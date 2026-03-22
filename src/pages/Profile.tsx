@@ -1,4 +1,4 @@
-import { User, Settings, LogIn, LogOut, Bell, HelpCircle, ChevronLeft, Globe } from "lucide-react";
+import { User, Settings, LogIn, LogOut, Bell, HelpCircle, ChevronLeft, Globe, Briefcase } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
