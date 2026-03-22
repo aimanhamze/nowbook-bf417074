@@ -1,10 +1,12 @@
 import { Search, MapPin } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useLang } from "@/contexts/LangContext";
 
 export function SearchBar() {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
+  const { t } = useLang();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,14 +23,14 @@ export function SearchBar() {
         <Search className="h-5 w-5 text-muted-foreground shrink-0" />
         <input
           type="text"
-          placeholder="Search services or providers..."
+          placeholder={t("searchPlaceholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
         />
         <button type="button" className="flex items-center gap-1 text-xs text-accent font-medium shrink-0">
           <MapPin className="h-3.5 w-3.5" />
-          Nearby
+          {t("nearby")}
         </button>
       </div>
     </form>

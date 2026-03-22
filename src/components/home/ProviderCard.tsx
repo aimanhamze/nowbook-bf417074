@@ -2,6 +2,8 @@ import { Star, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Provider } from "@/lib/mock-data";
 import { motion } from "framer-motion";
+import { useLang } from "@/contexts/LangContext";
+import { categoryNames } from "@/lib/mock-data";
 
 interface ProviderCardProps {
   provider: Provider;
@@ -10,6 +12,7 @@ interface ProviderCardProps {
 
 export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
   const navigate = useNavigate();
+  const { lang, t } = useLang();
 
   return (
     <motion.button
@@ -18,17 +21,17 @@ export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
       viewport={{ once: true, amount: 0.2 }}
       transition={{ delay: index * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       onClick={() => navigate(`/provider/${provider.id}`)}
-      className="flex gap-4 p-3 rounded-2xl bg-card border border-border/60 shadow-sm hover:shadow-md transition-shadow text-left w-full active:scale-[0.98]"
+      className="flex gap-4 p-3 rounded-2xl bg-card border border-border/60 shadow-sm hover:shadow-md transition-shadow text-right w-full active:scale-[0.98]"
     >
       <img
         src={provider.image}
-        alt={provider.name}
+        alt={provider.name[lang]}
         className="w-20 h-20 rounded-xl object-cover shrink-0"
         loading="lazy"
       />
       <div className="flex flex-col justify-center gap-1 min-w-0">
-        <h3 className="font-semibold text-sm truncate">{provider.name}</h3>
-        <p className="text-xs text-muted-foreground capitalize">{provider.category}</p>
+        <h3 className="font-semibold text-sm truncate">{provider.name[lang]}</h3>
+        <p className="text-xs text-muted-foreground">{categoryNames[provider.category]?.[lang]}</p>
         <div className="flex items-center gap-3 mt-0.5">
           <span className="flex items-center gap-1 text-xs font-medium">
             <Star className="h-3.5 w-3.5 fill-accent text-accent" />
@@ -37,7 +40,7 @@ export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
           </span>
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <MapPin className="h-3 w-3" />
-            {provider.distance}
+            {provider.distance} {t("km")}
           </span>
         </div>
       </div>

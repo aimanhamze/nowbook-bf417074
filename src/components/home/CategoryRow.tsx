@@ -1,9 +1,11 @@
-import { categories } from "@/lib/mock-data";
+import { categories, categoryNames } from "@/lib/mock-data";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useLang } from "@/contexts/LangContext";
 
 export function CategoryRow() {
   const navigate = useNavigate();
+  const { lang } = useLang();
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none -mx-1.5 px-1.5">
@@ -17,7 +19,7 @@ export function CategoryRow() {
           className="flex flex-col items-center gap-2 min-w-[72px] py-3 px-2 rounded-2xl bg-secondary hover:bg-accent/10 transition-colors active:scale-95"
         >
           <span className="text-2xl">{cat.icon}</span>
-          <span className="text-xs font-medium text-foreground whitespace-nowrap">{cat.name}</span>
+          <span className="text-xs font-medium text-foreground whitespace-nowrap">{categoryNames[cat.id][lang]}</span>
         </motion.button>
       ))}
     </div>
