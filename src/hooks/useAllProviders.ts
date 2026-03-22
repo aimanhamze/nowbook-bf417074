@@ -128,8 +128,7 @@ export function useRealAvailability(providerId: string | undefined) {
   const getAvailableSlots = (date: Date): string[] => {
     if (!isDbProvider) {
       // Fall back to mock slot generation
-      const { getAvailableSlots: mockSlots } = require("@/lib/mock-data");
-      return mockSlots(providerId, date);
+      return getMockAvailableSlots(providerId || "", date);
     }
 
     const dow = date.getDay();
