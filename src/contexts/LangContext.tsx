@@ -13,7 +13,7 @@ const LangContext = createContext<LangContextType | undefined>(undefined);
 export function LangProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
     const saved = localStorage.getItem("book-lang");
-    return (saved === "he" || saved === "ar") ? saved : "he";
+    return (saved === "he" || saved === "ar" || saved === "en") ? saved : "he";
   });
 
   const setLang = (l: Lang) => {
@@ -25,13 +25,12 @@ export function LangProvider({ children }: { children: ReactNode }) {
     return translations[lang][key] || key;
   };
 
-  // Both Hebrew and Arabic are RTL
-  const isRtl = true;
+  const isRtl = lang === "he" || lang === "ar";
 
   useEffect(() => {
-    document.documentElement.dir = "rtl";
+    document.documentElement.dir = isRtl ? "rtl" : "ltr";
     document.documentElement.lang = lang;
-  }, [lang]);
+  }, [lang, isRtl]);
 
   return (
     <LangContext.Provider value={{ lang, setLang, t, isRtl }}>

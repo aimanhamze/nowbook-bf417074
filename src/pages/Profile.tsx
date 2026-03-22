@@ -36,18 +36,15 @@ const Profile = () => {
             <span className="text-sm font-medium">{t("language")}</span>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={() => setLang("he")}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${lang === "he" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground"}`}
-            >
-              עברית
-            </button>
-            <button
-              onClick={() => setLang("ar")}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${lang === "ar" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground"}`}
-            >
-              العربية
-            </button>
+            {([["he", "עברית"], ["ar", "العربية"], ["en", "English"]] as const).map(([code, label]) => (
+              <button
+                key={code}
+                onClick={() => setLang(code)}
+                className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${lang === code ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground"}`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       </div>

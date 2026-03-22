@@ -1,8 +1,7 @@
-export type Lang = "he" | "ar";
+export type Lang = "he" | "ar" | "en";
 
 export const translations = {
   he: {
-    // General
     appName: "Book",
     goodMorning: "בוקר טוב ☀️",
     findAppointment: "מצא את התור",
@@ -12,16 +11,12 @@ export const translations = {
     seeAll: "הצג הכל",
     nearby: "בקרבת מקום",
     searchPlaceholder: "חפש שירותים או ספקים...",
-    
-    // Categories
     barber: "ספר",
     salon: "מספרה",
     nails: "ציפורניים",
     brows: "גבות וריסים",
     spa: "ספא ועיסוי",
     skincare: "טיפוח עור",
-    
-    // Provider detail
     about: "אודות",
     services: "שירותים",
     hours: "שעות פעילות",
@@ -29,8 +24,6 @@ export const translations = {
     reviews: "ביקורות",
     bookAppointment: "קבע תור",
     min: "דק׳",
-    
-    // Booking
     bookAt: "קביעת תור ב",
     step: "שלב",
     of: "מתוך",
@@ -47,40 +40,28 @@ export const translations = {
     payAtVenue: "💳 התשלום ייגבה במקום",
     service: "שירות",
     serviceCount: "שירותים",
-    
-    // Booking confirmed
     bookingConfirmed: "התור אושר!",
     youreAllSet: "הכל מוכן",
     viewMyBookings: "הצג את התורים שלי",
     backToHome: "חזרה לדף הבית",
-    
-    // Navigation
     home: "בית",
     explore: "חיפוש",
     bookings: "תורים",
     favorites: "מועדפים",
     profile: "פרופיל",
-    
-    // Explore
     all: "הכל",
     providersFound: "ספקים נמצאו",
     providerFound: "ספק נמצא",
     noProvidersFound: "לא נמצאו ספקים",
     clearFilters: "נקה סינון",
     search: "חיפוש...",
-    
-    // Bookings page
     myBookings: "התורים שלי",
     noBookingsYet: "אין תורים עדיין",
     bookFirstAppointment: "קבע את התור הראשון שלך כדי לראות אותו כאן",
     exploreServices: "גלה שירותים",
-    
-    // Favorites
     noFavoritesYet: "אין מועדפים עדיין",
     tapHeart: "לחץ על הלב בספקים שאתה אוהב",
     browseProviders: "חפש ספקים",
-    
-    // Profile
     guest: "אורח",
     signInToManage: "התחבר כדי לנהל את התורים שלך",
     signInUp: "התחברות / הרשמה",
@@ -88,8 +69,6 @@ export const translations = {
     settings: "הגדרות",
     helpSupport: "עזרה ותמיכה",
     language: "שפה",
-    
-    // Misc
     closed: "סגור",
     km: "ק״מ",
     noBookingData: "לא נמצאו נתוני הזמנה",
@@ -105,14 +84,12 @@ export const translations = {
     seeAll: "عرض الكل",
     nearby: "بالقرب",
     searchPlaceholder: "ابحث عن خدمات أو مزودين...",
-    
     barber: "حلاق",
     salon: "صالون شعر",
     nails: "أظافر",
     brows: "حواجب ورموش",
     spa: "سبا ومساج",
     skincare: "العناية بالبشرة",
-    
     about: "حول",
     services: "الخدمات",
     hours: "ساعات العمل",
@@ -120,7 +97,6 @@ export const translations = {
     reviews: "التقييمات",
     bookAppointment: "احجز موعد",
     min: "دقيقة",
-    
     bookAt: "حجز موعد في",
     step: "خطوة",
     of: "من",
@@ -137,34 +113,28 @@ export const translations = {
     payAtVenue: "💳 الدفع عند الوصول",
     service: "خدمة",
     serviceCount: "خدمات",
-    
     bookingConfirmed: "تم تأكيد الحجز!",
     youreAllSet: "أنت جاهز",
     viewMyBookings: "عرض حجوزاتي",
     backToHome: "العودة للرئيسية",
-    
     home: "الرئيسية",
     explore: "استكشاف",
     bookings: "الحجوزات",
     favorites: "المفضلة",
     profile: "الملف الشخصي",
-    
     all: "الكل",
     providersFound: "مزودين",
     providerFound: "مزود واحد",
     noProvidersFound: "لم يتم العثور على مزودين",
     clearFilters: "مسح الفلاتر",
     search: "بحث...",
-    
     myBookings: "حجوزاتي",
     noBookingsYet: "لا توجد حجوزات بعد",
     bookFirstAppointment: "احجز أول موعد لك لتراه هنا",
     exploreServices: "استكشف الخدمات",
-    
     noFavoritesYet: "لا توجد مفضلات بعد",
     tapHeart: "اضغط على القلب على المزودين الذين تحبهم",
     browseProviders: "تصفح المزودين",
-    
     guest: "زائر",
     signInToManage: "سجل دخولك لإدارة حجوزاتك",
     signInUp: "تسجيل الدخول / إنشاء حساب",
@@ -172,11 +142,83 @@ export const translations = {
     settings: "الإعدادات",
     helpSupport: "المساعدة والدعم",
     language: "اللغة",
-    
     closed: "مغلق",
     km: "كم",
     noBookingData: "لم يتم العثور على بيانات الحجز",
     providerNotFound: "لم يتم العثور على المزود",
+  },
+  en: {
+    appName: "Book",
+    goodMorning: "Good morning ☀️",
+    findAppointment: "Find your next",
+    nextAppointment: "appointment",
+    browseByCategory: "Browse by category",
+    popularNearby: "Popular nearby",
+    seeAll: "See all",
+    nearby: "Nearby",
+    searchPlaceholder: "Search services or providers...",
+    barber: "Barber",
+    salon: "Hair Salon",
+    nails: "Nails",
+    brows: "Brows & Lashes",
+    spa: "Spa & Massage",
+    skincare: "Skincare",
+    about: "About",
+    services: "Services",
+    hours: "Working Hours",
+    photos: "Photos",
+    reviews: "Reviews",
+    bookAppointment: "Book Appointment",
+    min: "min",
+    bookAt: "Book at",
+    step: "Step",
+    of: "of",
+    selectServices: "Select services",
+    pickTime: "Pick a time",
+    confirm: "Confirm",
+    selectDate: "Select date",
+    availableTimes: "Available times",
+    continue: "Continue",
+    confirmBooking: "Confirm Booking",
+    provider: "Provider",
+    dateTime: "Date & Time",
+    total: "Total",
+    payAtVenue: "💳 Payment will be collected at the venue",
+    service: "service",
+    serviceCount: "services",
+    bookingConfirmed: "Booking Confirmed!",
+    youreAllSet: "You're all set",
+    viewMyBookings: "View My Bookings",
+    backToHome: "Back to Home",
+    home: "Home",
+    explore: "Explore",
+    bookings: "Bookings",
+    favorites: "Favorites",
+    profile: "Profile",
+    all: "All",
+    providersFound: "providers found",
+    providerFound: "provider found",
+    noProvidersFound: "No providers found",
+    clearFilters: "Clear filters",
+    search: "Search...",
+    myBookings: "My Bookings",
+    noBookingsYet: "No bookings yet",
+    bookFirstAppointment: "Book your first appointment to see it here",
+    exploreServices: "Explore Services",
+    noFavoritesYet: "No favorites yet",
+    tapHeart: "Tap the heart on providers you love",
+    browseProviders: "Browse Providers",
+    guest: "Guest",
+    signInToManage: "Sign in to manage your bookings",
+    signInUp: "Sign in / Sign up",
+    notifications: "Notifications",
+    settings: "Settings",
+    helpSupport: "Help & Support",
+    language: "Language",
+    closed: "Closed",
+    km: "km",
+    noBookingData: "No booking data found",
+    providerNotFound: "Provider not found",
   },
 } as const;
 
