@@ -7,17 +7,22 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, addDays } from "date-fns";
 import { useLang } from "@/contexts/LangContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const BookAppointment = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { lang, t } = useLang();
+  const { user } = useAuth();
   const provider = providers.find((p) => p.id === id);
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>("");
+  const [loading, setLoading] = useState(false);
 
   if (!provider) {
     return (
@@ -50,7 +55,24 @@ const BookAppointment = () => {
     else if (step === 2 && selectedTime) setStep(3);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (user) {
+      setLoading(true);
+      const { error } = await supabase.from("bookings").insert({
+        user_id: user.id,
+        provider_id: provider.id,
+        service_ids: selectedServices.map((s) => s.id),
+        booking_date: format(selectedDate, "yyyy-MM-dd"),
+        booking_time: selectedTime,
+        total_price: total,
+      });
+      setLoading(false);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+    }
+
     navigate("/booking-confirmed", {
       state: {
         provider: provider.name[lang],
@@ -199,8 +221,8 @@ const BookAppointment = () => {
               {t("continue")}
             </button>
           ) : (
-            <button onClick={handleConfirm} className="px-8 py-3 rounded-2xl bg-accent text-accent-foreground text-sm font-semibold active:scale-[0.97] transition-transform">
-              {t("confirmBooking")}
+            <button onClick={handleConfirm} disabled={loading} className="px-8 py-3 rounded-2xl bg-accent text-accent-foreground text-sm font-semibold active:scale-[0.97] transition-transform disabled:opacity-50">
+              {loading ? "..." : t("confirmBooking")}
             </button>
           )}
         </div>
