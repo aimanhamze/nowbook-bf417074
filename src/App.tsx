@@ -16,6 +16,7 @@ import Favorites from "./pages/Favorites";
 import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import Install from "./pages/Install";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,6 +40,7 @@ const App = () => (
               <Route path="/profile" element={<Profile />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/install" element={<Install />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <BottomNav />
