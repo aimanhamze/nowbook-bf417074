@@ -1,0 +1,46 @@
+import { Star, MapPin } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import type { Provider } from "@/lib/mock-data";
+import { motion } from "framer-motion";
+
+interface ProviderCardProps {
+  provider: Provider;
+  index?: number;
+}
+
+export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
+  const navigate = useNavigate();
+
+  return (
+    <motion.button
+      initial={{ opacity: 0, y: 16, filter: "blur(4px)" }}
+      whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ delay: index * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      onClick={() => navigate(`/provider/${provider.id}`)}
+      className="flex gap-4 p-3 rounded-2xl bg-card border border-border/60 shadow-sm hover:shadow-md transition-shadow text-left w-full active:scale-[0.98]"
+    >
+      <img
+        src={provider.image}
+        alt={provider.name}
+        className="w-20 h-20 rounded-xl object-cover shrink-0"
+        loading="lazy"
+      />
+      <div className="flex flex-col justify-center gap-1 min-w-0">
+        <h3 className="font-semibold text-sm truncate">{provider.name}</h3>
+        <p className="text-xs text-muted-foreground capitalize">{provider.category}</p>
+        <div className="flex items-center gap-3 mt-0.5">
+          <span className="flex items-center gap-1 text-xs font-medium">
+            <Star className="h-3.5 w-3.5 fill-accent text-accent" />
+            {provider.rating}
+            <span className="text-muted-foreground">({provider.reviewCount})</span>
+          </span>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <MapPin className="h-3 w-3" />
+            {provider.distance}
+          </span>
+        </div>
+      </div>
+    </motion.button>
+  );
+}
