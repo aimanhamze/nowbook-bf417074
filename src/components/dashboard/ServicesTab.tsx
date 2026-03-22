@@ -58,7 +58,7 @@ export function ServicesTab() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>{t("duration")} ({t("min")})</Label>
-                <Input type="number" value={editing.duration} onChange={e => setEditing({ ...editing, duration: Number(e.target.value) })} />
+                <Input type="number" value={editing.duration} onChange={e => setEditing({ ...editing, duration: Number(e.target.value) })} onFocus={e => e.target.select()} />
               </div>
               <div>
                 <Label>{t("price")} (₪)</Label>
