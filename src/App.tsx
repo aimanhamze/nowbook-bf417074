@@ -40,6 +40,7 @@ const App = () => (
               <Route path="/profile" element={<Profile />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/install" element={<Install />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <BottomNav />
