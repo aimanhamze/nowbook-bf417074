@@ -19,6 +19,7 @@ const Profile = () => {
 
   const menuItems = [
     { icon: user ? LogOut : LogIn, label: user ? t("signOut") : t("signInUp"), action: handleSignInOut },
+    ...(user ? [{ icon: Briefcase, label: t("providerDashboard"), action: () => navigate("/dashboard") }] : []),
     { icon: Bell, label: t("notifications") },
     { icon: Settings, label: t("settings") },
     { icon: HelpCircle, label: t("helpSupport") },
