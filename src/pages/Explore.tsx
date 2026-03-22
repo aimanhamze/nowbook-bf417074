@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import { Search, SlidersHorizontal } from "lucide-react";
-import { providers, categories, categoryNames } from "@/lib/mock-data";
+import { categories, categoryNames } from "@/lib/mock-data";
+import { useAllProviders } from "@/hooks/useAllProviders";
 import { ProviderCard } from "@/components/home/ProviderCard";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -13,6 +14,7 @@ const Explore = () => {
   const [activeCategory, setActiveCategory] = useState(initialCategory);
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const { lang, t } = useLang();
+  const { providers } = useAllProviders();
 
   const filtered = providers.filter((p) => {
     const matchesCategory = !activeCategory || p.category === activeCategory;
