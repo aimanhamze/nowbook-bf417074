@@ -1,16 +1,31 @@
-import { User, Settings, LogIn, Bell, HelpCircle, ChevronLeft, Globe } from "lucide-react";
+import { User, Settings, LogIn, LogOut, Bell, HelpCircle, ChevronLeft, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const Profile = () => {
   const { lang, setLang, t } = useLang();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignInOut = async () => {
+    if (user) {
+      await signOut();
+    } else {
+      navigate("/auth");
+    }
+  };
 
   const menuItems = [
-    { icon: LogIn, label: t("signInUp") },
+    { icon: user ? LogOut : LogIn, label: user ? t("signOut") : t("signInUp"), action: handleSignInOut },
     { icon: Bell, label: t("notifications") },
     { icon: Settings, label: t("settings") },
     { icon: HelpCircle, label: t("helpSupport") },
   ];
+
+  const displayName = user?.user_metadata?.full_name || user?.phone || t("guest");
+  const subtitle = user ? (user.phone || user.email || "") : t("signInToManage");
 
   return (
     <div className="min-h-screen pb-24">
@@ -23,8 +38,8 @@ const Profile = () => {
           <User className="h-7 w-7 text-muted-foreground" />
         </div>
         <div>
-          <p className="font-semibold">{t("guest")}</p>
-          <p className="text-xs text-muted-foreground">{t("signInToManage")}</p>
+          <p className="font-semibold">{displayName}</p>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
         </div>
       </motion.div>
 
@@ -51,8 +66,8 @@ const Profile = () => {
 
       <div className="px-5">
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
-          {menuItems.map(({ icon: Icon, label }, i) => (
-            <motion.button key={label} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06, duration: 0.3 }} className="flex items-center justify-between w-full px-4 py-3.5 text-sm hover:bg-secondary/50 transition-colors active:scale-[0.99] border-b border-border last:border-0">
+          {menuItems.map(({ icon: Icon, label, action }, i) => (
+            <motion.button key={label} onClick={action} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06, duration: 0.3 }} className="flex items-center justify-between w-full px-4 py-3.5 text-sm hover:bg-secondary/50 transition-colors active:scale-[0.99] border-b border-border last:border-0">
               <span className="flex items-center gap-3">
                 <Icon className="h-4 w-4 text-muted-foreground" />
                 {label}

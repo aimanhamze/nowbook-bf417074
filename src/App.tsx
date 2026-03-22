@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LangProvider } from "@/contexts/LangContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { BottomNav } from "@/components/layout/BottomNav";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
@@ -13,6 +14,7 @@ import BookingConfirmed from "./pages/BookingConfirmed";
 import Bookings from "./pages/Bookings";
 import Favorites from "./pages/Favorites";
 import Profile from "./pages/Profile";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -21,22 +23,25 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <LangProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/explore" element={<Explore />} />
-            <Route path="/provider/:id" element={<ProviderDetail />} />
-            <Route path="/provider/:id/book" element={<BookAppointment />} />
-            <Route path="/booking-confirmed" element={<BookingConfirmed />} />
-            <Route path="/bookings" element={<Bookings />} />
-            <Route path="/favorites" element={<Favorites />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          <BottomNav />
-        </BrowserRouter>
+        <AuthProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/explore" element={<Explore />} />
+              <Route path="/provider/:id" element={<ProviderDetail />} />
+              <Route path="/provider/:id/book" element={<BookAppointment />} />
+              <Route path="/booking-confirmed" element={<BookingConfirmed />} />
+              <Route path="/bookings" element={<Bookings />} />
+              <Route path="/favorites" element={<Favorites />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <BottomNav />
+          </BrowserRouter>
+        </AuthProvider>
       </LangProvider>
     </TooltipProvider>
   </QueryClientProvider>
