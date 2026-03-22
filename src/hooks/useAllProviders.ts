@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { providers as mockProviders, categoryNames } from "@/lib/mock-data";
+import { providers as mockProviders, categoryNames, getAvailableSlots as getMockAvailableSlots } from "@/lib/mock-data";
 import type { Provider, Service } from "@/lib/mock-data";
 import type { Lang } from "@/lib/translations";
 
