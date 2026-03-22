@@ -31,24 +31,16 @@ export function useProviderProfile() {
     }) => {
       if (!user) throw new Error("Not authenticated");
       
-      if (profileQuery.data) {
-        const { error } = await supabase
-          .from("provider_profiles")
-          .update(values)
-          .eq("user_id", user.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("provider_profiles")
-          .insert({ ...values, user_id: user.id });
-        if (error) throw error;
+      const { error } = await supabase
+        .from("provider_profiles")
+        .upsert({ ...values, user_id: user.id }, { onConflict: "user_id" });
+      if (error) throw error;
 
-        // Also assign provider role
-        const { error: roleError } = await supabase
-          .from("user_roles")
-          .insert({ user_id: user.id, role: "provider" });
-        if (roleError && !roleError.message.includes("duplicate")) throw roleError;
-      }
+      // Also assign provider role (ignore duplicates)
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .upsert({ user_id: user.id, role: "provider" }, { onConflict: "user_id,role" });
+      if (roleError && !roleError.message.includes("duplicate")) throw roleError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["provider-profile"] });
