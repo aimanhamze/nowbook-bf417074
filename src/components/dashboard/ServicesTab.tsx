@@ -62,7 +62,7 @@ export function ServicesTab() {
               </div>
               <div>
                 <Label>{t("price")} (₪)</Label>
-                <Input type="number" value={editing.price} onChange={e => setEditing({ ...editing, price: Number(e.target.value) })} />
+                <Input type="number" value={editing.price} onChange={e => setEditing({ ...editing, price: Number(e.target.value) })} onFocus={e => e.target.select()} />
               </div>
             </div>
             <div className="flex gap-2">
