@@ -1,4 +1,4 @@
-import { User, Settings, LogIn, LogOut, Bell, HelpCircle, ChevronLeft, Globe } from "lucide-react";
+import { User, Settings, LogIn, LogOut, Bell, HelpCircle, ChevronLeft, Globe, Briefcase } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,6 +19,7 @@ const Profile = () => {
 
   const menuItems = [
     { icon: user ? LogOut : LogIn, label: user ? t("signOut") : t("signInUp"), action: handleSignInOut },
+    ...(user ? [{ icon: Briefcase, label: t("providerDashboard"), action: () => navigate("/dashboard") }] : []),
     { icon: Bell, label: t("notifications") },
     { icon: Settings, label: t("settings") },
     { icon: HelpCircle, label: t("helpSupport") },
