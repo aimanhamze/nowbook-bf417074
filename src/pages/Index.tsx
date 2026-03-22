@@ -1,12 +1,13 @@
 import { SearchBar } from "@/components/home/SearchBar";
 import { CategoryRow } from "@/components/home/CategoryRow";
 import { ProviderCard } from "@/components/home/ProviderCard";
-import { providers } from "@/lib/mock-data";
+import { useAllProviders } from "@/hooks/useAllProviders";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 
 const Index = () => {
   const { t } = useLang();
+  const { providers } = useAllProviders();
 
   return (
     <div className="min-h-screen pb-24">

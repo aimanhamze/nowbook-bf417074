@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { providers, categoryNames } from "@/lib/mock-data";
+import { categoryNames } from "@/lib/mock-data";
+import { useProviderById } from "@/hooks/useAllProviders";
 import { ArrowLeft, Heart, Star, MapPin, Clock, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
@@ -10,7 +11,15 @@ const ProviderDetail = () => {
   const navigate = useNavigate();
   const [liked, setLiked] = useState(false);
   const { lang, t } = useLang();
-  const provider = providers.find((p) => p.id === id);
+  const { provider, isLoading } = useProviderById(id);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   if (!provider) {
     return (
@@ -46,15 +55,19 @@ const ProviderDetail = () => {
         <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
           <h1 className="text-xl font-bold mb-1">{provider.name[lang]}</h1>
           <div className="flex items-center gap-3 text-sm text-muted-foreground mb-3">
-            <span className="flex items-center gap-1">
-              <Star className="h-4 w-4 fill-accent text-accent" />
-              <span className="font-medium text-foreground">{provider.rating}</span>
-              ({provider.reviewCount})
-            </span>
-            <span className="flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5" />
-              {provider.distance} {t("km")}
-            </span>
+            {provider.rating > 0 && (
+              <span className="flex items-center gap-1">
+                <Star className="h-4 w-4 fill-accent text-accent" />
+                <span className="font-medium text-foreground">{provider.rating}</span>
+                ({provider.reviewCount})
+              </span>
+            )}
+            {provider.distance !== "—" && (
+              <span className="flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5" />
+                {provider.distance} {t("km")}
+              </span>
+            )}
           </div>
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             <MapPin className="h-3 w-3 shrink-0" />
@@ -64,44 +77,50 @@ const ProviderDetail = () => {
       </motion.div>
 
       {/* About */}
-      <section className="px-5 mt-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">{t("about")}</h2>
-        <p className="text-sm leading-relaxed">{provider.about[lang]}</p>
-      </section>
+      {provider.about[lang] && (
+        <section className="px-5 mt-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">{t("about")}</h2>
+          <p className="text-sm leading-relaxed">{provider.about[lang]}</p>
+        </section>
+      )}
 
       {/* Services */}
-      <section className="px-5 mt-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("services")}</h2>
-        <div className="flex flex-col gap-2">
-          {provider.services.map((service, i) => (
-            <motion.div key={service.id} initial={{ opacity: 0, x: 12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }} className="flex items-center justify-between p-4 rounded-xl bg-secondary/60">
-              <div>
-                <p className="text-sm font-medium">{service.name[lang]}</p>
-                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                  <Clock className="h-3 w-3" />
-                  {service.duration} {t("min")}
-                </p>
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-bold">₪{service.price}</p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
+      {provider.services.length > 0 && (
+        <section className="px-5 mt-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("services")}</h2>
+          <div className="flex flex-col gap-2">
+            {provider.services.map((service, i) => (
+              <motion.div key={service.id} initial={{ opacity: 0, x: 12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }} className="flex items-center justify-between p-4 rounded-xl bg-secondary/60">
+                <div>
+                  <p className="text-sm font-medium">{service.name[lang]}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <Clock className="h-3 w-3" />
+                    {service.duration} {t("min")}
+                  </p>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold">₪{service.price}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Working Hours */}
-      <section className="px-5 mt-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("hours")}</h2>
-        <div className="flex flex-col gap-1.5">
-          {provider.workingHours.map((wh, i) => (
-            <div key={i} className="flex justify-between text-sm">
-              <span className="text-muted-foreground">{wh.day[lang]}</span>
-              <span className="font-medium">{wh.hours}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {provider.workingHours.length > 0 && (
+        <section className="px-5 mt-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("hours")}</h2>
+          <div className="flex flex-col gap-1.5">
+            {provider.workingHours.map((wh, i) => (
+              <div key={i} className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{wh.day[lang]}</span>
+                <span className="font-medium">{wh.hours}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Photos */}
       {provider.photos.length > 0 && (
@@ -116,25 +135,27 @@ const ProviderDetail = () => {
       )}
 
       {/* Reviews */}
-      <section className="px-5 mt-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("reviews")}</h2>
-        <div className="flex flex-col gap-3">
-          {provider.reviews.map((review, i) => (
-            <motion.div key={i} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.4 }} className="p-4 rounded-xl bg-secondary/60">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-sm font-semibold">{review.name}</span>
-                <span className="text-xs text-muted-foreground">{review.date[lang]}</span>
-              </div>
-              <div className="flex gap-0.5 mb-2">
-                {Array.from({ length: 5 }).map((_, s) => (
-                  <Star key={s} className={`h-3 w-3 ${s < review.rating ? "fill-accent text-accent" : "text-border"}`} />
-                ))}
-              </div>
-              <p className="text-sm text-muted-foreground">{review.comment[lang]}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
+      {provider.reviews.length > 0 && (
+        <section className="px-5 mt-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("reviews")}</h2>
+          <div className="flex flex-col gap-3">
+            {provider.reviews.map((review, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.4 }} className="p-4 rounded-xl bg-secondary/60">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-semibold">{review.name}</span>
+                  <span className="text-xs text-muted-foreground">{review.date[lang]}</span>
+                </div>
+                <div className="flex gap-0.5 mb-2">
+                  {Array.from({ length: 5 }).map((_, s) => (
+                    <Star key={s} className={`h-3 w-3 ${s < review.rating ? "fill-accent text-accent" : "text-border"}`} />
+                  ))}
+                </div>
+                <p className="text-sm text-muted-foreground">{review.comment[lang]}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Sticky Book Button */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-card/80 backdrop-blur-xl border-t border-border">

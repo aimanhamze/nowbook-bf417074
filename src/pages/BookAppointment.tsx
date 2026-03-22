@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { providers, getAvailableSlots } from "@/lib/mock-data";
+import { useProviderById, useRealAvailability } from "@/hooks/useAllProviders";
+import { getAvailableSlots as getMockSlots } from "@/lib/mock-data";
 import type { Service } from "@/lib/mock-data";
 import { ArrowLeft, Check, Clock, CalendarDays } from "lucide-react";
 import { useState } from "react";
@@ -16,13 +17,22 @@ const BookAppointment = () => {
   const navigate = useNavigate();
   const { lang, t } = useLang();
   const { user } = useAuth();
-  const provider = providers.find((p) => p.id === id);
+  const { provider, isLoading: providerLoading } = useProviderById(id);
+  const { getAvailableSlots: getRealSlots } = useRealAvailability(id);
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [loading, setLoading] = useState(false);
+
+  if (providerLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   if (!provider) {
     return (
@@ -31,6 +41,8 @@ const BookAppointment = () => {
       </div>
     );
   }
+
+  const isDbProvider = provider.id.startsWith("db-");
 
   const toggleService = (service: Service) => {
     setSelectedServices((prev) =>
@@ -42,7 +54,12 @@ const BookAppointment = () => {
 
   const total = selectedServices.reduce((sum, s) => sum + s.price, 0);
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
-  const availableSlots = getAvailableSlots(provider.id, selectedDate);
+
+  // Use real availability for DB providers, mock for legacy
+  const availableSlots = isDbProvider
+    ? getRealSlots(selectedDate)
+    : getMockSlots(provider.id, selectedDate);
+
   const dates = Array.from({ length: 14 }, (_, i) => addDays(new Date(), i));
 
   const canProceed =
@@ -56,11 +73,14 @@ const BookAppointment = () => {
   };
 
   const handleConfirm = async () => {
+    // For DB providers, store the actual DB id (without "db-" prefix)
+    const storeProviderId = isDbProvider ? provider.id.replace("db-", "") : provider.id;
+
     if (user) {
       setLoading(true);
       const { error } = await supabase.from("bookings").insert({
         user_id: user.id,
-        provider_id: provider.id,
+        provider_id: storeProviderId,
         service_ids: selectedServices.map((s) => s.id),
         booking_date: format(selectedDate, "yyyy-MM-dd"),
         booking_time: selectedTime,
@@ -165,13 +185,17 @@ const BookAppointment = () => {
                 <Clock className="h-4 w-4 text-accent" />
                 {t("availableTimes")}
               </h3>
-              <div className="grid grid-cols-3 gap-2">
-                {availableSlots.map((slot) => (
-                  <button key={slot} onClick={() => setSelectedTime(slot)} className={cn("py-2.5 rounded-xl text-xs font-medium transition-colors active:scale-95", selectedTime === slot ? "bg-accent text-accent-foreground" : "bg-secondary text-foreground hover:bg-secondary/80")}>
-                    {slot}
-                  </button>
-                ))}
-              </div>
+              {availableSlots.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {availableSlots.map((slot) => (
+                    <button key={slot} onClick={() => setSelectedTime(slot)} className={cn("py-2.5 rounded-xl text-xs font-medium transition-colors active:scale-95", selectedTime === slot ? "bg-accent text-accent-foreground" : "bg-secondary text-foreground hover:bg-secondary/80")}>
+                      {slot}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-6">{t("unavailable")}</p>
+              )}
             </div>
           </motion.div>
         )}
