@@ -1,10 +1,12 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { categoryNames } from "@/lib/mock-data";
 import { useProviderById } from "@/hooks/useAllProviders";
+import { useProviderReviews } from "@/hooks/useReviews";
 import { ArrowLeft, Heart, Star, MapPin, Clock, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useLang } from "@/contexts/LangContext";
+import ReviewCard from "@/components/reviews/ReviewCard";
 
 const ProviderDetail = () => {
   const { id } = useParams();
