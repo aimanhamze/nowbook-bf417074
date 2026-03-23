@@ -86,4 +86,71 @@ const Bookings = () => {
   );
 };
 
+function BookingCard({ booking, index, getProviderName, getServiceNames }: {
+  booking: Tables<"bookings">;
+  index: number;
+  getProviderName: (id: string) => string;
+  getServiceNames: (ids: string[]) => string;
+}) {
+  const { t } = useLang();
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const { data: existingReview } = useBookingReview(booking.id);
+
+  const isPast = new Date(booking.booking_date) < new Date();
+  const canReview = isPast && booking.status === "confirmed" && !existingReview;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.06, duration: 0.3 }}
+      className="space-y-2"
+    >
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
+        <div className="flex justify-between items-start">
+          <p className="font-semibold text-sm">{getProviderName(booking.provider_id)}</p>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+            booking.status === "confirmed" ? "bg-green-100 text-green-700" : "bg-secondary text-muted-foreground"
+          }`}>
+            {booking.status}
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <Calendar className="h-3 w-3" />
+          {booking.booking_date} — {booking.booking_time}
+        </p>
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <Clock className="h-3 w-3" />
+          {getServiceNames(booking.service_ids)}
+        </p>
+        <div className="flex justify-between items-center">
+          {canReview ? (
+            <button
+              onClick={() => setShowReviewForm(!showReviewForm)}
+              className="text-xs font-medium text-accent flex items-center gap-1"
+            >
+              <Star className="h-3 w-3" />
+              {t("leaveReview")}
+            </button>
+          ) : existingReview ? (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Star className="h-3 w-3 fill-accent text-accent" />
+              {t("reviewed")}
+            </span>
+          ) : <span />}
+          <span className="text-sm font-bold">₪{booking.total_price}</span>
+        </div>
+      </div>
+
+      {showReviewForm && (
+        <ReviewForm
+          bookingId={booking.id}
+          providerId={booking.provider_id}
+          onSubmitted={() => setShowReviewForm(false)}
+        />
+      )}
+    </motion.div>
+  );
+}
+
 export default Bookings;
