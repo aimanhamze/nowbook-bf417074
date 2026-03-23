@@ -78,33 +78,7 @@ const Bookings = () => {
       ) : (
         <div className="px-5 space-y-3">
           {bookings.map((booking, i) => (
-            <motion.div
-              key={booking.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.06, duration: 0.3 }}
-              className="rounded-2xl border border-border bg-card p-4 space-y-2"
-            >
-              <div className="flex justify-between items-start">
-                <p className="font-semibold text-sm">{getProviderName(booking.provider_id)}</p>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                  booking.status === "confirmed" ? "bg-green-100 text-green-700" : "bg-secondary text-muted-foreground"
-                }`}>
-                  {booking.status}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Calendar className="h-3 w-3" />
-                {booking.booking_date} — {booking.booking_time}
-              </p>
-              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Clock className="h-3 w-3" />
-                {getServiceNames(booking.service_ids)}
-              </p>
-              <div className="flex justify-end">
-                <span className="text-sm font-bold">₪{booking.total_price}</span>
-              </div>
-            </motion.div>
+            <BookingCard key={booking.id} booking={booking} index={i} getProviderName={getProviderName} getServiceNames={getServiceNames} />
           ))}
         </div>
       )}
