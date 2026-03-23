@@ -64,11 +64,11 @@ const ProviderDetail = () => {
         <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
           <h1 className="text-xl font-bold mb-1">{provider.name[lang]}</h1>
           <div className="flex items-center gap-3 text-sm text-muted-foreground mb-3">
-            {provider.rating > 0 && (
+            {realReviewCount > 0 && (
               <span className="flex items-center gap-1">
                 <Star className="h-4 w-4 fill-accent text-accent" />
-                <span className="font-medium text-foreground">{provider.rating}</span>
-                ({provider.reviewCount})
+                <span className="font-medium text-foreground">{avgRating.toFixed(1)}</span>
+                ({realReviewCount})
               </span>
             )}
             {provider.distance !== "—" && (
