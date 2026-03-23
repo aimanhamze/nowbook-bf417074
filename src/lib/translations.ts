@@ -137,6 +137,13 @@ export const translations = {
     dateBlocked: "התאריך נחסם",
     dateUnblocked: "החסימה הוסרה",
     reason: "סיבה",
+    rateExperience: "דרג את החוויה שלך",
+    writeReview: "כתוב ביקורת...",
+    submitReview: "שלח ביקורת",
+    reviewSubmitted: "הביקורת נשלחה!",
+    reviewError: "שגיאה בשליחת הביקורת",
+    leaveReview: "השאר ביקורת",
+    reviewed: "דורג",
   },
   ar: {
     appName: "Book",
