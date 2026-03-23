@@ -281,6 +281,13 @@ export const translations = {
     dateBlocked: "تم حظر التاريخ",
     dateUnblocked: "تم إلغاء الحظر",
     reason: "السبب",
+    rateExperience: "قيّم تجربتك",
+    writeReview: "اكتب تقييمًا...",
+    submitReview: "إرسال التقييم",
+    reviewSubmitted: "تم إرسال التقييم!",
+    reviewError: "خطأ في إرسال التقييم",
+    leaveReview: "اترك تقييمًا",
+    reviewed: "تم التقييم",
   },
   en: {
     appName: "Book",
