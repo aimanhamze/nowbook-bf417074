@@ -14,6 +14,13 @@ const ProviderDetail = () => {
   const [liked, setLiked] = useState(false);
   const { lang, t } = useLang();
   const { provider, isLoading } = useProviderById(id);
+  const { data: dbReviews } = useProviderReviews(id);
+
+  // Combine mock reviews with real DB reviews
+  const realReviewCount = (dbReviews?.length || 0) + (provider?.reviewCount || 0);
+  const avgRating = dbReviews && dbReviews.length > 0
+    ? ((provider?.rating || 0) * (provider?.reviewCount || 0) + dbReviews.reduce((sum, r) => sum + r.rating, 0)) / realReviewCount
+    : provider?.rating || 0;
 
   if (isLoading) {
     return (
