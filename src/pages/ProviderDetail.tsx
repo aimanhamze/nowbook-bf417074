@@ -1,10 +1,12 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { categoryNames } from "@/lib/mock-data";
 import { useProviderById } from "@/hooks/useAllProviders";
+import { useProviderReviews } from "@/hooks/useReviews";
 import { ArrowLeft, Heart, Star, MapPin, Clock, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useLang } from "@/contexts/LangContext";
+import ReviewCard from "@/components/reviews/ReviewCard";
 
 const ProviderDetail = () => {
   const { id } = useParams();
@@ -12,6 +14,13 @@ const ProviderDetail = () => {
   const [liked, setLiked] = useState(false);
   const { lang, t } = useLang();
   const { provider, isLoading } = useProviderById(id);
+  const { data: dbReviews } = useProviderReviews(id);
+
+  // Combine mock reviews with real DB reviews
+  const realReviewCount = (dbReviews?.length || 0) + (provider?.reviewCount || 0);
+  const avgRating = dbReviews && dbReviews.length > 0
+    ? ((provider?.rating || 0) * (provider?.reviewCount || 0) + dbReviews.reduce((sum, r) => sum + r.rating, 0)) / realReviewCount
+    : provider?.rating || 0;
 
   if (isLoading) {
     return (
@@ -55,11 +64,11 @@ const ProviderDetail = () => {
         <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
           <h1 className="text-xl font-bold mb-1">{provider.name[lang]}</h1>
           <div className="flex items-center gap-3 text-sm text-muted-foreground mb-3">
-            {provider.rating > 0 && (
+            {realReviewCount > 0 && (
               <span className="flex items-center gap-1">
                 <Star className="h-4 w-4 fill-accent text-accent" />
-                <span className="font-medium text-foreground">{provider.rating}</span>
-                ({provider.reviewCount})
+                <span className="font-medium text-foreground">{avgRating.toFixed(1)}</span>
+                ({realReviewCount})
               </span>
             )}
             {provider.distance !== "—" && (
@@ -135,12 +144,17 @@ const ProviderDetail = () => {
       )}
 
       {/* Reviews */}
-      {provider.reviews.length > 0 && (
+      {(provider.reviews.length > 0 || (dbReviews && dbReviews.length > 0)) && (
         <section className="px-5 mt-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("reviews")}</h2>
           <div className="flex flex-col gap-3">
+            {/* Real DB reviews first */}
+            {dbReviews?.map((review, i) => (
+              <ReviewCard key={review.id} review={review} index={i} />
+            ))}
+            {/* Mock reviews */}
             {provider.reviews.map((review, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.4 }} className="p-4 rounded-xl bg-secondary/60">
+              <motion.div key={`mock-${i}`} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: (i + (dbReviews?.length || 0)) * 0.08, duration: 0.4 }} className="p-4 rounded-xl bg-secondary/60">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-sm font-semibold">{review.name}</span>
                   <span className="text-xs text-muted-foreground">{review.date[lang]}</span>
