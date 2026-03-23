@@ -144,12 +144,17 @@ const ProviderDetail = () => {
       )}
 
       {/* Reviews */}
-      {provider.reviews.length > 0 && (
+      {(provider.reviews.length > 0 || (dbReviews && dbReviews.length > 0)) && (
         <section className="px-5 mt-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("reviews")}</h2>
           <div className="flex flex-col gap-3">
+            {/* Real DB reviews first */}
+            {dbReviews?.map((review, i) => (
+              <ReviewCard key={review.id} review={review} index={i} />
+            ))}
+            {/* Mock reviews */}
             {provider.reviews.map((review, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08, duration: 0.4 }} className="p-4 rounded-xl bg-secondary/60">
+              <motion.div key={`mock-${i}`} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: (i + (dbReviews?.length || 0)) * 0.08, duration: 0.4 }} className="p-4 rounded-xl bg-secondary/60">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-sm font-semibold">{review.name}</span>
                   <span className="text-xs text-muted-foreground">{review.date[lang]}</span>
