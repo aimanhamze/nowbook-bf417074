@@ -425,6 +425,13 @@ export const translations = {
     dateBlocked: "Date blocked",
     dateUnblocked: "Date unblocked",
     reason: "Reason",
+    rateExperience: "Rate your experience",
+    writeReview: "Write a review...",
+    submitReview: "Submit Review",
+    reviewSubmitted: "Review submitted!",
+    reviewError: "Error submitting review",
+    leaveReview: "Leave a Review",
+    reviewed: "Reviewed",
   },
 } as const;
 
