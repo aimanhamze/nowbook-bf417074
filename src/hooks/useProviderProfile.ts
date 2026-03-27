@@ -30,13 +30,12 @@ export function useProviderProfile() {
       phone: string;
     }) => {
       if (!user) throw new Error("Not authenticated");
-      
+
       const { error } = await supabase
         .from("provider_profiles")
         .upsert({ ...values, user_id: user.id }, { onConflict: "user_id" });
       if (error) throw error;
 
-      // Also assign provider role (ignore duplicates)
       const { error: roleError } = await supabase
         .from("user_roles")
         .upsert({ user_id: user.id, role: "provider" }, { onConflict: "user_id,role" });
@@ -45,10 +44,45 @@ export function useProviderProfile() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["provider-profile"] });
       queryClient.invalidateQueries({ queryKey: ["user-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["all-db-providers"] });
     },
   });
 
-  return { profile: profileQuery.data, isLoading: profileQuery.isLoading, upsertProfile };
+  const uploadCoverImage = useMutation({
+    mutationFn: async (file: File) => {
+      if (!user) throw new Error("Not authenticated");
+
+      const extension = file.name.split(".").pop() || "jpg";
+      const filePath = `${user.id}/cover-${Date.now()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("provider-images")
+        .upload(filePath, file, { upsert: true, cacheControl: "3600" });
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from("provider-images")
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from("provider_profiles")
+        .upsert({ user_id: user.id, cover_image: publicUrlData.publicUrl }, { onConflict: "user_id" });
+      if (updateError) throw updateError;
+
+      return publicUrlData.publicUrl;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["all-db-providers"] });
+    },
+  });
+
+  return {
+    profile: profileQuery.data,
+    isLoading: profileQuery.isLoading,
+    upsertProfile,
+    uploadCoverImage,
+  };
 }
 
 export function useIsProvider() {

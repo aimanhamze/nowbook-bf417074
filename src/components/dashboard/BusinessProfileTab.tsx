@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type ChangeEvent } from "react";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ interface FormValues {
 
 export function BusinessProfileTab() {
   const { t } = useLang();
-  const { profile, upsertProfile } = useProviderProfile();
+  const { profile, upsertProfile, uploadCoverImage } = useProviderProfile();
 
   const { register, handleSubmit, setValue, watch, reset } = useForm<FormValues>({
     defaultValues: { business_name: "", category: "barber", address: "", about: "", phone: "" },
@@ -48,10 +48,30 @@ export function BusinessProfileTab() {
     }
   };
 
+  const handleCoverUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      await uploadCoverImage.mutateAsync(file);
+      toast.success(t("coverImageUploaded"));
+    } catch {
+      toast.error(t("coverImageUploadError"));
+    } finally {
+      event.target.value = "";
+    }
+  };
+
   const categoryLabels: Record<string, string> = {
     barber: t("barber"), salon: t("salon"), nails: t("nails"),
     brows: t("brows"), spa: t("spa"), skincare: t("skincare"),
   };
+
+  const coverPreview = profile?.cover_image?.trim() || "";
+  const businessInitial = (watch("business_name") || profile?.business_name || "?")
+    .trim()
+    .charAt(0)
+    .toUpperCase();
 
   return (
     <motion.form
@@ -63,6 +83,28 @@ export function BusinessProfileTab() {
       <h2 className="text-lg font-semibold">{t("businessProfile")}</h2>
 
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+        <div>
+          <Label htmlFor="cover-upload">{t("coverImage")}</Label>
+          <div className="mt-2 space-y-3">
+            <div className="h-36 w-full overflow-hidden rounded-xl bg-gradient-to-br from-accent/20 to-accent/5">
+              {coverPreview ? (
+                <img src={coverPreview} alt={t("coverImage")} className="h-full w-full object-cover" loading="lazy" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-5xl font-bold text-accent/35">
+                  {businessInitial || "?"}
+                </div>
+              )}
+            </div>
+            <Input
+              id="cover-upload"
+              type="file"
+              accept="image/*"
+              onChange={handleCoverUpload}
+              disabled={uploadCoverImage.isPending}
+            />
+          </div>
+        </div>
+
         <div>
           <Label>{t("businessName")}</Label>
           <Input {...register("business_name")} />
@@ -95,7 +137,7 @@ export function BusinessProfileTab() {
           <Textarea {...register("about")} rows={3} />
         </div>
 
-        <Button type="submit" className="w-full" disabled={upsertProfile.isPending}>
+        <Button type="submit" className="w-full" disabled={upsertProfile.isPending || uploadCoverImage.isPending}>
           {t("saveProfile")}
         </Button>
       </div>

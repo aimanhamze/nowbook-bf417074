@@ -39,7 +39,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[]): Provider 
     reviewCount: 0,
     distance: "—",
     image: dbp.avatar_image || "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=400&h=400&fit=crop",
-    coverImage: dbp.cover_image || "https://images.unsplash.com/photo-1585747860019-8e8e14e0ef66?w=800&h=400&fit=crop",
+    coverImage: dbp.cover_image || "",
     address,
     about,
     services: services.filter(s => s.is_active).map(s => ({
