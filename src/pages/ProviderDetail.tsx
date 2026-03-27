@@ -42,12 +42,18 @@ const ProviderDetail = () => {
     <div className="min-h-screen pb-28">
       {/* Cover */}
       <div className="relative h-56 bg-gradient-to-br from-accent/20 to-accent/5">
-        <img
-          src={provider.coverImage}
-          alt={provider.name[lang]}
-          className="w-full h-full object-cover"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
+        {provider.coverImage ? (
+          <img
+            src={provider.coverImage}
+            alt={provider.name[lang]}
+            className="w-full h-full object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-5xl font-bold text-accent/30">{provider.name[lang]?.charAt(0)?.toUpperCase()}</span>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-10">
           <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
