@@ -21,21 +21,6 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleEmailSignIn = async () => {
-    if (!email.trim() || !password.trim()) {
-      toast.error("נא למלא אימייל וסיסמא");
-      return;
-    }
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
-    } else {
-      navigate("/");
-    }
-  };
-
   const handleSendOtp = async () => {
     if (!phone.trim()) {
       toast.error(t("phoneRequired"));
@@ -69,6 +54,21 @@ const Auth = () => {
     }
   };
 
+  const handleEmailSignIn = async () => {
+    if (!email.trim() || !password.trim()) {
+      toast.error("נא למלא אימייל וסיסמא");
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      navigate("/");
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setLoading(true);
     const { error } = await lovable.auth.signInWithOAuth("google", {
@@ -82,7 +82,6 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="px-5 pt-12 pb-4 flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-secondary transition-colors active:scale-95">
           <ChevronLeft className={`h-5 w-5 ${isRtl ? "rotate-180" : ""}`} />
@@ -96,58 +95,100 @@ const Auth = () => {
         transition={{ duration: 0.5 }}
         className="flex-1 px-5 pt-8"
       >
-        {/* Phone input */}
         <div className="space-y-4 max-w-sm mx-auto">
-          <div className="flex items-center gap-3 mb-2">
-            <Phone className="h-5 w-5 text-muted-foreground" />
-            <span className="text-sm font-medium">{t("phoneNumber")}</span>
+          {/* Mode toggle */}
+          <div className="flex rounded-xl border border-border overflow-hidden mb-4">
+            <button
+              onClick={() => setMode("phone")}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${mode === "phone" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground"}`}
+            >
+              <Phone className="h-4 w-4" />
+              {t("phoneNumber")}
+            </button>
+            <button
+              onClick={() => setMode("email")}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${mode === "email" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground"}`}
+            >
+              <Mail className="h-4 w-4" />
+              אימייל
+            </button>
           </div>
 
-          {!otpSent ? (
+          {mode === "phone" ? (
             <>
-              <input
-                type="tel"
-                dir="ltr"
-                placeholder="+972 50 123 4567"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
-              />
-              <button
-                onClick={handleSendOtp}
-                disabled={loading}
-                className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50"
-              >
-                {loading ? "..." : t("sendCode")}
-              </button>
+              {!otpSent ? (
+                <>
+                  <input
+                    type="tel"
+                    dir="ltr"
+                    placeholder="+972 50 123 4567"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
+                  />
+                  <button
+                    onClick={handleSendOtp}
+                    disabled={loading}
+                    className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {loading ? "..." : t("sendCode")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">{t("enterOtp")}</p>
+                  <div className="flex justify-center" dir="ltr">
+                    <InputOTP maxLength={6} value={otp} onChange={setOtp}>
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <button
+                    onClick={handleVerifyOtp}
+                    disabled={loading || otp.length < 6}
+                    className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {loading ? "..." : t("verifyCode")}
+                  </button>
+                  <button
+                    onClick={() => { setOtpSent(false); setOtp(""); }}
+                    className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    ← {t("phoneNumber")}
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">{t("enterOtp")}</p>
-              <div className="flex justify-center" dir="ltr">
-                <InputOTP maxLength={6} value={otp} onChange={setOtp}>
-                  <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
-                  </InputOTPGroup>
-                </InputOTP>
-              </div>
+              <input
+                type="email"
+                dir="ltr"
+                placeholder="email@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
+              />
+              <input
+                type="password"
+                dir="ltr"
+                placeholder="סיסמא"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
+              />
               <button
-                onClick={handleVerifyOtp}
-                disabled={loading || otp.length < 6}
+                onClick={handleEmailSignIn}
+                disabled={loading}
                 className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50"
               >
-                {loading ? "..." : t("verifyCode")}
-              </button>
-              <button
-                onClick={() => { setOtpSent(false); setOtp(""); }}
-                className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                ← {t("phoneNumber")}
+                {loading ? "..." : t("signIn")}
               </button>
             </>
           )}
