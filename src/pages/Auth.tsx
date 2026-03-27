@@ -3,18 +3,38 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { useLang } from "@/contexts/LangContext";
 import { motion } from "framer-motion";
-import { Phone, ChevronLeft } from "lucide-react";
+import { Phone, ChevronLeft, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
+type AuthMode = "phone" | "email";
+
 const Auth = () => {
   const { t, isRtl } = useLang();
   const navigate = useNavigate();
+  const [mode, setMode] = useState<AuthMode>("phone");
   const [phone, setPhone] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const handleEmailSignIn = async () => {
+    if (!email.trim() || !password.trim()) {
+      toast.error("נא למלא אימייל וסיסמא");
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      navigate("/");
+    }
+  };
 
   const handleSendOtp = async () => {
     if (!phone.trim()) {
