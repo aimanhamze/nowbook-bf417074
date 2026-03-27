@@ -4,7 +4,7 @@ import { useProviderById } from "@/hooks/useAllProviders";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { ArrowLeft, Heart, Star, MapPin, Clock, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLang } from "@/contexts/LangContext";
 import ReviewCard from "@/components/reviews/ReviewCard";
 
@@ -12,6 +12,7 @@ const ProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [liked, setLiked] = useState(false);
+  const [coverImgSrc, setCoverImgSrc] = useState("");
   const { lang, t } = useLang();
   const { provider, isLoading } = useProviderById(id);
   const { data: dbReviews } = useProviderReviews(id);
@@ -21,6 +22,24 @@ const ProviderDetail = () => {
   const avgRating = dbReviews && dbReviews.length > 0
     ? ((provider?.rating || 0) * (provider?.reviewCount || 0) + dbReviews.reduce((sum, r) => sum + r.rating, 0)) / realReviewCount
     : provider?.rating || 0;
+
+  useEffect(() => {
+    const primary = provider?.coverImage?.trim() || "";
+    const fallback = provider?.image?.trim() || "";
+    setCoverImgSrc(primary || fallback);
+  }, [provider?.id, provider?.coverImage, provider?.image]);
+
+  const handleCoverImageError = () => {
+    const primary = provider?.coverImage?.trim() || "";
+    const fallback = provider?.image?.trim() || "";
+
+    if (coverImgSrc === primary && fallback && fallback !== primary) {
+      setCoverImgSrc(fallback);
+      return;
+    }
+
+    setCoverImgSrc("");
+  };
 
   if (isLoading) {
     return (
@@ -42,12 +61,12 @@ const ProviderDetail = () => {
     <div className="min-h-screen pb-28">
       {/* Cover */}
       <div className="relative h-56 bg-gradient-to-br from-accent/20 to-accent/5">
-        {provider.coverImage && provider.coverImage.trim() !== '' ? (
+        {coverImgSrc ? (
           <img
-            src={provider.coverImage}
+            src={coverImgSrc}
             alt={provider.name[lang]}
             className="w-full h-full object-cover"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            onError={handleCoverImageError}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
