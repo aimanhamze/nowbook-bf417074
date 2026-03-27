@@ -42,7 +42,7 @@ const ProviderDetail = () => {
     <div className="min-h-screen pb-28">
       {/* Cover */}
       <div className="relative h-56 bg-gradient-to-br from-accent/20 to-accent/5">
-        {provider.coverImage ? (
+        {provider.coverImage && provider.coverImage.trim() !== '' ? (
           <img
             src={provider.coverImage}
             alt={provider.name[lang]}
