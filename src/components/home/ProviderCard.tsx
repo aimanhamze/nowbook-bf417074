@@ -23,12 +23,15 @@ export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
       onClick={() => navigate(`/provider/${provider.id}`)}
       className="flex gap-4 p-3 rounded-2xl bg-card border border-border/60 shadow-sm hover:shadow-md transition-shadow text-right w-full active:scale-[0.98]"
     >
-      <img
-        src={provider.image}
-        alt={provider.name[lang]}
-        className="w-20 h-20 rounded-xl object-cover shrink-0"
-        loading="lazy"
-      />
+      <div className="w-20 h-20 rounded-xl shrink-0 bg-gradient-to-br from-accent/20 to-accent/5 overflow-hidden">
+        <img
+          src={provider.image}
+          alt={provider.name[lang]}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+      </div>
       <div className="flex flex-col justify-center gap-1 min-w-0">
         <h3 className="font-semibold text-sm truncate">{provider.name[lang]}</h3>
         <p className="text-xs text-muted-foreground">{categoryNames[provider.category]?.[lang]}</p>
