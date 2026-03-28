@@ -31,6 +31,7 @@ export function useProviderBookings() {
         .from("bookings")
         .select("*")
         .eq("provider_id", profile.id)
+        .in("status", ["confirmed", "pending"])
         .order("booking_date", { ascending: true });
       if (error) throw error;
       if (!bookings || bookings.length === 0) return [];

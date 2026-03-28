@@ -327,6 +327,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      booking_time_to_minutes: { Args: { _time: string }; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
