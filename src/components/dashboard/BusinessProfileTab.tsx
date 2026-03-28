@@ -65,6 +65,7 @@ export function BusinessProfileTab() {
   const categoryLabels: Record<string, string> = {
     barber: t("barber"), salon: t("salon"), nails: t("nails"),
     brows: t("brows"), spa: t("spa"), skincare: t("skincare"),
+    makeup: t("makeup") || "איפור",
   };
 
   const coverPreview = profile?.cover_image?.trim() || "";
