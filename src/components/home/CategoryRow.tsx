@@ -8,18 +8,18 @@ export function CategoryRow() {
   const { lang } = useLang();
 
   return (
-    <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none -mx-1.5 px-1.5">
+    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none -mx-1.5 px-1.5">
       {categories.map((cat, i) => (
         <motion.button
           key={cat.id}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: i * 0.03, duration: 0.3 }}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           onClick={() => navigate(`/explore?category=${cat.id}`)}
-          className="flex items-center gap-1.5 min-w-fit px-4 py-2 rounded-full bg-card border border-border text-sm font-medium text-foreground hover:border-accent hover:text-accent transition-colors active:scale-95 whitespace-nowrap"
+          className="flex flex-col items-center gap-2 min-w-[72px] py-3 px-2 rounded-2xl bg-secondary hover:bg-accent/10 transition-colors active:scale-95"
         >
-          <span className="text-base">{cat.icon}</span>
-          <span>{categoryNames[cat.id][lang]}</span>
+          <span className="text-2xl">{cat.icon}</span>
+          <span className="text-xs font-medium text-foreground whitespace-nowrap">{categoryNames[cat.id][lang]}</span>
         </motion.button>
       ))}
     </div>
