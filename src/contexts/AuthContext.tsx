@@ -17,13 +17,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isProvider, setIsProvider] = useState(false);
+  const [roleLoading, setRoleLoading] = useState(false);
 
   // Check provider role when user changes
   useEffect(() => {
     if (!user) {
       setIsProvider(false);
+      setRoleLoading(false);
       return;
     }
+    setRoleLoading(true);
     supabase
       .from("user_roles")
       .select("role")
@@ -32,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle()
       .then(({ data }) => {
         setIsProvider(!!data);
+        setRoleLoading(false);
       });
   }, [user?.id]);
 
@@ -40,18 +44,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        if (!session?.user) setLoading(false);
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
+      if (!session?.user) setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Only stop loading once both auth AND role are resolved
+  useEffect(() => {
+    if (user && !roleLoading) {
+      setLoading(false);
+    }
+  }, [user, roleLoading]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
