@@ -69,7 +69,19 @@ export default function Dashboard() {
           <button onClick={() => navigate(-1)} className="active:scale-95">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-xl font-bold">{t("providerDashboard")}</h1>
+          <h1 className="text-xl font-bold flex-1">{t("providerDashboard")}</h1>
+          {isSupported && (
+            <button
+              onClick={isSubscribed ? unsubscribe : subscribe}
+              disabled={pushLoading}
+              className={`p-2 rounded-xl transition-colors active:scale-95 ${
+                isSubscribed ? "bg-accent/10 text-accent" : "bg-secondary text-muted-foreground"
+              }`}
+              title={isSubscribed ? "התראות פעילות" : "הפעל התראות"}
+            >
+              {isSubscribed ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
+            </button>
+          )}
         </div>
 
         {/* Tab bar */}
