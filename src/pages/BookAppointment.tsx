@@ -265,7 +265,13 @@ const BookAppointment = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-6">{t("unavailable")}</p>
+                <div className="text-center py-6">
+                  <p className="text-sm text-muted-foreground">
+                    {allSlotsPassed
+                      ? (lang === "he" ? "כל השעות של היום כבר עברו, בחר תאריך אחר" : "All times for today have passed, pick another date")
+                      : t("unavailable")}
+                  </p>
+                </div>
               )}
             </div>
           </motion.div>
