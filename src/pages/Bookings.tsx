@@ -34,8 +34,12 @@ const Bookings = () => {
   });
 
   const getProviderName = (providerId: string) => {
-    const provider = providers.find((p) => p.id === providerId);
-    return provider?.name[lang] || providerId;
+    // Check mock providers first, then DB providers (with db- prefix)
+    const mock = providers.find((p) => p.id === providerId);
+    if (mock) return mock.name[lang];
+    const dbP = allProviders.find((p) => p.id === `db-${providerId}`);
+    if (dbP) return dbP.name[lang];
+    return providerId;
   };
 
   const getServiceNames = (serviceIds: string[]) => {
