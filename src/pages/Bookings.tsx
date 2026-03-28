@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { providers } from "@/lib/mock-data";
+import { useAllProviders } from "@/hooks/useAllProviders";
 import { useBookingReview } from "@/hooks/useReviews";
 import ReviewForm from "@/components/reviews/ReviewForm";
 import { useState } from "react";
