@@ -81,9 +81,24 @@ const BookAppointment = () => {
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
 
   // Use real availability for DB providers, mock for legacy
-  const availableSlots = isDbProvider
+  const allSlots = isDbProvider
     ? getRealSlots(selectedDate)
     : getMockSlots(provider.id, selectedDate);
+
+  // Filter out past time slots if the selected date is today
+  const availableSlots = (() => {
+    const now = new Date();
+    const isToday =
+      selectedDate.getFullYear() === now.getFullYear() &&
+      selectedDate.getMonth() === now.getMonth() &&
+      selectedDate.getDate() === now.getDate();
+    if (!isToday) return allSlots;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    return allSlots.filter((slot) => {
+      const [h, m] = slot.split(":").map(Number);
+      return h * 60 + m > currentMinutes;
+    });
+  })();
 
   const dates = Array.from({ length: 14 }, (_, i) => addDays(new Date(), i));
 
