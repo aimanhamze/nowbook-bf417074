@@ -30,17 +30,17 @@ const TAB_LABELS: Record<TabId, string> = {
 
 export default function Dashboard() {
   const { t } = useLang();
-  const { user } = useAuth();
+  const { user, isProvider } = useAuth();
   const { profile, isLoading } = useProviderProfile();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("services");
   const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
 
-  if (!user) {
+  if (!user || !isProvider) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-5 gap-4">
-        <p className="text-muted-foreground">{t("signInToManage")}</p>
-        <Button onClick={() => navigate("/auth")}>{t("signInUp")}</Button>
+        <p className="text-muted-foreground">{!user ? t("signInToManage") : t("providerOnly")}</p>
+        <Button onClick={() => navigate(!user ? "/auth" : "/")}>{!user ? t("signInUp") : t("home")}</Button>
       </div>
     );
   }
