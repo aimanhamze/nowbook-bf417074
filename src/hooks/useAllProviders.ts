@@ -131,9 +131,23 @@ export function useRealAvailability(providerId: string | undefined) {
       if (!dbId) return [];
       const { data, error } = await supabase
         .from("bookings")
-        .select("booking_date, booking_time")
+        .select("booking_date, booking_time, service_ids")
         .eq("provider_id", dbId)
         .in("status", ["confirmed", "pending"]);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!dbId,
+  });
+
+  const servicesQuery = useQuery({
+    queryKey: ["provider-services-public", dbId],
+    queryFn: async () => {
+      if (!dbId) return [];
+      const { data, error } = await supabase
+        .from("provider_services")
+        .select("id, duration")
+        .eq("provider_id", dbId);
       if (error) throw error;
       return data || [];
     },
@@ -153,21 +167,34 @@ export function useRealAvailability(providerId: string | undefined) {
     const slot = (availabilityQuery.data || []).find(a => a.day_of_week === dow);
     if (!slot || !slot.is_available) return [];
 
-    // Get booked times for this date
-    const bookedTimes = (bookingsQuery.data || [])
-      .filter(b => b.booking_date === dateStr)
-      .map(b => b.booking_time);
+    // Build a set of blocked time slots based on booking duration
+    const services = servicesQuery.data || [];
+    const blockedMinutes = new Set<number>();
 
-    // Generate 30-min slots, excluding already booked ones
+    (bookingsQuery.data || [])
+      .filter(b => b.booking_date === dateStr)
+      .forEach(b => {
+        const bookingStart = parseTime(b.booking_time);
+        // Calculate total duration from booked services
+        const totalDuration = (b.service_ids || []).reduce((sum: number, sid: string) => {
+          const svc = services.find(s => s.id === sid);
+          return sum + (svc?.duration || 30);
+        }, 0);
+        // Block all 30-min slots that overlap with this booking
+        for (let t = bookingStart; t < bookingStart + totalDuration; t += 30) {
+          blockedMinutes.add(t);
+        }
+      });
+
+    // Generate 30-min slots, excluding blocked ones
     const start = parseTime(slot.start_time);
     const end = parseTime(slot.end_time);
     const slots: string[] = [];
     for (let t = start; t < end; t += 30) {
-      const h = Math.floor(t / 60);
-      const m = t % 60;
-      const timeStr = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-      if (!bookedTimes.includes(timeStr)) {
-        slots.push(timeStr);
+      if (!blockedMinutes.has(t)) {
+        const h = Math.floor(t / 60);
+        const m = t % 60;
+        slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
       }
     }
     return slots;
