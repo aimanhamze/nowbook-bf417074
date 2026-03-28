@@ -4,10 +4,18 @@ import { ProviderCard } from "@/components/home/ProviderCard";
 import { useAllProviders } from "@/hooks/useAllProviders";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { Navigate } from "react-router-dom";
 
 const Index = () => {
   const { t } = useLang();
+  const { isProvider } = useAuth();
   const { providers } = useAllProviders();
+
+  // Providers see their dashboard as home
+  if (isProvider) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div className="min-h-screen pb-24">
