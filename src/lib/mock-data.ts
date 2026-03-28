@@ -33,6 +33,11 @@ export const categories = [
   { id: "skincare", icon: "✨" },
   { id: "makeup", icon: "💄" },
   { id: "orthopedic", icon: "🦴" },
+  { id: "dentist", icon: "🦷" },
+  { id: "eye_doctor", icon: "👁️‍🗨️" },
+  { id: "dermatologist", icon: "🩺" },
+  { id: "physiotherapy", icon: "💪" },
+  { id: "pediatrician", icon: "👶" },
 ] as const;
 
 export const categoryNames: Record<string, Record<Lang, string>> = {
@@ -44,6 +49,11 @@ export const categoryNames: Record<string, Record<Lang, string>> = {
   skincare: { he: "טיפוח עור", ar: "العناية بالبشرة", en: "Skincare" },
   makeup: { he: "איפור", ar: "مكياج", en: "Makeup" },
   orthopedic: { he: "אורתופדיה", ar: "جراحة العظام", en: "Orthopedics" },
+  dentist: { he: "רופא שיניים", ar: "طبيب أسنان", en: "Dentist" },
+  eye_doctor: { he: "רופא עיניים", ar: "طبيب عيون", en: "Eye Doctor" },
+  dermatologist: { he: "רופא עור", ar: "طبيب جلدية", en: "Dermatologist" },
+  physiotherapy: { he: "פיזיותרפיה", ar: "علاج طبيعي", en: "Physiotherapy" },
+  pediatrician: { he: "רופא ילדים", ar: "طبيب أطفال", en: "Pediatrician" },
 };
 
 export const providers: Provider[] = [];
