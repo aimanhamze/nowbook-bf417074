@@ -74,7 +74,18 @@ const BookAppointment = () => {
 
   const handleConfirm = async () => {
     // For DB providers, store the actual DB id (without "db-" prefix)
-    const storeProviderId = isDbProvider ? provider.id.replace("db-", "") : provider.id;
+    // For mock providers, try to find a matching DB provider profile
+    let storeProviderId = isDbProvider ? provider.id.replace("db-", "") : provider.id;
+    
+    if (!isDbProvider) {
+      // Look up if this mock provider has a real DB profile
+      const { data: dbProfile } = await supabase
+        .from("provider_profiles")
+        .select("id")
+        .ilike("business_name", `%${provider.name.he.replace(/[׳']/g, "").substring(0, 6)}%`)
+        .maybeSingle();
+      if (dbProfile) storeProviderId = dbProfile.id;
+    }
 
     if (user) {
       setLoading(true);
