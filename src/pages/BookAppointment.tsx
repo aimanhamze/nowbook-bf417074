@@ -114,18 +114,20 @@ const BookAppointment = () => {
       }
 
       // Send push notification to provider
-      try {
-        await supabase.functions.invoke("send-push", {
-          body: {
-            provider_id: storeProviderId,
-            title: "הזמנה חדשה! 🎉",
-            body: `הזמנה חדשה ל-${format(selectedDate, "dd/MM")} בשעה ${selectedTime}`,
-            url: "/dashboard",
-          },
-        });
-      } catch (e) {
-        // Don't block booking if push fails
-        console.error("Push notification failed:", e);
+      const { data: pushData, error: pushError } = await supabase.functions.invoke("send-push", {
+        body: {
+          provider_id: storeProviderId,
+          title: "הזמנה חדשה! 🎉",
+          body: `הזמנה חדשה ל-${format(selectedDate, "dd/MM")} בשעה ${selectedTime}`,
+          url: "/dashboard",
+        },
+      });
+
+      // Don't block booking if push fails, but log clearly for debugging
+      if (pushError) {
+        console.error("Push notification failed:", pushError.message);
+      } else if (pushData?.results?.some((r: any) => r.status === "rejected" || (r.value && r.value.ok === false))) {
+        console.error("Push notification delivery failed:", pushData);
       }
     }
 
