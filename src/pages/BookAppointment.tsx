@@ -26,6 +26,21 @@ const BookAppointment = () => {
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
+  // Must be logged in to book
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center gap-4">
+        <h2 className="text-lg font-bold">{lang === "he" ? "יש להתחבר כדי לקבוע תור" : "Please sign in to book"}</h2>
+        <button
+          onClick={() => navigate("/auth", { state: { from: `/provider/${id}/book` } })}
+          className="px-6 py-3 rounded-2xl bg-accent text-accent-foreground font-semibold"
+        >
+          {lang === "he" ? "התחברות" : "Sign in"}
+        </button>
+      </div>
+    );
+  }
+
   // Providers cannot book appointments
   if (isProvider) {
     return (
