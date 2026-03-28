@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Briefcase, Calendar, User, Clock, ChevronLeft } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Briefcase, Calendar, User, Clock, ChevronLeft, Bell, BellOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -10,6 +10,7 @@ import { CalendarTab } from "@/components/dashboard/CalendarTab";
 import { BusinessProfileTab } from "@/components/dashboard/BusinessProfileTab";
 import { AvailabilityTab } from "@/components/dashboard/AvailabilityTab";
 import { Button } from "@/components/ui/button";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 const tabs = [
   { id: "services", icon: Briefcase },
