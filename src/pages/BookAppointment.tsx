@@ -86,12 +86,13 @@ const BookAppointment = () => {
     : getMockSlots(provider.id, selectedDate);
 
   // Filter out past time slots if the selected date is today
+  const now = new Date();
+  const isToday =
+    selectedDate.getFullYear() === now.getFullYear() &&
+    selectedDate.getMonth() === now.getMonth() &&
+    selectedDate.getDate() === now.getDate();
+
   const availableSlots = (() => {
-    const now = new Date();
-    const isToday =
-      selectedDate.getFullYear() === now.getFullYear() &&
-      selectedDate.getMonth() === now.getMonth() &&
-      selectedDate.getDate() === now.getDate();
     if (!isToday) return allSlots;
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     return allSlots.filter((slot) => {
@@ -99,6 +100,8 @@ const BookAppointment = () => {
       return h * 60 + m > currentMinutes;
     });
   })();
+
+  const allSlotsPassed = isToday && allSlots.length > 0 && availableSlots.length === 0;
 
   const dates = Array.from({ length: 14 }, (_, i) => addDays(new Date(), i));
 
@@ -262,7 +265,13 @@ const BookAppointment = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-6">{t("unavailable")}</p>
+                <div className="text-center py-6">
+                  <p className="text-sm text-muted-foreground">
+                    {allSlotsPassed
+                      ? (lang === "he" ? "כל השעות של היום כבר עברו, בחר תאריך אחר" : "All times for today have passed, pick another date")
+                      : t("unavailable")}
+                  </p>
+                </div>
               )}
             </div>
           </motion.div>
