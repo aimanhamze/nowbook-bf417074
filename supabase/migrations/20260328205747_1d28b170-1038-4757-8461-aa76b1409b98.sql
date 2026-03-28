@@ -1,0 +1,1 @@
+UPDATE provider_profiles SET business_name = 'BODY PHYSICAL THERAPY - בראא סלימאן' WHERE business_name = 'BODY PHYSICAL THERAPY - BARAA SLEMAN';
