@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
 
@@ -27,7 +27,6 @@ export function useProviderBookings() {
     queryFn: async () => {
       if (!profile) return [];
 
-      // Fetch bookings
       const { data: bookings, error } = await supabase
         .from("bookings")
         .select("*")
@@ -36,14 +35,12 @@ export function useProviderBookings() {
       if (error) throw error;
       if (!bookings || bookings.length === 0) return [];
 
-      // Fetch customer profiles for all user_ids
       const userIds = [...new Set(bookings.map((b) => b.user_id))];
       const { data: profiles } = await supabase
         .from("profiles")
         .select("user_id, display_name, phone, avatar_url")
         .in("user_id", userIds);
 
-      // Fetch provider services for name resolution
       const { data: services } = await supabase
         .from("provider_services")
         .select("id, name")
@@ -68,5 +65,37 @@ export function useProviderBookings() {
       });
     },
     enabled: !!profile,
+  });
+}
+
+export function useCancelBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: "cancelled" })
+        .eq("id", bookingId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
+    },
+  });
+}
+
+export function useDeleteBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { error } = await supabase
+        .from("bookings")
+        .delete()
+        .eq("id", bookingId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
+    },
   });
 }

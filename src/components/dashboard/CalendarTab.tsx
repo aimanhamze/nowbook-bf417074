@@ -1,13 +1,15 @@
 import { useState, useMemo } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday } from "date-fns";
 import { he } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, User, Phone, Banknote, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, User, Phone, Banknote, XCircle, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/contexts/LangContext";
-import { useProviderBookings, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import { useProviderBookings, useCancelBooking, useDeleteBooking, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   confirmed: { label: "מאושר", className: "bg-emerald-500/15 text-emerald-700 border-emerald-200" },
@@ -16,11 +18,29 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 function BookingCard({ booking, index }: { booking: EnrichedBooking; index: number }) {
+  const cancelBooking = useCancelBooking();
+  const deleteBooking = useDeleteBooking();
+
   const initials = booking.customer_name
     ? booking.customer_name.split(" ").map((w) => w[0]).join("").slice(0, 2)
     : "?";
 
   const status = statusConfig[booking.status] || statusConfig.confirmed;
+  const isCancelled = booking.status === "cancelled";
+
+  const handleCancel = () => {
+    cancelBooking.mutate(booking.id, {
+      onSuccess: () => toast.success("התור בוטל בהצלחה"),
+      onError: () => toast.error("שגיאה בביטול התור"),
+    });
+  };
+
+  const handleDelete = () => {
+    deleteBooking.mutate(booking.id, {
+      onSuccess: () => toast.success("התור נמחק"),
+      onError: () => toast.error("שגיאה במחיקת התור"),
+    });
+  };
 
   return (
     <motion.div
@@ -76,6 +96,32 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
             {name}
           </span>
         ))}
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-2 pt-1">
+        {!isCancelled && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 text-xs h-8 text-amber-600 border-amber-200 hover:bg-amber-50"
+            onClick={handleCancel}
+            disabled={cancelBooking.isPending}
+          >
+            <XCircle className="h-3.5 w-3.5 mr-1" />
+            {cancelBooking.isPending ? "מבטל..." : "בטל תור"}
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className={`${isCancelled ? 'flex-1' : ''} text-xs h-8 text-red-600 border-red-200 hover:bg-red-50`}
+          onClick={handleDelete}
+          disabled={deleteBooking.isPending}
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-1" />
+          {deleteBooking.isPending ? "מוחק..." : "מחק"}
+        </Button>
       </div>
     </motion.div>
   );
