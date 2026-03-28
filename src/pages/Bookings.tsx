@@ -16,6 +16,7 @@ const Bookings = () => {
   const navigate = useNavigate();
   const { lang, t } = useLang();
   const { user } = useAuth();
+  const { providers: allProviders } = useAllProviders();
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ["bookings", user?.id],
