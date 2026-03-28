@@ -21,6 +21,31 @@ export function usePushSubscription() {
   const [isSupported, setIsSupported] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const persistSubscription = async (subscription: PushSubscription) => {
+    if (!user) return;
+
+    const subJson = subscription.toJSON();
+    const endpoint = subJson.endpoint;
+    const p256dh = subJson.keys?.p256dh;
+    const auth = subJson.keys?.auth;
+
+    if (!endpoint || !p256dh || !auth) {
+      throw new Error("Invalid push subscription payload");
+    }
+
+    const { error } = await supabase.from("push_subscriptions").upsert(
+      {
+        user_id: user.id,
+        endpoint,
+        p256dh,
+        auth,
+      },
+      { onConflict: "user_id,endpoint" }
+    );
+
+    if (error) throw error;
+  };
+
   useEffect(() => {
     setIsSupported("serviceWorker" in navigator && "PushManager" in window);
   }, []);
@@ -28,11 +53,19 @@ export function usePushSubscription() {
   useEffect(() => {
     if (!isSupported || !user) return;
     // Check existing subscription
-    navigator.serviceWorker.getRegistration("/sw-push.js").then((reg) => {
+    navigator.serviceWorker.getRegistration("/sw-push.js").then(async (reg) => {
       if (reg) {
-        reg.pushManager.getSubscription().then((sub) => {
-          setIsSubscribed(!!sub);
-        });
+        const sub = await reg.pushManager.getSubscription();
+        setIsSubscribed(!!sub);
+
+        // Re-sync subscription record in case DB row was removed
+        if (sub) {
+          try {
+            await persistSubscription(sub);
+          } catch (err) {
+            console.error("Push subscription sync failed:", err);
+          }
+        }
       }
     });
   }, [isSupported, user]);
@@ -41,29 +74,31 @@ export function usePushSubscription() {
     if (!user || !isSupported) return;
     setLoading(true);
     try {
+      if (Notification.permission === "denied") {
+        throw new Error("Notifications permission is blocked in browser settings");
+      }
+
       // Register the push SW
       const registration = await navigator.serviceWorker.register("/sw-push.js");
       await navigator.serviceWorker.ready;
+
+      // Force-refresh subscription to avoid stale VAPID key subscriptions
+      const existingSubscription = await registration.pushManager.getSubscription();
+      if (existingSubscription) {
+        await existingSubscription.unsubscribe();
+        await supabase
+          .from("push_subscriptions")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("endpoint", existingSubscription.endpoint);
+      }
 
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
 
-      const subJson = subscription.toJSON();
-
-      // Save to database
-      const { error } = await supabase.from("push_subscriptions").upsert(
-        {
-          user_id: user.id,
-          endpoint: subJson.endpoint!,
-          p256dh: subJson.keys!.p256dh!,
-          auth: subJson.keys!.auth!,
-        },
-        { onConflict: "user_id,endpoint" }
-      );
-
-      if (error) throw error;
+      await persistSubscription(subscription);
       setIsSubscribed(true);
     } catch (err) {
       console.error("Push subscription failed:", err);
