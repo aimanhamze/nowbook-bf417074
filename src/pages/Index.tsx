@@ -6,50 +6,56 @@ import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
+import { MapPin } from "lucide-react";
 
 const Index = () => {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { isProvider } = useAuth();
   const { providers } = useAllProviders();
 
-  // Providers see their dashboard as home
   if (isProvider) {
     return <Navigate to="/dashboard" replace />;
   }
 
   return (
-    <div className="min-h-screen pb-24">
-      <header className="px-5 pt-12 pb-6">
+    <div className="min-h-screen pb-24 bg-background">
+      {/* Wolt-style header */}
+      <header className="sticky top-0 z-30 bg-accent px-5 pt-10 pb-5">
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.4 }}
         >
-          <p className="text-sm text-muted-foreground mb-1">{t("goodMorning")}</p>
-          <h1 className="text-2xl font-bold leading-tight">
-            {t("findAppointment")}<br />
-            <span className="text-accent">{t("nextAppointment")}</span>
+          <div className="flex items-center gap-2 mb-3">
+            <MapPin className="h-4 w-4 text-accent-foreground/80" />
+            <span className="text-xs font-medium text-accent-foreground/80">
+              {lang === "he" ? "בקרבתך" : "Near you"}
+            </span>
+          </div>
+          <h1 className="text-xl font-bold text-accent-foreground leading-tight mb-4">
+            {t("findAppointment")}
           </h1>
+          <SearchBar />
         </motion.div>
       </header>
 
-      <div className="px-5 mb-6">
-        <SearchBar />
-      </div>
-
-      <section className="px-5 mb-8">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-          {t("browseByCategory")}
-        </h2>
+      {/* Categories */}
+      <section className="px-5 py-4">
         <CategoryRow />
       </section>
 
+      {/* Provider Grid — Wolt-style 2 columns */}
       <section className="px-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">{t("popularNearby")}</h2>
-          <button className="text-xs text-accent font-semibold">{t("seeAll")}</button>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-bold">{t("popularNearby")}</h2>
+          <button
+            className="text-xs text-accent font-semibold"
+            onClick={() => {}}
+          >
+            {t("seeAll")}
+          </button>
         </div>
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {providers.map((provider, i) => (
             <ProviderCard key={provider.id} provider={provider} index={i} />
           ))}

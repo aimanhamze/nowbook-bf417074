@@ -1,4 +1,4 @@
-import { Star, MapPin } from "lucide-react";
+import { Star, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Provider } from "@/lib/mock-data";
 import { motion } from "framer-motion";
@@ -14,37 +14,65 @@ export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
   const navigate = useNavigate();
   const { lang, t } = useLang();
 
+  const minPrice = provider.services.length
+    ? Math.min(...provider.services.map((s) => s.price))
+    : null;
+
   return (
     <motion.button
-      initial={{ opacity: 0, y: 16, filter: "blur(4px)" }}
-      whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-      viewport={{ once: true, amount: 0.2 }}
-      transition={{ delay: index * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.15 }}
+      transition={{ delay: index * 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       onClick={() => navigate(`/provider/${provider.id}`)}
-      className="flex gap-4 p-3 rounded-2xl bg-card border border-border/60 shadow-sm hover:shadow-md transition-shadow text-right w-full active:scale-[0.98]"
+      className="flex flex-col rounded-2xl bg-card overflow-hidden shadow-sm hover:shadow-lg transition-shadow text-right w-full active:scale-[0.98] group"
     >
-      <div className="w-20 h-20 rounded-xl shrink-0 bg-gradient-to-br from-accent/20 to-accent/5 overflow-hidden">
+      {/* Image */}
+      <div className="relative w-full aspect-[16/10] bg-muted overflow-hidden">
         <img
           src={provider.image}
           alt={provider.name[lang]}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = "none";
+          }}
         />
-      </div>
-      <div className="flex flex-col justify-center gap-1 min-w-0">
-        <h3 className="font-semibold text-sm truncate">{provider.name[lang]}</h3>
-        <p className="text-xs text-muted-foreground">{categoryNames[provider.category]?.[lang]}</p>
-        <div className="flex items-center gap-3 mt-0.5">
-          <span className="flex items-center gap-1 text-xs font-medium">
-            <Star className="h-3.5 w-3.5 fill-accent text-accent" />
-            {provider.rating}
-            <span className="text-muted-foreground">({provider.reviewCount})</span>
-          </span>
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="h-3 w-3" />
+        {/* Category badge */}
+        <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-card/90 backdrop-blur-sm text-[11px] font-semibold text-foreground shadow-sm">
+          {categoryNames[provider.category]?.[lang]}
+        </span>
+        {/* Distance badge */}
+        {provider.distance && provider.distance !== "—" && (
+          <span className="absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-md bg-foreground/70 text-[11px] font-medium text-primary-foreground">
             {provider.distance} {t("km")}
           </span>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-3 flex flex-col gap-1">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-bold text-sm truncate">{provider.name[lang]}</h3>
+          {provider.rating > 0 && (
+            <span className="flex items-center gap-1 shrink-0 text-xs font-semibold bg-accent/10 text-accent px-1.5 py-0.5 rounded-md">
+              <Star className="h-3 w-3 fill-accent text-accent" />
+              {provider.rating}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          {provider.services.length > 0 && (
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {provider.services[0].duration}+ {t("min")}
+            </span>
+          )}
+          {minPrice !== null && (
+            <span>
+              {lang === "he" ? "החל מ-" : "From "}₪{minPrice}
+            </span>
+          )}
         </div>
       </div>
     </motion.button>
