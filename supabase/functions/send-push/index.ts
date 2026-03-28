@@ -7,51 +7,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-function b64urlDecode(str: string): Uint8Array {
-  const padding = "=".repeat((4 - (str.length % 4)) % 4);
-  const base64 = (str + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64);
-  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
-}
-
-function b64urlEncode(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
-function toExportedVapidKeys(vapidPublicKey: string, vapidPrivateKey: string) {
-  const pubBytes = b64urlDecode(vapidPublicKey);
-
-  if (pubBytes.length !== 65 || pubBytes[0] !== 0x04) {
-    throw new Error("Invalid VAPID public key format. Expected uncompressed P-256 key (65 bytes)");
-  }
-
-  const x = b64urlEncode(pubBytes.slice(1, 33));
-  const y = b64urlEncode(pubBytes.slice(33, 65));
-
-  return {
-    publicKey: {
-      kty: "EC",
-      crv: "P-256",
-      x,
-      y,
-      key_ops: ["verify"],
-      ext: true,
-    },
-    privateKey: {
-      kty: "EC",
-      crv: "P-256",
-      x,
-      y,
-      d: vapidPrivateKey,
-      key_ops: ["sign"],
-      ext: true,
-    },
-  };
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -63,20 +18,17 @@ Deno.serve(async (req) => {
     if (!provider_id || !title) {
       return new Response(
         JSON.stringify({ error: "provider_id and title are required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY")!;
-    const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY")!;
+    const vapidKeysJson = Deno.env.get("VAPID_KEYS")!;
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // Get provider's user_id
     const { data: providerProfile } = await supabase
       .from("provider_profiles")
       .select("user_id")
@@ -84,26 +36,27 @@ Deno.serve(async (req) => {
       .single();
 
     if (!providerProfile) {
-      return new Response(JSON.stringify({ error: "Provider not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Provider not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
+    // Get push subscriptions
     const { data: subscriptions } = await supabase
       .from("push_subscriptions")
       .select("id, endpoint, p256dh, auth")
       .eq("user_id", providerProfile.user_id);
 
     if (!subscriptions?.length) {
-      return new Response(JSON.stringify({ message: "No subscriptions found" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ message: "No subscriptions found" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const exportedVapidKeys = toExportedVapidKeys(vapidPublicKey, vapidPrivateKey);
-    const vapidKeys = await webpush.importVapidKeys(exportedVapidKeys);
+    // Import VAPID keys from JWK format
+    const vapidKeys = await webpush.importVapidKeys(JSON.parse(vapidKeysJson));
     const appServer = await webpush.ApplicationServer.new({
       contactInformation: "mailto:push@nowbook.lovable.app",
       vapidKeys,
@@ -131,38 +84,30 @@ Deno.serve(async (req) => {
             urgency: webpush.Urgency.High,
           });
 
-          return {
-            subscription_id: sub.id,
-            status: 201,
-            ok: true,
-          };
+          return { subscription_id: sub.id, ok: true };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
 
-          // Remove expired subscriptions when possible
-          if (message.includes("410") || message.toLowerCase().includes("gone")) {
+          // Remove expired subscriptions
+          if (err instanceof webpush.PushMessageError && err.isGone()) {
             await supabase.from("push_subscriptions").delete().eq("id", sub.id);
           }
 
-          return {
-            subscription_id: sub.id,
-            status: 500,
-            ok: false,
-            error: message,
-          };
+          return { subscription_id: sub.id, ok: false, error: message };
         }
       })
     );
 
-    return new Response(JSON.stringify({ sent: results.length, results }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ sent: results.length, results }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("Send push error:", message);
+    return new Response(
+      JSON.stringify({ error: message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 });
