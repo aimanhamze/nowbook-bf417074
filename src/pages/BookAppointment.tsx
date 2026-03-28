@@ -81,8 +81,9 @@ const BookAppointment = () => {
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
 
   // Use real availability for DB providers, mock for legacy
+  // Pass totalDuration so only slots with enough room are shown
   const allSlots = isDbProvider
-    ? getRealSlots(selectedDate)
+    ? getRealSlots(selectedDate, totalDuration || 15)
     : getMockSlots(provider.id, selectedDate);
 
   // Filter out past time slots if the selected date is today
