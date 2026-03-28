@@ -30,7 +30,7 @@ const TAB_LABELS: Record<TabId, string> = {
 
 export default function Dashboard() {
   const { t } = useLang();
-  const { user } = useAuth();
+  const { user, isProvider } = useAuth();
   const { profile, isLoading } = useProviderProfile();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("services");
