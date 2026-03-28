@@ -43,7 +43,13 @@ const Bookings = () => {
   };
 
   const getServiceNames = (serviceIds: string[]) => {
+    // Check mock providers
     for (const provider of providers) {
+      const matched = provider.services.filter((s) => serviceIds.includes(s.id));
+      if (matched.length > 0) return matched.map((s) => s.name[lang]).join("، ");
+    }
+    // Check DB providers
+    for (const provider of allProviders) {
       const matched = provider.services.filter((s) => serviceIds.includes(s.id));
       if (matched.length > 0) return matched.map((s) => s.name[lang]).join("، ");
     }
