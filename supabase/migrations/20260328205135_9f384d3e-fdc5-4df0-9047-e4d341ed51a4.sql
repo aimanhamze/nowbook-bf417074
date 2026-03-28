@@ -1,0 +1,1 @@
+UPDATE provider_profiles SET business_name = 'לינא זבידאת - איפור מקצועי' WHERE id = '20fe5cc7-9536-41c4-8e2e-55f957fbc216';
