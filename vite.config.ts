@@ -23,8 +23,8 @@ export default defineConfig(({ mode }) => ({
         navigateFallbackDenylist: [/^\/~oauth/],
       },
       manifest: {
-        name: "Book - הזמנת תורים",
-        short_name: "Book",
+        name: "Dori - הזמנת תורים",
+        short_name: "Dori",
         description: "הזמנת תורים בקלות",
         theme_color: "#fcfcfc",
         background_color: "#fcfcfc",

@@ -2,7 +2,7 @@ export type Lang = "he" | "ar" | "en";
 
 export const translations = {
   he: {
-    appName: "Book",
+    appName: "Dori",
     goodMorning: "בוקר טוב ☀️",
     findAppointment: "מצא את התור",
     nextAppointment: "הבא שלך",
@@ -149,7 +149,7 @@ export const translations = {
     reviewed: "דורג",
   },
   ar: {
-    appName: "Book",
+    appName: "Dori",
     goodMorning: "صباح الخير ☀️",
     findAppointment: "ابحث عن",
     nextAppointment: "موعدك القادم",
@@ -296,7 +296,7 @@ export const translations = {
     reviewed: "تم التقييم",
   },
   en: {
-    appName: "Book",
+    appName: "Dori",
     goodMorning: "Good morning ☀️",
     findAppointment: "Find your next",
     nextAppointment: "appointment",
