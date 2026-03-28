@@ -34,6 +34,7 @@ export default function Dashboard() {
   const { profile, isLoading } = useProviderProfile();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("services");
+  const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
 
   if (!user) {
     return (
