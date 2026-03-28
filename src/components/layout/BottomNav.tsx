@@ -16,7 +16,8 @@ export function BottomNav() {
     { icon: User, label: t("profile"), path: "/profile" },
   ];
 
-  if (location.pathname.startsWith("/provider/") && location.pathname.includes("/book")) {
+  // Hide BottomNav on provider detail and booking pages
+  if (location.pathname.startsWith("/provider/")) {
     return null;
   }
 
