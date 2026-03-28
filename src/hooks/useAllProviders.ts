@@ -125,30 +125,50 @@ export function useRealAvailability(providerId: string | undefined) {
     enabled: !!dbId,
   });
 
+  const bookingsQuery = useQuery({
+    queryKey: ["provider-bookings-public", dbId],
+    queryFn: async () => {
+      if (!dbId) return [];
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("booking_date, booking_time")
+        .eq("provider_id", dbId)
+        .in("status", ["confirmed", "pending"]);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!dbId,
+  });
+
   const getAvailableSlots = (date: Date): string[] => {
     if (!isDbProvider) {
-      // Fall back to mock slot generation
       return getMockAvailableSlots(providerId || "", date);
     }
 
     const dow = date.getDay();
     const dateStr = date.toISOString().split("T")[0];
 
-    // Check if date is blocked
     if ((blockedDatesQuery.data || []).includes(dateStr)) return [];
 
-    // Find availability for this day
     const slot = (availabilityQuery.data || []).find(a => a.day_of_week === dow);
     if (!slot || !slot.is_available) return [];
 
-    // Generate 30-min slots between start_time and end_time
+    // Get booked times for this date
+    const bookedTimes = (bookingsQuery.data || [])
+      .filter(b => b.booking_date === dateStr)
+      .map(b => b.booking_time);
+
+    // Generate 30-min slots, excluding already booked ones
     const start = parseTime(slot.start_time);
     const end = parseTime(slot.end_time);
     const slots: string[] = [];
     for (let t = start; t < end; t += 30) {
       const h = Math.floor(t / 60);
       const m = t % 60;
-      slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+      const timeStr = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      if (!bookedTimes.includes(timeStr)) {
+        slots.push(timeStr);
+      }
     }
     return slots;
   };
