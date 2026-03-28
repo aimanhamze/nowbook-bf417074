@@ -1,20 +1,28 @@
-import { Home, Search, Calendar, Heart, User } from "lucide-react";
+import { Home, Search, Calendar, Heart, User, LayoutDashboard } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useLang();
+  const { isProvider } = useAuth();
 
-  const navItems = [
-    { icon: Home, label: t("home"), path: "/" },
-    { icon: Search, label: t("explore"), path: "/explore" },
-    { icon: Calendar, label: t("bookings"), path: "/bookings" },
-    { icon: Heart, label: t("favorites"), path: "/favorites" },
-    { icon: User, label: t("profile"), path: "/profile" },
-  ];
+  const navItems = isProvider
+    ? [
+        { icon: LayoutDashboard, label: t("providerDashboard"), path: "/dashboard" },
+        { icon: Search, label: t("explore"), path: "/explore" },
+        { icon: User, label: t("profile"), path: "/profile" },
+      ]
+    : [
+        { icon: Home, label: t("home"), path: "/" },
+        { icon: Search, label: t("explore"), path: "/explore" },
+        { icon: Calendar, label: t("bookings"), path: "/bookings" },
+        { icon: Heart, label: t("favorites"), path: "/favorites" },
+        { icon: User, label: t("profile"), path: "/profile" },
+      ];
 
   // Hide BottomNav on provider detail and booking pages
   if (location.pathname.startsWith("/provider/")) {

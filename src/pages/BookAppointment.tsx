@@ -16,7 +16,7 @@ const BookAppointment = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { lang, t } = useLang();
-  const { user } = useAuth();
+  const { user, isProvider } = useAuth();
   const { provider, isLoading: providerLoading } = useProviderById(id);
   const { getAvailableSlots: getRealSlots } = useRealAvailability(id);
 
@@ -25,6 +25,16 @@ const BookAppointment = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [loading, setLoading] = useState(false);
+
+  // Providers cannot book appointments
+  if (isProvider) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-5 gap-4">
+        <p className="text-muted-foreground">ספקים לא יכולים להזמין תורים</p>
+        <button onClick={() => navigate(-1)} className="text-accent font-semibold">← {t("backToHome")}</button>
+      </div>
+    );
+  }
 
   if (providerLoading) {
     return (

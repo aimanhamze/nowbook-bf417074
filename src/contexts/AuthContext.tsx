@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isProvider: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -15,6 +16,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isProvider, setIsProvider] = useState(false);
+
+  // Check provider role when user changes
+  useEffect(() => {
+    if (!user) {
+      setIsProvider(false);
+      return;
+    }
+    supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "provider")
+      .maybeSingle()
+      .then(({ data }) => {
+        setIsProvider(!!data);
+      });
+  }, [user?.id]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -39,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, isProvider, signOut }}>
       {children}
     </AuthContext.Provider>
   );
