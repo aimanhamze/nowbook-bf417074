@@ -69,7 +69,7 @@ const Install = () => {
         className="flex-1 px-5 pt-8 max-w-sm mx-auto w-full"
       >
         <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-6 shadow-lg">
-          <img src="/pwa-icon-512.png" alt="Book app icon" className="w-full h-full object-cover" />
+          <img src="/pwa-icon-512.png" alt="Dori app icon" className="w-full h-full object-cover" />
         </div>
 
         {deferredPrompt ? (
