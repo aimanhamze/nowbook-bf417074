@@ -1,13 +1,15 @@
 import { useState, useMemo } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday } from "date-fns";
 import { he } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, User, Phone, Banknote, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, User, Phone, Banknote, XCircle, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/contexts/LangContext";
-import { useProviderBookings, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import { useProviderBookings, useCancelBooking, useDeleteBooking, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   confirmed: { label: "מאושר", className: "bg-emerald-500/15 text-emerald-700 border-emerald-200" },
