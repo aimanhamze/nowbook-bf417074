@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Briefcase, Calendar, User, Clock, ChevronLeft } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Briefcase, Calendar, User, Clock, ChevronLeft, Bell, BellOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -10,6 +10,7 @@ import { CalendarTab } from "@/components/dashboard/CalendarTab";
 import { BusinessProfileTab } from "@/components/dashboard/BusinessProfileTab";
 import { AvailabilityTab } from "@/components/dashboard/AvailabilityTab";
 import { Button } from "@/components/ui/button";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 const tabs = [
   { id: "services", icon: Briefcase },
@@ -33,6 +34,7 @@ export default function Dashboard() {
   const { profile, isLoading } = useProviderProfile();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("services");
+  const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
 
   if (!user) {
     return (
@@ -67,7 +69,19 @@ export default function Dashboard() {
           <button onClick={() => navigate(-1)} className="active:scale-95">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-xl font-bold">{t("providerDashboard")}</h1>
+          <h1 className="text-xl font-bold flex-1">{t("providerDashboard")}</h1>
+          {isSupported && (
+            <button
+              onClick={isSubscribed ? unsubscribe : subscribe}
+              disabled={pushLoading}
+              className={`p-2 rounded-xl transition-colors active:scale-95 ${
+                isSubscribed ? "bg-accent/10 text-accent" : "bg-secondary text-muted-foreground"
+              }`}
+              title={isSubscribed ? "התראות פעילות" : "הפעל התראות"}
+            >
+              {isSubscribed ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
+            </button>
+          )}
         </div>
 
         {/* Tab bar */}
