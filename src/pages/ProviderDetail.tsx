@@ -58,7 +58,7 @@ const ProviderDetail = () => {
   }
 
   return (
-    <div className="min-h-screen pb-28">
+    <div className="min-h-screen pb-36">
       {/* Cover */}
       <div className="relative h-56 bg-gradient-to-br from-accent/20 to-accent/5">
         {coverImgSrc ? (
@@ -202,7 +202,7 @@ const ProviderDetail = () => {
       )}
 
       {/* Sticky Book Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-card/80 backdrop-blur-xl border-t border-border">
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/90 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl shadow-lg">
         <button
           onClick={() => navigate(`/provider/${provider.id}/book`)}
           className="w-full py-3.5 rounded-2xl bg-accent text-accent-foreground font-semibold text-sm active:scale-[0.98] transition-transform"
