@@ -147,8 +147,7 @@ export const providers: Provider[] = [
       { name: "Dina F.", rating: 5, comment: { he: "נייל ארט מדהים! באמת שמים לב לפרטים.", ar: "فن أظافر مذهل! يهتمون حقاً بالتفاصيل.", en: "Incredible nail art! They really care about detail." }, date: { he: "לפני 5 ימים", ar: "قبل 5 أيام", en: "5 days ago" } },
     ],
   },
-  {
-    id: "4",
+];
     name: { he: "ארץ׳ אנד גלואו – גבות וריסים", ar: "آرتش أند جلو – حواجب ورموش", en: "Arch & Glow" },
     category: "brows",
     rating: 4.9,
