@@ -28,7 +28,7 @@ const Bookings = () => {
         .from("bookings")
         .select("*")
         .eq("user_id", user.id)
-        .in("status", ["confirmed", "pending"])
+        .in("status", ["confirmed", "pending", "cancelled"])
         .order("booking_date", { ascending: false });
       if (error) throw error;
       return data as Tables<"bookings">[];
