@@ -1,15 +1,17 @@
-import { Calendar, Clock, Star } from "lucide-react";
+import { Calendar, Clock, Star, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { providers } from "@/lib/mock-data";
 import { useAllProviders } from "@/hooks/useAllProviders";
 import { useBookingReview } from "@/hooks/useReviews";
 import ReviewForm from "@/components/reviews/ReviewForm";
 import { useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import type { Tables } from "@/integrations/supabase/types";
 
 const Bookings = () => {
@@ -26,7 +28,7 @@ const Bookings = () => {
         .from("bookings")
         .select("*")
         .eq("user_id", user.id)
-        .in("status", ["confirmed", "pending"])
+        .in("status", ["confirmed", "pending", "cancelled"])
         .order("booking_date", { ascending: false });
       if (error) throw error;
       return data as Tables<"bookings">[];
@@ -109,8 +111,25 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
   const [showReviewForm, setShowReviewForm] = useState(false);
   const { data: existingReview } = useBookingReview(booking.id);
 
+  const queryClient = useQueryClient();
   const isPast = new Date(booking.booking_date) < new Date();
   const canReview = isPast && booking.status === "confirmed" && !existingReview;
+  const canCancel = !isPast && (booking.status === "confirmed" || booking.status === "pending");
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: "cancelled" })
+        .eq("id", booking.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      toast.success("התור בוטל בהצלחה");
+    },
+    onError: () => toast.error("שגיאה בביטול התור"),
+  });
 
   return (
     <motion.div
@@ -123,9 +142,9 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
         <div className="flex justify-between items-start">
           <p className="font-semibold text-sm">{getProviderName(booking.provider_id)}</p>
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-            booking.status === "confirmed" ? "bg-green-100 text-green-700" : "bg-secondary text-muted-foreground"
+            booking.status === "confirmed" ? "bg-green-100 text-green-700" : booking.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-secondary text-muted-foreground"
           }`}>
-            {booking.status}
+            {booking.status === "confirmed" ? "מאושר" : booking.status === "cancelled" ? "בוטל" : booking.status}
           </span>
         </div>
         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -137,20 +156,34 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
           {getServiceNames(booking.service_ids)}
         </p>
         <div className="flex justify-between items-center">
-          {canReview ? (
-            <button
-              onClick={() => setShowReviewForm(!showReviewForm)}
-              className="text-xs font-medium text-accent flex items-center gap-1"
-            >
-              <Star className="h-3 w-3" />
-              {t("leaveReview")}
-            </button>
-          ) : existingReview ? (
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Star className="h-3 w-3 fill-accent text-accent" />
-              {t("reviewed")}
-            </span>
-          ) : <span />}
+          <div className="flex items-center gap-2">
+            {canReview ? (
+              <button
+                onClick={() => setShowReviewForm(!showReviewForm)}
+                className="text-xs font-medium text-accent flex items-center gap-1"
+              >
+                <Star className="h-3 w-3" />
+                {t("leaveReview")}
+              </button>
+            ) : existingReview ? (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Star className="h-3 w-3 fill-accent text-accent" />
+                {t("reviewed")}
+              </span>
+            ) : null}
+            {canCancel && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-[11px] h-7 px-2.5 text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => cancelMutation.mutate()}
+                disabled={cancelMutation.isPending}
+              >
+                <XCircle className="h-3 w-3 mr-1" />
+                {cancelMutation.isPending ? "מבטל..." : "בטל תור"}
+              </Button>
+            )}
+          </div>
           <span className="text-sm font-bold">₪{booking.total_price}</span>
         </div>
       </div>
