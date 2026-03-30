@@ -328,6 +328,7 @@ export type Database = {
     }
     Functions: {
       booking_time_to_minutes: { Args: { _time: string }; Returns: number }
+      get_display_name: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
