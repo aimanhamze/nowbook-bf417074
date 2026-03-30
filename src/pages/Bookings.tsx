@@ -1,4 +1,4 @@
-import { Calendar, Clock, Star } from "lucide-react";
+import { Calendar, Clock, Star, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
