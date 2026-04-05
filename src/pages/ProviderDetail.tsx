@@ -86,7 +86,7 @@ const ProviderDetail = () => {
             <button className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
               <Share2 className="h-5 w-5" />
             </button>
-            <button onClick={() => setLiked(!liked)} className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
+            <button onClick={() => { if (user && id) toggleFavorite.mutate(id); else if (!user) navigate("/auth"); }} className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
               <Heart className={`h-5 w-5 transition-colors ${liked ? "fill-accent text-accent" : ""}`} />
             </button>
           </div>
