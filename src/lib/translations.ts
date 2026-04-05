@@ -149,6 +149,8 @@ export const translations = {
     reviewError: "שגיאה בשליחת הביקורת",
     leaveReview: "השאר ביקורת",
     reviewed: "דורג",
+    beautyAndCosmetics: "יופי וקוסמטיקה",
+    healthProfessionals: "בריאות ורפואה",
   },
   ar: {
     appName: "Dori",
@@ -298,6 +300,8 @@ export const translations = {
     reviewError: "خطأ في إرسال التقييم",
     leaveReview: "اترك تقييمًا",
     reviewed: "تم التقييم",
+    beautyAndCosmetics: "جمال وتجميل",
+    healthProfessionals: "صحة وطب",
   },
   en: {
     appName: "Dori",
@@ -447,6 +451,8 @@ export const translations = {
     reviewError: "Error submitting review",
     leaveReview: "Leave a Review",
     reviewed: "Reviewed",
+    beautyAndCosmetics: "Beauty & Cosmetics",
+    healthProfessionals: "Health & Medical",
   },
 } as const;
 

@@ -3,13 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 
-export function CategoryRow() {
+interface CategoryRowProps {
+  filter?: string[];
+}
+
+export function CategoryRow({ filter }: CategoryRowProps) {
   const navigate = useNavigate();
   const { lang } = useLang();
 
+  const filtered = filter
+    ? categories.filter((cat) => filter.includes(cat.id))
+    : categories;
+
   return (
     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none -mx-1.5 px-1.5">
-      {categories.map((cat, i) => (
+      {filtered.map((cat, i) => (
         <motion.button
           key={cat.id}
           initial={{ opacity: 0, y: 12 }}
