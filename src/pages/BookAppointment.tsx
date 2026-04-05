@@ -154,6 +154,7 @@ const BookAppointment = () => {
           title: "הזמנה חדשה! 🎉",
           body: `הזמנה חדשה ל-${format(selectedDate, "dd/MM")} בשעה ${selectedTime}`,
           url: "/dashboard",
+          type: "booking_new",
         },
       });
 

@@ -25,7 +25,6 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Validate caller
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -38,7 +37,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { user_id, title, body, url } = await req.json();
+    const { user_id, title, body, url, type } = await req.json();
 
     if (!user_id || !title) {
       return new Response(
@@ -47,58 +46,62 @@ Deno.serve(async (req) => {
       );
     }
 
-    const vapidKeysJson = Deno.env.get("VAPID_KEYS")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Get push subscriptions for the target user
-    const { data: subscriptions } = await supabase
-      .from("push_subscriptions")
-      .select("id, endpoint, p256dh, auth")
-      .eq("user_id", user_id);
-
-    if (!subscriptions?.length) {
-      return new Response(
-        JSON.stringify({ message: "No subscriptions found" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const vapidKeys = await webpush.importVapidKeys(JSON.parse(vapidKeysJson));
-    const appServer = await webpush.ApplicationServer.new({
-      contactInformation: "mailto:push@nowbook.lovable.app",
-      vapidKeys,
-    });
-
-    const payload = JSON.stringify({
+    // Save notification to DB
+    await supabase.from("notifications").insert({
+      user_id,
       title,
       body: body || "",
       url: url || "/bookings",
+      type: type || "general",
     });
 
-    const results = await Promise.allSettled(
-      subscriptions.map(async (sub) => {
-        try {
-          const subscriber = appServer.subscribe({
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          });
-          await subscriber.pushTextMessage(payload, {
-            ttl: 86400,
-            urgency: webpush.Urgency.High,
-          });
-          return { subscription_id: sub.id, ok: true };
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          if (err instanceof webpush.PushMessageError && err.isGone()) {
-            await supabase.from("push_subscriptions").delete().eq("id", sub.id);
-          }
-          return { subscription_id: sub.id, ok: false, error: message };
-        }
-      })
-    );
+    // Try sending push notification
+    const vapidKeysJson = Deno.env.get("VAPID_KEYS");
+    let pushResults: unknown[] = [];
+
+    if (vapidKeysJson) {
+      const { data: subscriptions } = await supabase
+        .from("push_subscriptions")
+        .select("id, endpoint, p256dh, auth")
+        .eq("user_id", user_id);
+
+      if (subscriptions?.length) {
+        const vapidKeys = await webpush.importVapidKeys(JSON.parse(vapidKeysJson));
+        const appServer = await webpush.ApplicationServer.new({
+          contactInformation: "mailto:push@nowbook.lovable.app",
+          vapidKeys,
+        });
+
+        const payload = JSON.stringify({ title, body: body || "", url: url || "/bookings" });
+
+        pushResults = await Promise.allSettled(
+          subscriptions.map(async (sub) => {
+            try {
+              const subscriber = appServer.subscribe({
+                endpoint: sub.endpoint,
+                keys: { p256dh: sub.p256dh, auth: sub.auth },
+              });
+              await subscriber.pushTextMessage(payload, {
+                ttl: 86400,
+                urgency: webpush.Urgency.High,
+              });
+              return { subscription_id: sub.id, ok: true };
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              if (err instanceof webpush.PushMessageError && err.isGone()) {
+                await supabase.from("push_subscriptions").delete().eq("id", sub.id);
+              }
+              return { subscription_id: sub.id, ok: false, error: message };
+            }
+          })
+        );
+      }
+    }
 
     return new Response(
-      JSON.stringify({ sent: results.length, results }),
+      JSON.stringify({ saved: true, push_sent: pushResults.length, results: pushResults }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

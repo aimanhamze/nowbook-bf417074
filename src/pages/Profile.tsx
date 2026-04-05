@@ -30,11 +30,12 @@ const Profile = () => {
   const menuItems = [
     { icon: user ? LogOut : LogIn, label: user ? t("signOut") : t("signInUp"), action: handleSignInOut },
     ...(user ? [{ icon: Briefcase, label: t("providerDashboard"), action: () => navigate("/dashboard") }] : []),
+    ...(user ? [{ icon: Bell, label: lang === "he" ? "התראות" : lang === "ar" ? "الإشعارات" : "Notifications", action: () => navigate("/notifications") }] : []),
     ...(user && isSupported ? [{
       icon: isSubscribed ? Bell : BellOff,
       label: isSubscribed
-        ? (lang === "he" ? "התראות פעילות ✓" : lang === "ar" ? "الإشعارات مفعّلة ✓" : "Notifications On ✓")
-        : t("notifications"),
+        ? (lang === "he" ? "Push התראות פעילות ✓" : lang === "ar" ? "إشعارات Push مفعّلة ✓" : "Push Notifications On ✓")
+        : (lang === "he" ? "הפעל Push התראות" : lang === "ar" ? "تفعيل إشعارات Push" : "Enable Push Notifications"),
       action: handlePushToggle,
       loading: pushLoading,
     }] : []),

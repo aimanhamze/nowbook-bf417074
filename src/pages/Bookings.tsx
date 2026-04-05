@@ -131,6 +131,7 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
           title: "תור בוטל ❌",
           body: `לקוח ביטל תור בתאריך ${booking.booking_date} בשעה ${booking.booking_time}`,
           url: "/dashboard",
+          type: "booking_cancelled",
         },
       }).catch((err) => console.error("Push to provider failed:", err));
     },

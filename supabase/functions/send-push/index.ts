@@ -13,7 +13,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authenticate the caller
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
@@ -39,7 +38,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { provider_id, title, body, url } = await req.json();
+    const { provider_id, title, body, url, type } = await req.json();
 
     if (!provider_id || !title) {
       return new Response(
@@ -47,7 +46,6 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const vapidKeysJson = Deno.env.get("VAPID_KEYS")!;
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -65,7 +63,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get push subscriptions
+    // Save notification to DB
+    await supabase.from("notifications").insert({
+      user_id: providerProfile.user_id,
+      title,
+      body: body || "יש לך הזמנה חדשה",
+      url: url || "/dashboard",
+      type: type || "booking_new",
+    });
+
+    // Try sending push
+    const vapidKeysJson = Deno.env.get("VAPID_KEYS")!;
+
     const { data: subscriptions } = await supabase
       .from("push_subscriptions")
       .select("id, endpoint, p256dh, auth")
@@ -73,12 +82,11 @@ Deno.serve(async (req) => {
 
     if (!subscriptions?.length) {
       return new Response(
-        JSON.stringify({ message: "No subscriptions found" }),
+        JSON.stringify({ saved: true, message: "No push subscriptions found" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Import VAPID keys from JWK format
     const vapidKeys = await webpush.importVapidKeys(JSON.parse(vapidKeysJson));
     const appServer = await webpush.ApplicationServer.new({
       contactInformation: "mailto:push@nowbook.lovable.app",
@@ -96,33 +104,25 @@ Deno.serve(async (req) => {
         try {
           const subscriber = appServer.subscribe({
             endpoint: sub.endpoint,
-            keys: {
-              p256dh: sub.p256dh,
-              auth: sub.auth,
-            },
+            keys: { p256dh: sub.p256dh, auth: sub.auth },
           });
-
           await subscriber.pushTextMessage(payload, {
             ttl: 86400,
             urgency: webpush.Urgency.High,
           });
-
           return { subscription_id: sub.id, ok: true };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-
-          // Remove expired subscriptions
           if (err instanceof webpush.PushMessageError && err.isGone()) {
             await supabase.from("push_subscriptions").delete().eq("id", sub.id);
           }
-
           return { subscription_id: sub.id, ok: false, error: message };
         }
       })
     );
 
     return new Response(
-      JSON.stringify({ sent: results.length, results }),
+      JSON.stringify({ saved: true, sent: results.length, results }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

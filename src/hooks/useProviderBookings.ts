@@ -102,6 +102,7 @@ export function useCancelBooking() {
             title: "התור בוטל ❌",
             body: `התור ב-${provider?.business_name || "העסק"} בתאריך ${booking.booking_date} בשעה ${booking.booking_time} בוטל על ידי הספק`,
             url: "/bookings",
+            type: "booking_cancelled",
           },
         }).catch((err) => console.error("Push to customer failed:", err));
       }
