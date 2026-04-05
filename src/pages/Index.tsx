@@ -10,8 +10,12 @@ import { Navigate } from "react-router-dom";
 
 const Index = () => {
   const { t } = useLang();
-  const { isProvider } = useAuth();
+  const { isProvider, isAdmin } = useAuth();
   const { providers } = useAllProviders();
+
+  if (isAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
 
   if (isProvider) {
     return <Navigate to="/dashboard" replace />;
