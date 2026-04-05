@@ -23,6 +23,7 @@ const Auth = lazy(() => import("./pages/Auth"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Install = lazy(() => import("./pages/Install"));
 const Notifications = lazy(() => import("./pages/Notifications"));
+const Admin = lazy(() => import("./pages/Admin"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
