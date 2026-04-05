@@ -56,43 +56,7 @@ export const categoryNames: Record<string, Record<Lang, string>> = {
   pediatrician: { he: "רופא ילדים", ar: "طبيب أطفال", en: "Pediatrician" },
 };
 
-export const providers: Provider[] = [
-  {
-    id: "mock-dentist-1",
-    name: { he: "Mohamad Abo Raya", ar: "محمد أبو ريا", en: "Mohamad Abo Raya" },
-    category: "dentist",
-    rating: 4.8,
-    reviewCount: 124,
-    distance: "2.3 km",
-    image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop",
-    coverImage: "https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=800&h=400&fit=crop",
-    address: { he: "חיפה, רח׳ הנמל 12", ar: "حيفا، شارع الميناء 12", en: "12 HaNamal St, Haifa" },
-    about: {
-      he: "מרפאת שיניים מקצועית עם ניסיון של למעלה מ-15 שנה. התמחות בטיפולי שיניים מתקדמים, הלבנות, כתרים והשתלות.",
-      ar: "عيادة أسنان متخصصة مع خبرة تزيد عن 15 عامًا. تخصص في علاجات الأسنان المتقدمة والتبييض والتيجان وزراعة الأسنان.",
-      en: "Professional dental clinic with over 15 years of experience. Specializing in advanced dental treatments, whitening, crowns, and implants.",
-    },
-    services: [
-      { id: "s-dent-1", name: { he: "בדיקה כללית", ar: "فحص عام", en: "General Checkup" }, duration: 30, price: 150 },
-      { id: "s-dent-2", name: { he: "הלבנת שיניים", ar: "تبييض أسنان", en: "Teeth Whitening" }, duration: 60, price: 800 },
-      { id: "s-dent-3", name: { he: "עקירת שן", ar: "خلع سن", en: "Tooth Extraction" }, duration: 45, price: 400 },
-      { id: "s-dent-4", name: { he: "סתימה", ar: "حشوة", en: "Filling" }, duration: 30, price: 250 },
-      { id: "s-dent-5", name: { he: "ניקוי אבנית", ar: "تنظيف الجير", en: "Scaling & Cleaning" }, duration: 45, price: 350 },
-    ],
-    photos: [
-      "https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=600",
-      "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=600",
-    ],
-    workingHours: [
-      { day: { he: "ראשון-חמישי", ar: "الأحد-الخميس", en: "Sun-Thu" }, hours: "09:00-18:00" },
-      { day: { he: "שישי", ar: "الجمعة", en: "Fri" }, hours: "09:00-13:00" },
-    ],
-    reviews: [
-      { name: "יוסי כ.", rating: 5, comment: { he: "רופא מעולה, מקצועי ונעים", ar: "طبيب ممتاز، محترف ولطيف", en: "Excellent doctor, professional and pleasant" }, date: { he: "לפני שבוע", ar: "قبل أسبوع", en: "1 week ago" } },
-      { name: "סארה מ.", rating: 5, comment: { he: "המרפאה נקייה ומודרנית, ממליצה בחום", ar: "العيادة نظيفة وحديثة، أنصح بشدة", en: "Clean and modern clinic, highly recommended" }, date: { he: "לפני חודש", ar: "قبل شهر", en: "1 month ago" } },
-    ],
-  },
-];
+export const providers: Provider[] = [];
 
 export const timeSlots = [
   "9:00", "9:30", "10:00", "10:30",
