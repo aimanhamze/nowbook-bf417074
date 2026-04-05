@@ -7,6 +7,7 @@ import { LangProvider } from "@/contexts/LangContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Suspense, lazy } from "react";
 
@@ -22,6 +23,7 @@ const Auth = lazy(() => import("./pages/Auth"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Install = lazy(() => import("./pages/Install"));
 const Notifications = lazy(() => import("./pages/Notifications"));
+const Admin = lazy(() => import("./pages/Admin"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -56,6 +58,7 @@ const App = () => (
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                   <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                  <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
                   <Route path="/install" element={<Install />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>

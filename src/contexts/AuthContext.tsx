@@ -7,6 +7,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   isProvider: boolean;
+  isAdmin: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -17,12 +18,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isProvider, setIsProvider] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [roleLoading, setRoleLoading] = useState(false);
 
-  // Check provider role when user changes
   useEffect(() => {
     if (!user) {
       setIsProvider(false);
+      setIsAdmin(false);
       setRoleLoading(false);
       return;
     }
@@ -31,10 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
-      .eq("role", "provider")
-      .maybeSingle()
       .then(({ data }) => {
-        setIsProvider(!!data);
+        const roles = (data || []).map((r) => r.role);
+        setIsProvider(roles.includes("provider"));
+        setIsAdmin(roles.includes("admin"));
         setRoleLoading(false);
       });
   }, [user?.id]);
@@ -57,7 +59,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Only stop loading once both auth AND role are resolved
   useEffect(() => {
     if (user && !roleLoading) {
       setLoading(false);
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, isProvider, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, isProvider, isAdmin, signOut }}>
       {children}
     </AuthContext.Provider>
   );
