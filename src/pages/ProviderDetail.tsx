@@ -2,20 +2,24 @@ import { useParams, useNavigate } from "react-router-dom";
 import { categoryNames } from "@/lib/mock-data";
 import { useProviderById } from "@/hooks/useAllProviders";
 import { useProviderReviews } from "@/hooks/useReviews";
+import { useFavorites } from "@/hooks/useFavorites";
 import { ArrowLeft, Heart, Star, MapPin, Clock, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useLang } from "@/contexts/LangContext";
+import { useAuth } from "@/contexts/AuthContext";
 import ReviewCard from "@/components/reviews/ReviewCard";
 
 const ProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [liked, setLiked] = useState(false);
   const [coverImgSrc, setCoverImgSrc] = useState("");
   const { lang, t } = useLang();
+  const { user } = useAuth();
   const { provider, isLoading } = useProviderById(id);
   const { data: dbReviews } = useProviderReviews(id);
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const liked = id ? isFavorite(id) : false;
 
   // Combine mock reviews with real DB reviews
   const realReviewCount = (dbReviews?.length || 0) + (provider?.reviewCount || 0);
