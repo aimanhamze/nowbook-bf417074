@@ -1,11 +1,22 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { categoryNames } from "@/lib/mock-data";
-import { Store, MapPin, Pencil } from "lucide-react";
+import { Store, MapPin, Pencil, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { CreateProviderDialog } from "./CreateProviderDialog";
 import { EditProviderDialog } from "./EditProviderDialog";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 export function AdminProviders() {
