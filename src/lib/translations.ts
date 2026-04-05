@@ -300,6 +300,8 @@ export const translations = {
     reviewError: "خطأ في إرسال التقييم",
     leaveReview: "اترك تقييمًا",
     reviewed: "تم التقييم",
+    beautyAndCosmetics: "جمال وتجميل",
+    healthProfessionals: "صحة وطب",
   },
   en: {
     appName: "Dori",
