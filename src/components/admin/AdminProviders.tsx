@@ -1,16 +1,58 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { categoryNames } from "@/lib/mock-data";
-import { Store, MapPin, Pencil } from "lucide-react";
+import { Store, MapPin, Pencil, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { CreateProviderDialog } from "./CreateProviderDialog";
 import { EditProviderDialog } from "./EditProviderDialog";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 export function AdminProviders() {
   const navigate = useNavigate();
   const [editingProvider, setEditingProvider] = useState<Tables<"provider_profiles"> | null>(null);
+  const [deletingProvider, setDeletingProvider] = useState<Tables<"provider_profiles"> | null>(null);
+  const queryClient = useQueryClient();
+
+  const deleteProvider = useMutation({
+    mutationFn: async (provider: Tables<"provider_profiles">) => {
+      // Remove provider role
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", provider.user_id)
+        .eq("role", "provider");
+      if (roleError) throw roleError;
+
+      // Delete provider profile
+      const { error } = await supabase
+        .from("provider_profiles")
+        .delete()
+        .eq("id", provider.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["all-db-providers"] });
+      toast.success("הספק נמחק בהצלחה");
+      setDeletingProvider(null);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "שגיאה במחיקת הספק");
+    },
+  });
 
   const { data: providers, isLoading } = useQuery({
     queryKey: ["admin-providers"],
@@ -73,13 +115,22 @@ export function AdminProviders() {
             <span className="text-xs text-muted-foreground">
               {new Date(p.created_at).toLocaleDateString("he-IL")}
             </span>
-            <button
-              onClick={() => setEditingProvider(p)}
-              className="p-1.5 rounded-lg bg-secondary hover:bg-accent/10 text-muted-foreground hover:text-accent transition-colors"
-              title="ערוך ספק"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setEditingProvider(p)}
+                className="p-1.5 rounded-lg bg-secondary hover:bg-accent/10 text-muted-foreground hover:text-accent transition-colors"
+                title="ערוך ספק"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setDeletingProvider(p)}
+                className="p-1.5 rounded-lg bg-secondary hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                title="מחק ספק"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       ))}
@@ -89,6 +140,27 @@ export function AdminProviders() {
         open={!!editingProvider}
         onOpenChange={(open) => { if (!open) setEditingProvider(null); }}
       />
+
+      <AlertDialog open={!!deletingProvider} onOpenChange={(open) => { if (!open) setDeletingProvider(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת ספק</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם אתה בטוח שברצונך למחוק את "{deletingProvider?.business_name}"? פעולה זו לא ניתנת לביטול.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingProvider && deleteProvider.mutate(deletingProvider)}
+              disabled={deleteProvider.isPending}
+            >
+              {deleteProvider.isPending ? "מוחק..." : "מחק"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
