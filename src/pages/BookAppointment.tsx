@@ -18,6 +18,7 @@ const BookAppointment = () => {
   const navigate = useNavigate();
   const { lang, t } = useLang();
   const { user, isProvider } = useAuth();
+  const queryClient = useQueryClient();
   const { provider, isLoading: providerLoading } = useProviderById(id);
   const { getAvailableSlots: getRealSlots } = useRealAvailability(id);
 
