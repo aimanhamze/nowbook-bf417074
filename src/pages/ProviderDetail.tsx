@@ -2,20 +2,24 @@ import { useParams, useNavigate } from "react-router-dom";
 import { categoryNames } from "@/lib/mock-data";
 import { useProviderById } from "@/hooks/useAllProviders";
 import { useProviderReviews } from "@/hooks/useReviews";
+import { useFavorites } from "@/hooks/useFavorites";
 import { ArrowLeft, Heart, Star, MapPin, Clock, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useLang } from "@/contexts/LangContext";
+import { useAuth } from "@/contexts/AuthContext";
 import ReviewCard from "@/components/reviews/ReviewCard";
 
 const ProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [liked, setLiked] = useState(false);
   const [coverImgSrc, setCoverImgSrc] = useState("");
   const { lang, t } = useLang();
+  const { user } = useAuth();
   const { provider, isLoading } = useProviderById(id);
   const { data: dbReviews } = useProviderReviews(id);
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const liked = id ? isFavorite(id) : false;
 
   // Combine mock reviews with real DB reviews
   const realReviewCount = (dbReviews?.length || 0) + (provider?.reviewCount || 0);
@@ -82,7 +86,7 @@ const ProviderDetail = () => {
             <button className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
               <Share2 className="h-5 w-5" />
             </button>
-            <button onClick={() => setLiked(!liked)} className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
+            <button onClick={() => { if (user && id) toggleFavorite.mutate(id); else if (!user) navigate("/auth"); }} className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
               <Heart className={`h-5 w-5 transition-colors ${liked ? "fill-accent text-accent" : ""}`} />
             </button>
           </div>
