@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 type AuthMode = "phone" | "email";
+type EmailView = "login" | "forgot";
 
 const Auth = () => {
   const { t, isRtl } = useLang();
