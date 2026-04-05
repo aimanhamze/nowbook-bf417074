@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { useProviderProfile } from "./useProviderProfile";
 
 export interface EnrichedBooking {
@@ -73,11 +74,37 @@ export function useCancelBooking() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (bookingId: string) => {
+      // Get booking details before cancelling to notify the customer
+      const { data: booking } = await supabase
+        .from("bookings")
+        .select("user_id, booking_date, booking_time, provider_id")
+        .eq("id", bookingId)
+        .single();
+
       const { error } = await supabase
         .from("bookings")
         .update({ status: "cancelled" })
         .eq("id", bookingId);
       if (error) throw error;
+
+      // Notify customer about cancellation
+      if (booking) {
+        // Get provider name
+        const { data: provider } = await supabase
+          .from("provider_profiles")
+          .select("business_name")
+          .eq("id", booking.provider_id)
+          .single();
+
+        supabase.functions.invoke("notify-user", {
+          body: {
+            user_id: booking.user_id,
+            title: "התור בוטל ❌",
+            body: `התור ב-${provider?.business_name || "העסק"} בתאריך ${booking.booking_date} בשעה ${booking.booking_time} בוטל על ידי הספק`,
+            url: "/bookings",
+          },
+        }).catch((err) => console.error("Push to customer failed:", err));
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
