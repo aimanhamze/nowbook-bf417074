@@ -11,12 +11,14 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 const BookAppointment = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { lang, t } = useLang();
   const { user, isProvider } = useAuth();
+  const queryClient = useQueryClient();
   const { provider, isLoading: providerLoading } = useProviderById(id);
   const { getAvailableSlots: getRealSlots } = useRealAvailability(id);
 
@@ -155,6 +157,8 @@ const BookAppointment = () => {
         url: "/bookings",
         type: "booking_confirmed",
       });
+      queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
 
       // Send push notification to provider
       const { data: pushData, error: pushError } = await supabase.functions.invoke("send-push", {
