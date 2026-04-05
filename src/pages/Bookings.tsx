@@ -131,7 +131,7 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
           user_id: user.id,
           title: "ביטלת תור ❌",
           body: `התור בתאריך ${booking.booking_date} בשעה ${booking.booking_time} בוטל`,
-          url: "/bookings",
+          url: `/provider/${booking.provider_id}`,
           type: "booking_cancelled",
         });
         queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });

@@ -154,7 +154,7 @@ const BookAppointment = () => {
         user_id: user.id,
         title: "התור נקבע בהצלחה! ✅",
         body: `תור ל-${provider.name[lang]} ב-${format(selectedDate, "dd/MM")} בשעה ${selectedTime}`,
-        url: "/bookings",
+        url: `/provider/${id}`,
         type: "booking_confirmed",
       });
       queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });
