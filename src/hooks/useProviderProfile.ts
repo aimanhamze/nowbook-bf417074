@@ -33,27 +33,12 @@ export function useProviderProfile() {
 
       const { error } = await supabase
         .from("provider_profiles")
-        .upsert({ ...values, user_id: user.id }, { onConflict: "user_id" });
+        .update(values)
+        .eq("user_id", user.id);
       if (error) throw error;
-
-      // Only insert role if not already exists
-      const { data: existingRole } = await supabase
-        .from("user_roles")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("role", "provider")
-        .maybeSingle();
-
-      if (!existingRole) {
-        const { error: roleError } = await supabase
-          .from("user_roles")
-          .insert({ user_id: user.id, role: "provider" });
-        if (roleError && !roleError.message.includes("duplicate")) throw roleError;
-      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["provider-profile"] });
-      queryClient.invalidateQueries({ queryKey: ["user-roles"] });
       queryClient.invalidateQueries({ queryKey: ["all-db-providers"] });
     },
   });

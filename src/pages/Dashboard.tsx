@@ -45,19 +45,12 @@ export default function Dashboard() {
     );
   }
 
-  // If no profile yet, show setup prompt (which is the BusinessProfileTab)
+  // If no profile yet, provider was not set up by admin
   if (!isLoading && !profile) {
     return (
-      <div className="min-h-screen pb-24">
-        <header className="px-5 pt-12 pb-4 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="active:scale-95">
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <h1 className="text-xl font-bold">{t("setupBusiness")}</h1>
-        </header>
-        <div className="px-5">
-          <BusinessProfileTab />
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center px-5 gap-4">
+        <p className="text-muted-foreground text-center">הפרופיל העסקי שלך עדיין לא הוגדר.<br />פנה למנהל המערכת.</p>
+        <Button onClick={() => navigate("/")}>{t("home")}</Button>
       </div>
     );
   }

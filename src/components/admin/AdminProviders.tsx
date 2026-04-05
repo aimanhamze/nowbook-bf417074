@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { categoryNames } from "@/lib/mock-data";
 import { Store, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { CreateProviderDialog } from "./CreateProviderDialog";
 
 export function AdminProviders() {
   const navigate = useNavigate();
@@ -31,7 +32,10 @@ export function AdminProviders() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">{providers?.length} ספקים רשומים</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">{providers?.length} ספקים רשומים</p>
+        <CreateProviderDialog />
+      </div>
       {providers?.map((p) => (
         <button
           key={p.id}
