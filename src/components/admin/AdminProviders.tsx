@@ -22,6 +22,37 @@ import type { Tables } from "@/integrations/supabase/types";
 export function AdminProviders() {
   const navigate = useNavigate();
   const [editingProvider, setEditingProvider] = useState<Tables<"provider_profiles"> | null>(null);
+  const [deletingProvider, setDeletingProvider] = useState<Tables<"provider_profiles"> | null>(null);
+  const queryClient = useQueryClient();
+
+  const deleteProvider = useMutation({
+    mutationFn: async (provider: Tables<"provider_profiles">) => {
+      // Remove provider role
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", provider.user_id)
+        .eq("role", "provider");
+      if (roleError) throw roleError;
+
+      // Delete provider profile
+      const { error } = await supabase
+        .from("provider_profiles")
+        .delete()
+        .eq("id", provider.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-all-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["all-db-providers"] });
+      toast.success("הספק נמחק בהצלחה");
+      setDeletingProvider(null);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "שגיאה במחיקת הספק");
+    },
+  });
 
   const { data: providers, isLoading } = useQuery({
     queryKey: ["admin-providers"],
