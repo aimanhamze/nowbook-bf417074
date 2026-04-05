@@ -115,13 +115,22 @@ export function AdminProviders() {
             <span className="text-xs text-muted-foreground">
               {new Date(p.created_at).toLocaleDateString("he-IL")}
             </span>
-            <button
-              onClick={() => setEditingProvider(p)}
-              className="p-1.5 rounded-lg bg-secondary hover:bg-accent/10 text-muted-foreground hover:text-accent transition-colors"
-              title="ערוך ספק"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setEditingProvider(p)}
+                className="p-1.5 rounded-lg bg-secondary hover:bg-accent/10 text-muted-foreground hover:text-accent transition-colors"
+                title="ערוך ספק"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setDeletingProvider(p)}
+                className="p-1.5 rounded-lg bg-secondary hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                title="מחק ספק"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       ))}
@@ -131,6 +140,27 @@ export function AdminProviders() {
         open={!!editingProvider}
         onOpenChange={(open) => { if (!open) setEditingProvider(null); }}
       />
+
+      <AlertDialog open={!!deletingProvider} onOpenChange={(open) => { if (!open) setDeletingProvider(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת ספק</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם אתה בטוח שברצונך למחוק את "{deletingProvider?.business_name}"? פעולה זו לא ניתנת לביטול.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingProvider && deleteProvider.mutate(deletingProvider)}
+              disabled={deleteProvider.isPending}
+            >
+              {deleteProvider.isPending ? "מוחק..." : "מחק"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
