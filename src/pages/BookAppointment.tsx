@@ -147,6 +147,15 @@ const BookAppointment = () => {
         return;
       }
 
+      // Save confirmation notification for the customer
+      await supabase.from("notifications").insert({
+        user_id: user.id,
+        title: "התור נקבע בהצלחה! ✅",
+        body: `תור ל-${provider.name[lang]} ב-${format(selectedDate, "dd/MM")} בשעה ${selectedTime}`,
+        url: "/bookings",
+        type: "booking_confirmed",
+      });
+
       // Send push notification to provider
       const { data: pushData, error: pushError } = await supabase.functions.invoke("send-push", {
         body: {
@@ -158,7 +167,6 @@ const BookAppointment = () => {
         },
       });
 
-      // Don't block booking if push fails, but log clearly for debugging
       if (pushError) {
         console.error("Push notification failed:", pushError.message);
       } else if (pushData?.results?.some((r: any) => r.status === "rejected" || (r.value && r.value.ok === false))) {
