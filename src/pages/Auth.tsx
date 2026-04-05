@@ -168,6 +168,40 @@ const Auth = () => {
                 </>
               )}
             </>
+          ) : emailView === "forgot" ? (
+            <>
+              <p className="text-sm text-muted-foreground mb-2">הכנס את כתובת האימייל שלך ונשלח לך קישור לאיפוס הסיסמה</p>
+              <input
+                type="email"
+                dir="ltr"
+                placeholder="email@example.com"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
+              />
+              <button
+                onClick={async () => {
+                  if (!resetEmail.trim()) { toast.error("נא למלא אימייל"); return; }
+                  setLoading(true);
+                  const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+                    redirectTo: `${window.location.origin}/reset-password`,
+                  });
+                  setLoading(false);
+                  if (error) { toast.error(error.message); }
+                  else { toast.success("קישור איפוס נשלח לאימייל שלך"); }
+                }}
+                disabled={loading}
+                className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50"
+              >
+                {loading ? "..." : "שלח קישור איפוס"}
+              </button>
+              <button
+                onClick={() => setEmailView("login")}
+                className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                ← חזור להתחברות
+              </button>
+            </>
           ) : (
             <>
               <input
@@ -192,6 +226,12 @@ const Auth = () => {
                 className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50"
               >
                 {loading ? "..." : t("signIn")}
+              </button>
+              <button
+                onClick={() => setEmailView("forgot")}
+                className="w-full py-1 text-xs text-accent font-medium hover:underline"
+              >
+                שכחתי סיסמה
               </button>
             </>
           )}
