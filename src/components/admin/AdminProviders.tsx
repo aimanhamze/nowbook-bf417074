@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { categoryNames } from "@/lib/mock-data";
 import { Store, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { CreateProviderDialog } from "./CreateProviderDialog";
 
 export function AdminProviders() {
   const navigate = useNavigate();
