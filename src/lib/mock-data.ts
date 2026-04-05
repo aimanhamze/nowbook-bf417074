@@ -40,6 +40,9 @@ export const categories = [
   { id: "pediatrician", icon: "👶" },
 ] as const;
 
+export const beautyCategories = ["barber", "salon", "nails", "brows", "spa", "skincare", "makeup"] as const;
+export const healthCategories = ["orthopedic", "dentist", "eye_doctor", "dermatologist", "physiotherapy", "pediatrician"] as const;
+
 export const categoryNames: Record<string, Record<Lang, string>> = {
   barber: { he: "ספר", ar: "حلاق", en: "Barber" },
   salon: { he: "מספרה", ar: "صالون شعر", en: "Hair Salon" },
