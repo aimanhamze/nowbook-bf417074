@@ -149,6 +149,8 @@ export const translations = {
     reviewError: "שגיאה בשליחת הביקורת",
     leaveReview: "השאר ביקורת",
     reviewed: "דורג",
+    beautyAndCosmetics: "יופי וקוסמטיקה",
+    healthProfessionals: "בריאות ורפואה",
   },
   ar: {
     appName: "Dori",
