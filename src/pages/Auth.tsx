@@ -21,6 +21,8 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailView, setEmailView] = useState<EmailView>("login");
+  const [resetEmail, setResetEmail] = useState("");
 
   const handleSendOtp = async () => {
     if (!phone.trim()) {
