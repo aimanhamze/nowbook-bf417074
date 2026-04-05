@@ -124,6 +124,20 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
         .eq("id", booking.id);
       if (error) throw error;
 
+      // Save cancellation notification for the customer
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("notifications").insert({
+          user_id: user.id,
+          title: "ביטלת תור ❌",
+          body: `התור בתאריך ${booking.booking_date} בשעה ${booking.booking_time} בוטל`,
+          url: "/bookings",
+          type: "booking_cancelled",
+        });
+        queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });
+        queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      }
+
       // Notify provider about customer cancellation
       supabase.functions.invoke("send-push", {
         body: {

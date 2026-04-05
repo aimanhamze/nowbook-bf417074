@@ -157,6 +157,8 @@ const BookAppointment = () => {
         url: "/bookings",
         type: "booking_confirmed",
       });
+      queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
 
       // Send push notification to provider
       const { data: pushData, error: pushError } = await supabase.functions.invoke("send-push", {
