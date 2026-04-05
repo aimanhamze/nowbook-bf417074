@@ -123,6 +123,16 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
         .update({ status: "cancelled" })
         .eq("id", booking.id);
       if (error) throw error;
+
+      // Notify provider about customer cancellation
+      supabase.functions.invoke("send-push", {
+        body: {
+          provider_id: booking.provider_id,
+          title: "תור בוטל ❌",
+          body: `לקוח ביטל תור בתאריך ${booking.booking_date} בשעה ${booking.booking_time}`,
+          url: "/dashboard",
+        },
+      }).catch((err) => console.error("Push to provider failed:", err));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
