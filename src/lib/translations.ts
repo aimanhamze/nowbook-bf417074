@@ -451,6 +451,8 @@ export const translations = {
     reviewError: "Error submitting review",
     leaveReview: "Leave a Review",
     reviewed: "Reviewed",
+    beautyAndCosmetics: "Beauty & Cosmetics",
+    healthProfessionals: "Health & Medical",
   },
 } as const;
 
