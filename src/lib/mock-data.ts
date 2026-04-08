@@ -60,18 +60,3 @@ export const categoryNames: Record<string, Record<Lang, string>> = {
   pediatrician: { he: "רופא ילדים", ar: "طبيب أطفال", en: "Pediatrician" },
   gym: { he: "סטודיו אימונים", ar: "صالة رياضية", en: "Gym & Fitness" },
 };
-
-export const providers: Provider[] = [];
-
-export const timeSlots = [
-  "9:00", "9:30", "10:00", "10:30",
-  "11:00", "11:30", "12:00", "12:30",
-  "13:00", "13:30", "14:00", "14:30",
-  "15:00", "15:30", "16:00", "16:30",
-  "17:00", "17:30", "18:00", "18:30",
-];
-
-export const getAvailableSlots = (_providerId: string, _date: Date): string[] => {
-  const seed = _date.getDate();
-  return timeSlots.filter((_, i) => (i + seed) % 3 !== 0);
-};

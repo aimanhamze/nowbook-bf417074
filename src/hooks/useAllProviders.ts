@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { providers as mockProviders, categoryNames, getAvailableSlots as getMockAvailableSlots } from "@/lib/mock-data";
 import type { Provider, Service } from "@/lib/mock-data";
 import type { Lang } from "@/lib/translations";
 
@@ -32,7 +31,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[]): Provider 
   const about = { he: dbp.about, ar: dbp.about, en: dbp.about };
 
   return {
-    id: `db-${dbp.id}`,
+    id: dbp.id,
     name,
     category: dbp.category || "barber",
     rating: 0,
@@ -56,7 +55,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[]): Provider 
 
 export function useAllProviders() {
   const dbQuery = useQuery({
-    queryKey: ["all-db-providers"],
+    queryKey: ["all-providers"],
     queryFn: async () => {
       const { data: profiles, error: pErr } = await supabase
         .from("provider_profiles")
@@ -77,10 +76,8 @@ export function useAllProviders() {
     },
   });
 
-  const allProviders = [...mockProviders, ...(dbQuery.data || [])];
-
   return {
-    providers: allProviders,
+    providers: dbQuery.data || [],
     isLoading: dbQuery.isLoading,
   };
 }
@@ -91,73 +88,68 @@ export function useProviderById(id: string | undefined) {
   return { provider, isLoading };
 }
 
-/** Fetch real availability for a db provider, or return mock slots */
+/** Fetch real availability for a provider */
 export function useRealAvailability(providerId: string | undefined) {
-  const isDbProvider = providerId?.startsWith("db-");
-  const dbId = isDbProvider ? providerId?.replace("db-", "") : null;
-
   const availabilityQuery = useQuery({
-    queryKey: ["provider-availability-public", dbId],
+    queryKey: ["provider-availability-public", providerId],
     queryFn: async () => {
-      if (!dbId) return [];
+      if (!providerId) return [];
       const { data, error } = await supabase
         .from("provider_availability")
         .select("*")
-        .eq("provider_id", dbId)
+        .eq("provider_id", providerId)
         .order("day_of_week");
       if (error) throw error;
       return data || [];
     },
-    enabled: !!dbId,
+    enabled: !!providerId,
   });
 
   const blockedDatesQuery = useQuery({
-    queryKey: ["provider-blocked-dates-public", dbId],
+    queryKey: ["provider-blocked-dates-public", providerId],
     queryFn: async () => {
-      if (!dbId) return [];
+      if (!providerId) return [];
       const { data, error } = await supabase
         .from("provider_blocked_dates")
         .select("blocked_date")
-        .eq("provider_id", dbId);
+        .eq("provider_id", providerId);
       if (error) throw error;
       return (data || []).map(d => d.blocked_date);
     },
-    enabled: !!dbId,
+    enabled: !!providerId,
   });
 
   const bookingsQuery = useQuery({
-    queryKey: ["provider-bookings-public", dbId],
+    queryKey: ["provider-bookings-public", providerId],
     queryFn: async () => {
-      if (!dbId) return [];
+      if (!providerId) return [];
       const { data, error } = await supabase
         .from("bookings")
         .select("booking_date, booking_time, service_ids")
-        .eq("provider_id", dbId)
+        .eq("provider_id", providerId)
         .in("status", ["confirmed", "pending"]);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!dbId,
+    enabled: !!providerId,
   });
 
   const servicesQuery = useQuery({
-    queryKey: ["provider-services-public", dbId],
+    queryKey: ["provider-services-public", providerId],
     queryFn: async () => {
-      if (!dbId) return [];
+      if (!providerId) return [];
       const { data, error } = await supabase
         .from("provider_services")
         .select("id, duration")
-        .eq("provider_id", dbId);
+        .eq("provider_id", providerId);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!dbId,
+    enabled: !!providerId,
   });
 
   const getAvailableSlots = (date: Date, requestedDuration?: number): string[] => {
-    if (!isDbProvider) {
-      return getMockAvailableSlots(providerId || "", date);
-    }
+    if (!providerId) return [];
 
     const dow = date.getDay();
     const dateStr = date.toISOString().split("T")[0];
@@ -190,7 +182,6 @@ export function useRealAvailability(providerId: string | undefined) {
 
     const slots: string[] = [];
     for (let t = start; t + neededDuration <= end; t += SLOT_STEP) {
-      // Check if [t, t+neededDuration) overlaps any booked interval
       const overlaps = bookedIntervals.some(
         bi => t < bi.end && bi.start < t + neededDuration
       );

@@ -21,11 +21,10 @@ const ProviderDetail = () => {
   const { isFavorite, toggleFavorite } = useFavorites();
   const liked = id ? isFavorite(id) : false;
 
-  // Combine mock reviews with real DB reviews
-  const realReviewCount = (dbReviews?.length || 0) + (provider?.reviewCount || 0);
+  const reviewCount = dbReviews?.length || 0;
   const avgRating = dbReviews && dbReviews.length > 0
-    ? ((provider?.rating || 0) * (provider?.reviewCount || 0) + dbReviews.reduce((sum, r) => sum + r.rating, 0)) / realReviewCount
-    : provider?.rating || 0;
+    ? dbReviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
+    : 0;
 
   useEffect(() => {
     const primary = provider?.coverImage?.trim() || "";
@@ -98,11 +97,11 @@ const ProviderDetail = () => {
         <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
           <h1 className="text-xl font-bold mb-1">{provider.name[lang]}</h1>
           <div className="flex items-center gap-3 text-sm text-muted-foreground mb-3">
-            {realReviewCount > 0 && (
+            {reviewCount > 0 && (
               <span className="flex items-center gap-1">
                 <Star className="h-4 w-4 fill-accent text-accent" />
                 <span className="font-medium text-foreground">{avgRating.toFixed(1)}</span>
-                ({realReviewCount})
+                ({reviewCount})
               </span>
             )}
             {provider.distance !== "—" && (
@@ -178,28 +177,12 @@ const ProviderDetail = () => {
       )}
 
       {/* Reviews */}
-      {(provider.reviews.length > 0 || (dbReviews && dbReviews.length > 0)) && (
+      {dbReviews && dbReviews.length > 0 && (
         <section className="px-5 mt-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("reviews")}</h2>
           <div className="flex flex-col gap-3">
-            {/* Real DB reviews first */}
-            {dbReviews?.map((review, i) => (
+            {dbReviews.map((review, i) => (
               <ReviewCard key={review.id} review={review} index={i} />
-            ))}
-            {/* Mock reviews */}
-            {provider.reviews.map((review, i) => (
-              <motion.div key={`mock-${i}`} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: (i + (dbReviews?.length || 0)) * 0.08, duration: 0.4 }} className="p-4 rounded-xl bg-secondary/60">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-semibold">{review.name}</span>
-                  <span className="text-xs text-muted-foreground">{review.date[lang]}</span>
-                </div>
-                <div className="flex gap-0.5 mb-2">
-                  {Array.from({ length: 5 }).map((_, s) => (
-                    <Star key={s} className={`h-3 w-3 ${s < review.rating ? "fill-accent text-accent" : "text-border"}`} />
-                  ))}
-                </div>
-                <p className="text-sm text-muted-foreground">{review.comment[lang]}</p>
-              </motion.div>
             ))}
           </div>
         </section>
