@@ -75,7 +75,7 @@ export function EditProviderDialog({ provider, open, onOpenChange }: EditProvide
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
-      queryClient.invalidateQueries({ queryKey: ["all-db-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
       toast.success("פרטי הספק עודכנו בהצלחה");
       onOpenChange(false);
     },
