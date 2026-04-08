@@ -5,7 +5,6 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { providers } from "@/lib/mock-data";
 import { useAllProviders } from "@/hooks/useAllProviders";
 import { useBookingReview } from "@/hooks/useReviews";
 import ReviewForm from "@/components/reviews/ReviewForm";
@@ -37,21 +36,11 @@ const Bookings = () => {
   });
 
   const getProviderName = (providerId: string) => {
-    // Check mock providers first, then DB providers (with db- prefix)
-    const mock = providers.find((p) => p.id === providerId);
-    if (mock) return mock.name[lang];
-    const dbP = allProviders.find((p) => p.id === `db-${providerId}`);
-    if (dbP) return dbP.name[lang];
-    return providerId;
+    const p = allProviders.find((p) => p.id === providerId);
+    return p ? p.name[lang] : providerId;
   };
 
   const getServiceNames = (serviceIds: string[]) => {
-    // Check mock providers
-    for (const provider of providers) {
-      const matched = provider.services.filter((s) => serviceIds.includes(s.id));
-      if (matched.length > 0) return matched.map((s) => s.name[lang]).join("، ");
-    }
-    // Check DB providers
     for (const provider of allProviders) {
       const matched = provider.services.filter((s) => serviceIds.includes(s.id));
       if (matched.length > 0) return matched.map((s) => s.name[lang]).join("، ");

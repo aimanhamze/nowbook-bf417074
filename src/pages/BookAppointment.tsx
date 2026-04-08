@@ -1,6 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useProviderById, useRealAvailability } from "@/hooks/useAllProviders";
-import { getAvailableSlots as getMockSlots } from "@/lib/mock-data";
 import type { Service } from "@/lib/mock-data";
 import { ArrowLeft, Check, Clock, CalendarDays } from "lucide-react";
 import { useState } from "react";
@@ -20,7 +19,7 @@ const BookAppointment = () => {
   const { user, isProvider } = useAuth();
   const queryClient = useQueryClient();
   const { provider, isLoading: providerLoading } = useProviderById(id);
-  const { getAvailableSlots: getRealSlots } = useRealAvailability(id);
+  const { getAvailableSlots } = useRealAvailability(id);
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
@@ -69,8 +68,6 @@ const BookAppointment = () => {
     );
   }
 
-  const isDbProvider = provider.id.startsWith("db-");
-
   const toggleService = (service: Service) => {
     setSelectedServices((prev) =>
       prev.find((s) => s.id === service.id)
@@ -82,11 +79,7 @@ const BookAppointment = () => {
   const total = selectedServices.reduce((sum, s) => sum + s.price, 0);
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
 
-  // Use real availability for DB providers, mock for legacy
-  // Pass totalDuration so only slots with enough room are shown
-  const allSlots = isDbProvider
-    ? getRealSlots(selectedDate, totalDuration || 15)
-    : getMockSlots(provider.id, selectedDate);
+  const allSlots = getAvailableSlots(selectedDate, totalDuration || 15);
 
   // Filter out past time slots if the selected date is today
   const now = new Date();
@@ -119,25 +112,11 @@ const BookAppointment = () => {
   };
 
   const handleConfirm = async () => {
-    // For DB providers, store the actual DB id (without "db-" prefix)
-    // For mock providers, try to find a matching DB provider profile
-    let storeProviderId = isDbProvider ? provider.id.replace("db-", "") : provider.id;
-    
-    if (!isDbProvider) {
-      // Look up if this mock provider has a real DB profile
-      const { data: dbProfile } = await supabase
-        .from("provider_profiles")
-        .select("id")
-        .ilike("business_name", `%${provider.name.he.replace(/[׳']/g, "").substring(0, 6)}%`)
-        .maybeSingle();
-      if (dbProfile) storeProviderId = dbProfile.id;
-    }
-
     if (user) {
       setLoading(true);
       const { error } = await supabase.from("bookings").insert({
         user_id: user.id,
-        provider_id: storeProviderId,
+        provider_id: provider.id,
         service_ids: selectedServices.map((s) => s.id),
         booking_date: format(selectedDate, "yyyy-MM-dd"),
         booking_time: selectedTime,
@@ -163,7 +142,7 @@ const BookAppointment = () => {
       // Send push notification to provider
       const { data: pushData, error: pushError } = await supabase.functions.invoke("send-push", {
         body: {
-          provider_id: storeProviderId,
+          provider_id: provider.id,
           title: "הזמנה חדשה! 🎉",
           body: `הזמנה חדשה ל-${format(selectedDate, "dd/MM")} בשעה ${selectedTime}`,
           url: "/dashboard",

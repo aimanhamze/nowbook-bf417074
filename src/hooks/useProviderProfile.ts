@@ -39,7 +39,7 @@ export function useProviderProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["provider-profile"] });
-      queryClient.invalidateQueries({ queryKey: ["all-db-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
     },
   });
 
@@ -68,7 +68,7 @@ export function useProviderProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["provider-profile"] });
-      queryClient.invalidateQueries({ queryKey: ["all-db-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
     },
   });
 

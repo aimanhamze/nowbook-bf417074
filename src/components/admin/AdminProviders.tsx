@@ -45,7 +45,7 @@ export function AdminProviders() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
       queryClient.invalidateQueries({ queryKey: ["admin-all-roles"] });
-      queryClient.invalidateQueries({ queryKey: ["all-db-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
       toast.success("הספק נמחק בהצלחה");
       setDeletingProvider(null);
     },
@@ -88,7 +88,7 @@ export function AdminProviders() {
           className="flex items-center gap-4 p-4 rounded-2xl border border-border bg-card"
         >
           <button
-            onClick={() => navigate(`/provider/db-${p.id}`)}
+            onClick={() => navigate(`/provider/${p.id}`)}
             className="flex items-center gap-4 flex-1 min-w-0 text-right"
           >
             <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center shrink-0 overflow-hidden">
