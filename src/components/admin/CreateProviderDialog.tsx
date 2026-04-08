@@ -33,6 +33,7 @@ const categoryLabels: Record<string, string> = {
   makeup: "💄 איפור",
   dental: "🦷 רפואת שיניים",
   physio: "🏃 פיזיותרפיה",
+  gym: "🏋️ סטודיו אימונים",
 };
 
 export function CreateProviderDialog() {
