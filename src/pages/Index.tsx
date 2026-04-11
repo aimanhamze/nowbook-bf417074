@@ -2,15 +2,16 @@ import { SearchBar } from "@/components/home/SearchBar";
 import { CategoryRow } from "@/components/home/CategoryRow";
 import { ProviderCard } from "@/components/home/ProviderCard";
 import { useAllProviders } from "@/hooks/useAllProviders";
-import { beautyCategories, healthCategories } from "@/lib/mock-data";
+import { beautyCategories, healthCategories, fitnessCategories } from "@/lib/mock-data";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 
 const Index = () => {
   const { t } = useLang();
   const { isProvider, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const { providers } = useAllProviders();
 
   if (isAdmin) {
@@ -26,6 +27,9 @@ const Index = () => {
   );
   const healthProviders = providers.filter((p) =>
     (healthCategories as readonly string[]).includes(p.category)
+  );
+  const fitnessProviders = providers.filter((p) =>
+    (fitnessCategories as readonly string[]).includes(p.category)
   );
 
   return (
@@ -64,12 +68,25 @@ const Index = () => {
         <CategoryRow filter={[...healthCategories]} />
       </section>
 
+      {/* Fitness & Sports */}
+      <section className="px-5 mb-8">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+          🏋️ {t("fitnessStudio")}
+        </h2>
+        <CategoryRow filter={[...fitnessCategories]} />
+      </section>
+
       {/* Popular nearby - beauty */}
       {beautyProviders.length > 0 && (
         <section className="px-5 mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">{t("beautyAndCosmetics")}</h2>
-            <button className="text-xs text-accent font-semibold">{t("seeAll")}</button>
+            <button
+              className="text-xs text-accent font-semibold"
+              onClick={() => navigate("/explore?group=beauty")}
+            >
+              {t("seeAll")}
+            </button>
           </div>
           <div className="flex flex-col gap-3">
             {beautyProviders.map((provider, i) => (
@@ -81,13 +98,38 @@ const Index = () => {
 
       {/* Popular nearby - health */}
       {healthProviders.length > 0 && (
-        <section className="px-5">
+        <section className="px-5 mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">{t("healthProfessionals")}</h2>
-            <button className="text-xs text-accent font-semibold">{t("seeAll")}</button>
+            <button
+              className="text-xs text-accent font-semibold"
+              onClick={() => navigate("/explore?group=health")}
+            >
+              {t("seeAll")}
+            </button>
           </div>
           <div className="flex flex-col gap-3">
             {healthProviders.map((provider, i) => (
+              <ProviderCard key={provider.id} provider={provider} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Fitness providers */}
+      {fitnessProviders.length > 0 && (
+        <section className="px-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold">🏋️ {t("fitnessStudio")}</h2>
+            <button
+              className="text-xs text-accent font-semibold"
+              onClick={() => navigate("/explore?group=fitness")}
+            >
+              {t("seeAll")}
+            </button>
+          </div>
+          <div className="flex flex-col gap-3">
+            {fitnessProviders.map((provider, i) => (
               <ProviderCard key={provider.id} provider={provider} index={i} />
             ))}
           </div>

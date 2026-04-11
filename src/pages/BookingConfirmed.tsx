@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { CheckCircle2, Calendar, ArrowLeft as ArrowRight } from "lucide-react";
+import { CheckCircle2, Calendar, ArrowLeft as ArrowRight, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 
@@ -13,6 +13,8 @@ const BookingConfirmed = () => {
     date: string;
     time: string;
     total: number;
+    isGroup?: boolean;
+    participantCount?: number;
   } | null;
 
   if (!state) {
@@ -47,6 +49,16 @@ const BookingConfirmed = () => {
           <p className="text-xs text-muted-foreground">{t("services")}</p>
           <p className="text-sm">{state.services.join("، ")}</p>
         </div>
+
+        {state.isGroup && state.participantCount !== undefined && (
+          <div className="flex items-center gap-2 py-2 px-3 rounded-xl bg-blue-50 border border-blue-100">
+            <Users className="h-4 w-4 text-blue-600 shrink-0" />
+            <p className="text-sm text-blue-700 font-medium">
+              {t("joinedClass")} · {state.participantCount} {t("classParticipants")}
+            </p>
+          </div>
+        )}
+
         <div className="border-t border-border pt-3 flex justify-between items-center">
           <span className="text-sm text-muted-foreground">{t("total")}</span>
           <span className="text-lg font-bold">₪{state.total}</span>

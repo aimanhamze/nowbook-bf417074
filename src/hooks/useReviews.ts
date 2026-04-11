@@ -13,8 +13,9 @@ export interface Review {
 }
 
 export function useProviderReviews(providerId: string | undefined) {
-  return useQuery({
+  const q = useQuery({
     queryKey: ["reviews", providerId],
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       if (!providerId) return [];
       const { data, error } = await supabase
@@ -27,6 +28,7 @@ export function useProviderReviews(providerId: string | undefined) {
     },
     enabled: !!providerId,
   });
+  return { ...q, data: q.data ?? [], error: q.error };
 }
 
 export function useBookingReview(bookingId: string | undefined) {

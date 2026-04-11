@@ -1,4 +1,4 @@
-import { Bell, Check, CheckCheck, ChevronLeft } from "lucide-react";
+import { Bell, CheckCheck, ChevronLeft } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
+import { useState } from "react";
 
 const typeIcons: Record<string, string> = {
   booking_new: "🎉",
@@ -24,21 +25,27 @@ const Notifications = () => {
   const queryClient = useQueryClient();
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
 
-  const { data: notifications = [], isLoading } = useQuery({
-    queryKey: ["notifications", user?.id],
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(0);
+
+  const { data: notifData, isLoading } = useQuery({
+    queryKey: ["notifications", user?.id, page],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user) return { items: [], hasMore: false };
       const { data, error } = await supabase
         .from("notifications")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(50);
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
       if (error) throw error;
-      return data;
+      return { items: data || [], hasMore: (data || []).length === PAGE_SIZE };
     },
     enabled: !!user,
   });
+
+  const notifications = notifData?.items ?? [];
+  const hasMore = notifData?.hasMore ?? false;
 
   const markReadMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -48,7 +55,24 @@ const Notifications = () => {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["notifications", user?.id] });
+      const previous = queryClient.getQueryData(["notifications", user?.id]);
+      queryClient.setQueryData(["notifications", user?.id], (old: typeof notifications) =>
+        (old || []).map((n) => n.id === id ? { ...n, is_read: true } : n)
+      );
+      queryClient.setQueryData<number>(["unread-notifications", user?.id], (old = 0) =>
+        Math.max(0, old - 1)
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(["notifications", user?.id], context.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });
+    },
   });
 
   const markAllReadMutation = useMutation({
@@ -61,7 +85,10 @@ const Notifications = () => {
         .eq("is_read", false);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["unread-notifications", user?.id] });
+    },
   });
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
@@ -81,9 +108,7 @@ const Notifications = () => {
         <button onClick={() => navigate(-1)} className="active:scale-95">
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-xl font-bold flex-1">
-          {lang === "he" ? "התראות" : lang === "ar" ? "الإشعارات" : "Notifications"}
-        </h1>
+        <h1 className="text-xl font-bold flex-1">{t("notificationsLabel")}</h1>
         {unreadCount > 0 && (
           <Button
             variant="ghost"
@@ -93,7 +118,7 @@ const Notifications = () => {
             disabled={markAllReadMutation.isPending}
           >
             <CheckCheck className="h-4 w-4 mr-1" />
-            {lang === "he" ? "סמן הכל כנקרא" : lang === "ar" ? "تعليم الكل كمقروء" : "Mark all read"}
+            {t("markAllRead")}
           </Button>
         )}
       </header>
@@ -111,9 +136,7 @@ const Notifications = () => {
           className="px-5 flex flex-col items-center justify-center py-20"
         >
           <Bell className="h-12 w-12 text-muted-foreground/40 mb-4" />
-          <p className="text-muted-foreground text-sm">
-            {lang === "he" ? "אין התראות עדיין" : lang === "ar" ? "لا توجد إشعارات بعد" : "No notifications yet"}
-          </p>
+          <p className="text-muted-foreground text-sm">{t("noNotificationsYet")}</p>
         </motion.div>
       ) : (
         <div className="px-5 space-y-2">
@@ -159,6 +182,25 @@ const Notifications = () => {
               </div>
             </motion.button>
           ))}
+          <div className="flex justify-between items-center pt-2 pb-4">
+            <button
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="text-sm text-accent font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              ← {t("prev")}
+            </button>
+            <span className="text-xs text-muted-foreground">
+              {lang === "he" ? `עמוד ${page + 1}` : lang === "ar" ? `صفحة ${page + 1}` : `Page ${page + 1}`}
+            </span>
+            <button
+              disabled={!hasMore}
+              onClick={() => setPage((p) => p + 1)}
+              className="text-sm text-accent font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {t("next")} →
+            </button>
+          </div>
         </div>
       )}
     </div>

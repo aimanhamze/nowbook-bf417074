@@ -6,8 +6,9 @@ export function useFavorites() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: favoriteIds = [], isLoading } = useQuery({
+  const query = useQuery({
     queryKey: ["favorites", user?.id],
+    staleTime: 2 * 60 * 1000,
     queryFn: async () => {
       if (!user) return [];
       const { data, error } = await supabase
@@ -19,6 +20,9 @@ export function useFavorites() {
     },
     enabled: !!user,
   });
+
+  const favoriteIds: string[] = query.data ?? [];
+  const isLoading = query.isLoading;
 
   const toggleFavorite = useMutation({
     mutationFn: async (providerId: string) => {
@@ -38,12 +42,28 @@ export function useFavorites() {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onMutate: async (providerId: string) => {
+      await queryClient.cancelQueries({ queryKey: ["favorites", user?.id] });
+      const previous = queryClient.getQueryData<string[]>(["favorites", user?.id]);
+      queryClient.setQueryData<string[]>(["favorites", user?.id], (old = []) =>
+        old.includes(providerId)
+          ? old.filter((id) => id !== providerId)
+          : [...old, providerId]
+      );
+      return { previous };
+    },
+    onError: (_err, _providerId, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(["favorites", user?.id], context.previous);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["favorites", user?.id] });
     },
   });
 
   const isFavorite = (providerId: string) => favoriteIds.includes(providerId);
 
-  return { favoriteIds, isFavorite, toggleFavorite, isLoading };
+  return { favoriteIds, isFavorite, toggleFavorite, isLoading, error: query.error };
+
 }

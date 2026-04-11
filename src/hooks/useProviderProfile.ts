@@ -8,6 +8,7 @@ export function useProviderProfile() {
 
   const profileQuery = useQuery({
     queryKey: ["provider-profile", user?.id],
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       if (!user) return null;
       const { data, error } = await supabase
@@ -38,7 +39,7 @@ export function useProviderProfile() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["provider-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["all-providers"] });
     },
   });
@@ -67,7 +68,36 @@ export function useProviderProfile() {
       return publicUrlData.publicUrl;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["provider-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+    },
+  });
+
+  const uploadAvatarImage = useMutation({
+    mutationFn: async (file: File) => {
+      if (!user) throw new Error("Not authenticated");
+
+      const extension = file.name.split(".").pop() || "jpg";
+      const filePath = `${user.id}/avatar-${Date.now()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("provider-images")
+        .upload(filePath, file, { upsert: true, cacheControl: "3600" });
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from("provider-images")
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from("provider_profiles")
+        .upsert({ user_id: user.id, avatar_image: publicUrlData.publicUrl }, { onConflict: "user_id" });
+      if (updateError) throw updateError;
+
+      return publicUrlData.publicUrl;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["all-providers"] });
     },
   });
@@ -75,8 +105,10 @@ export function useProviderProfile() {
   return {
     profile: profileQuery.data,
     isLoading: profileQuery.isLoading,
+    error: profileQuery.error,
     upsertProfile,
     uploadCoverImage,
+    uploadAvatarImage,
   };
 }
 

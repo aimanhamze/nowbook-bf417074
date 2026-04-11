@@ -21,16 +21,26 @@ export default defineConfig(({ mode }) => ({
       includeAssets: ["favicon.ico", "pwa-icon-192.png", "pwa-icon-512.png"],
       workbox: {
         navigateFallbackDenylist: [/^\/~oauth/],
+        importScripts: ["/sw-push.js"],
       },
       manifest: {
         name: "Dori - הזמנת תורים",
         short_name: "Dori",
         description: "הזמנת תורים בקלות",
+        lang: "he",
         theme_color: "#fcfcfc",
         background_color: "#fcfcfc",
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
+        screenshots: [
+          {
+            src: "/pwa-icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            form_factor: "narrow",
+          },
+        ],
         icons: [
           {
             src: "/pwa-icon-192.png",
@@ -55,6 +65,17 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react-router-dom"],
+          "vendor-ui": ["framer-motion", "@radix-ui/react-dialog", "@radix-ui/react-select", "@radix-ui/react-tabs", "@radix-ui/react-dropdown-menu"],
+          "vendor-supabase": ["@supabase/supabase-js"],
+        },
+      },
     },
   },
 }));

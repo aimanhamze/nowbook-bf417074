@@ -5,6 +5,9 @@ export interface Service {
   name: Record<Lang, string>;
   duration: number;
   price: number;
+  service_type?: 'private' | 'group';
+  max_capacity?: number;
+  scheduled_time?: string | null; // HH:MM — fixed time for group classes
 }
 
 export interface Provider {
@@ -13,15 +16,11 @@ export interface Provider {
   category: string;
   rating: number;
   reviewCount: number;
-  distance: string;
   image: string;
   coverImage: string;
   address: Record<Lang, string>;
   about: Record<Lang, string>;
   services: Service[];
-  photos: string[];
-  workingHours: { day: Record<Lang, string>; hours: string }[];
-  reviews: { name: string; rating: number; comment: Record<Lang, string>; date: Record<Lang, string> }[];
 }
 
 export const categories = [
@@ -39,10 +38,12 @@ export const categories = [
   { id: "physiotherapy", icon: "💪" },
   { id: "pediatrician", icon: "👶" },
   { id: "gym", icon: "🏋️" },
+  { id: "fitness_studio", icon: "🤸" },
 ] as const;
 
 export const beautyCategories = ["barber", "salon", "nails", "brows", "spa", "skincare", "makeup"] as const;
 export const healthCategories = ["orthopedic", "dentist", "eye_doctor", "dermatologist", "physiotherapy", "pediatrician"] as const;
+export const fitnessCategories = ["gym", "fitness_studio"] as const;
 
 export const categoryNames: Record<string, Record<Lang, string>> = {
   barber: { he: "ספר", ar: "حلاق", en: "Barber" },
@@ -59,4 +60,5 @@ export const categoryNames: Record<string, Record<Lang, string>> = {
   physiotherapy: { he: "פיזיותרפיה", ar: "علاج طبيعي", en: "Physiotherapy" },
   pediatrician: { he: "רופא ילדים", ar: "طبيب أطفال", en: "Pediatrician" },
   gym: { he: "סטודיו אימונים", ar: "صالة رياضية", en: "Gym & Fitness" },
+  fitness_studio: { he: "סטודיו כושר", ar: "استوديو لياقة", en: "Fitness Studio" },
 };

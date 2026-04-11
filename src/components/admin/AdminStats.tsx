@@ -1,8 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Users, Store, CalendarDays, Star, TrendingUp, Bell } from "lucide-react";
+import { useLang } from "@/contexts/LangContext";
 
 export function AdminStats() {
+  const { t } = useLang();
+
   const { data: stats, isLoading } = useQuery({
     queryKey: ["admin-stats"],
     queryFn: async () => {
@@ -44,12 +47,12 @@ export function AdminStats() {
   }
 
   const cards = [
-    { label: "משתמשים", value: stats?.users, icon: Users, color: "text-blue-500" },
-    { label: "ספקים", value: stats?.providers, icon: Store, color: "text-emerald-500" },
-    { label: "תורים (סה״כ)", value: stats?.totalBookings, icon: CalendarDays, color: "text-violet-500" },
-    { label: "תורים מאושרים", value: stats?.confirmedBookings, icon: TrendingUp, color: "text-green-500" },
-    { label: "ביקורות", value: stats?.reviews, icon: Star, color: "text-amber-500" },
-    { label: "התראות", value: stats?.notifications, icon: Bell, color: "text-rose-500" },
+    { label: t("statsUsers"), value: stats?.users, icon: Users, color: "text-blue-500" },
+    { label: t("statsProviders"), value: stats?.providers, icon: Store, color: "text-emerald-500" },
+    { label: t("statsTotalBookings"), value: stats?.totalBookings, icon: CalendarDays, color: "text-violet-500" },
+    { label: t("statsConfirmedBookings"), value: stats?.confirmedBookings, icon: TrendingUp, color: "text-green-500" },
+    { label: t("statsReviews"), value: stats?.reviews, icon: Star, color: "text-amber-500" },
+    { label: t("statsNotifications"), value: stats?.notifications, icon: Bell, color: "text-rose-500" },
   ];
 
   return (
@@ -67,9 +70,11 @@ export function AdminStats() {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-5">
-        <h3 className="text-sm font-semibold mb-1">הכנסות כוללות (תורים מאושרים)</h3>
+        <h3 className="text-sm font-semibold mb-1">{t("statsTotalRevenue")}</h3>
         <p className="text-3xl font-bold text-accent">₪{stats?.totalRevenue?.toLocaleString()}</p>
-        <p className="text-xs text-muted-foreground mt-1">{stats?.cancelledBookings} תורים בוטלו</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {stats?.cancelledBookings} {t("statsCancelledBookings")}
+        </p>
       </div>
     </div>
   );

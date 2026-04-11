@@ -1,15 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { LangProvider } from "@/contexts/LangContext";
+import { LangProvider, useLang } from "@/contexts/LangContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 
 const Index = lazy(() => import("./pages/Index"));
 const Explore = lazy(() => import("./pages/Explore"));
@@ -37,6 +37,33 @@ function PageLoader() {
   );
 }
 
+function PageTitleUpdater() {
+  const location = useLocation();
+  const { t } = useLang();
+
+  useEffect(() => {
+    const routeTitles: Record<string, string> = {
+      "/": `Dori — ${t("home")}`,
+      "/explore": `Dori — ${t("explore")}`,
+      "/bookings": `Dori — ${t("myBookings")}`,
+      "/favorites": `Dori — ${t("favorites")}`,
+      "/profile": `Dori — ${t("profile")}`,
+      "/auth": `Dori — ${t("signIn")}`,
+      "/notifications": `Dori — ${t("notificationsLabel")}`,
+      "/dashboard": `Dori — ${t("dashboard")}`,
+      "/admin": `Dori — Admin`,
+      "/booking-confirmed": `Dori — ${t("bookingConfirmed")}`,
+    };
+
+    const base = location.pathname.split("/").slice(0, 2).join("/");
+    document.title = routeTitles[location.pathname]
+      || routeTitles[base]
+      || "Dori — הזמנת תורים";
+  }, [location.pathname, t]);
+
+  return null;
+}
+
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -46,22 +73,23 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
+              <PageTitleUpdater />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/explore" element={<Explore />} />
-                  <Route path="/provider/:id" element={<ProviderDetail />} />
-                  <Route path="/provider/:id/book" element={<ProtectedRoute><BookAppointment /></ProtectedRoute>} />
-                  <Route path="/booking-confirmed" element={<ProtectedRoute><BookingConfirmed /></ProtectedRoute>} />
-                  <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
-                  <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
-                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/reset-password" element={<ResetPassword />} />
-                  <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                  <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-                  <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
-                  <Route path="/install" element={<Install />} />
+                  <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
+                  <Route path="/explore" element={<ErrorBoundary><Explore /></ErrorBoundary>} />
+                  <Route path="/provider/:id" element={<ErrorBoundary><ProviderDetail /></ErrorBoundary>} />
+                  <Route path="/provider/:id/book" element={<ProtectedRoute><ErrorBoundary><BookAppointment /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/booking-confirmed" element={<ProtectedRoute><ErrorBoundary><BookingConfirmed /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/bookings" element={<ProtectedRoute><ErrorBoundary><Bookings /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/favorites" element={<ProtectedRoute><ErrorBoundary><Favorites /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><ErrorBoundary><Profile /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
+                  <Route path="/reset-password" element={<ErrorBoundary><ResetPassword /></ErrorBoundary>} />
+                  <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Dashboard /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/notifications" element={<ProtectedRoute><ErrorBoundary><Notifications /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/admin" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
+                  <Route path="/install" element={<ErrorBoundary><Install /></ErrorBoundary>} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

@@ -19,21 +19,28 @@ const Bookings = () => {
   const { user } = useAuth();
   const { providers: allProviders } = useAllProviders();
 
-  const { data: bookings, isLoading } = useQuery({
-    queryKey: ["bookings", user?.id],
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(0);
+
+  const { data: bookingsData, isLoading } = useQuery({
+    queryKey: ["bookings", user?.id, page],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user) return { items: [], hasMore: false };
       const { data, error } = await supabase
         .from("bookings")
         .select("*")
         .eq("user_id", user.id)
         .in("status", ["confirmed", "pending", "cancelled"])
-        .order("booking_date", { ascending: false });
+        .order("booking_date", { ascending: false })
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
       if (error) throw error;
-      return data as Tables<"bookings">[];
+      return { items: (data || []) as Tables<"bookings">[], hasMore: (data || []).length === PAGE_SIZE };
     },
     enabled: !!user,
   });
+
+  const bookings = bookingsData?.items;
+  const hasMore = bookingsData?.hasMore ?? false;
 
   const getProviderName = (providerId: string) => {
     const p = allProviders.find((p) => p.id === providerId);
@@ -84,6 +91,25 @@ const Bookings = () => {
           {bookings.map((booking, i) => (
             <BookingCard key={booking.id} booking={booking} index={i} getProviderName={getProviderName} getServiceNames={getServiceNames} />
           ))}
+          <div className="flex justify-between items-center pt-2 pb-4">
+            <button
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="text-sm text-accent font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              ← {lang === "he" ? "הקודם" : lang === "ar" ? "السابق" : "Prev"}
+            </button>
+            <span className="text-xs text-muted-foreground">
+              {lang === "he" ? `עמוד ${page + 1}` : lang === "ar" ? `صفحة ${page + 1}` : `Page ${page + 1}`}
+            </span>
+            <button
+              disabled={!hasMore}
+              onClick={() => setPage((p) => p + 1)}
+              className="text-sm text-accent font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {lang === "he" ? "הבא" : lang === "ar" ? "التالي" : "Next"} →
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -101,7 +127,8 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
   const { data: existingReview } = useBookingReview(booking.id);
 
   const queryClient = useQueryClient();
-  const isPast = new Date(booking.booking_date) < new Date();
+  const bookingDateTime = new Date(`${booking.booking_date}T${booking.booking_time}:00`);
+  const isPast = bookingDateTime < new Date();
   const canReview = isPast && booking.status === "confirmed" && !existingReview;
   const canCancel = !isPast && (booking.status === "confirmed" || booking.status === "pending");
 
@@ -127,7 +154,7 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
         queryClient.invalidateQueries({ queryKey: ["notifications"] });
       }
 
-      // Notify provider about customer cancellation
+      // Notify provider about customer cancellation (best-effort, non-blocking)
       supabase.functions.invoke("send-push", {
         body: {
           provider_id: booking.provider_id,
@@ -136,13 +163,13 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
           url: "/dashboard",
           type: "booking_cancelled",
         },
-      }).catch((err) => console.error("Push to provider failed:", err));
+      }).catch(() => { /* best-effort — provider will see updated calendar */ });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
-      toast.success("התור בוטל בהצלחה");
+      toast.success(t("bookingCancelled"));
     },
-    onError: () => toast.error("שגיאה בביטול התור"),
+    onError: () => toast.error(t("errorCancelBooking")),
   });
 
   return (
@@ -158,7 +185,7 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
             booking.status === "confirmed" ? "bg-green-100 text-green-700" : booking.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-secondary text-muted-foreground"
           }`}>
-            {booking.status === "confirmed" ? "מאושר" : booking.status === "cancelled" ? "בוטל" : booking.status}
+            {booking.status === "confirmed" ? t("confirmed") : booking.status === "cancelled" ? t("cancelled") : booking.status}
           </span>
         </div>
         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -194,7 +221,7 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
                 disabled={cancelMutation.isPending}
               >
                 <XCircle className="h-3 w-3 mr-1" />
-                {cancelMutation.isPending ? "מבטל..." : "בטל תור"}
+                {cancelMutation.isPending ? t("cancelling") : t("cancelBooking")}
               </Button>
             )}
           </div>

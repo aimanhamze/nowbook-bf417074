@@ -252,9 +252,12 @@ export type Database = {
           duration: number
           id: string
           is_active: boolean
+          max_capacity: number
           name: string
           price: number
           provider_id: string
+          scheduled_time: string | null
+          service_type: string
           sort_order: number
           updated_at: string
         }
@@ -263,9 +266,12 @@ export type Database = {
           duration?: number
           id?: string
           is_active?: boolean
+          max_capacity?: number
           name: string
           price?: number
           provider_id: string
+          scheduled_time?: string | null
+          service_type?: string
           sort_order?: number
           updated_at?: string
         }
@@ -274,9 +280,12 @@ export type Database = {
           duration?: number
           id?: string
           is_active?: boolean
+          max_capacity?: number
           name?: string
           price?: number
           provider_id?: string
+          scheduled_time?: string | null
+          service_type?: string
           sort_order?: number
           updated_at?: string
         }
@@ -286,6 +295,48 @@ export type Database = {
             columns: ["provider_id"]
             isOneToOne: false
             referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_sessions: {
+        Row: {
+          id: string
+          provider_id: string
+          service_id: string
+          session_date: string
+          session_time: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          provider_id: string
+          service_id: string
+          session_date: string
+          session_time: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          provider_id?: string
+          service_id?: string
+          session_date?: string
+          session_time?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_sessions_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_sessions_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "provider_services"
             referencedColumns: ["id"]
           },
         ]
@@ -383,6 +434,20 @@ export type Database = {
     Functions: {
       booking_time_to_minutes: { Args: { _time: string }; Returns: number }
       get_display_name: { Args: { _user_id: string }; Returns: string }
+      get_slot_capacity: {
+        Args: {
+          p_provider_id: string
+          p_date: string
+          p_time: string
+          p_service_id: string
+        }
+        Returns: {
+          max_capacity: number
+          booked_count: number
+          available_spots: number
+          is_full: boolean
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

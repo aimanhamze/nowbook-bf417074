@@ -4,19 +4,21 @@ import { useNavigate } from "react-router-dom";
 import { AdminStats } from "@/components/admin/AdminStats";
 import { AdminProviders } from "@/components/admin/AdminProviders";
 import { AdminUsers } from "@/components/admin/AdminUsers";
+import { useLang } from "@/contexts/LangContext";
 import { cn } from "@/lib/utils";
 
-const tabs = [
-  { id: "stats", label: "סטטיסטיקות", icon: BarChart3 },
-  { id: "providers", label: "ספקים", icon: Store },
-  { id: "users", label: "משתמשים", icon: Users },
-] as const;
-
-type TabId = (typeof tabs)[number]["id"];
+type TabId = "stats" | "providers" | "users";
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState<TabId>("stats");
   const navigate = useNavigate();
+  const { t } = useLang();
+
+  const tabs: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
+    { id: "stats", label: t("adminStats"), icon: BarChart3 },
+    { id: "providers", label: t("adminProviders"), icon: Store },
+    { id: "users", label: t("adminUsers"), icon: Users },
+  ];
 
   return (
     <div className="min-h-screen pb-24">
@@ -25,7 +27,7 @@ const Admin = () => {
           <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-secondary active:scale-95">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-xl font-bold">לוח מנהל</h1>
+          <h1 className="text-xl font-bold">{t("adminDashboard")}</h1>
         </div>
 
         <div className="flex gap-2">

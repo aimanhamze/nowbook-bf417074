@@ -1,26 +1,71 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Clock } from "lucide-react";
+import { Plus, Pencil, Trash2, Clock, Users, User, CalendarPlus, X, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderServices } from "@/hooks/useProviderServices";
+import { useProviderSessions } from "@/hooks/useProviderSessions";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { z } from "zod";
+import { format } from "date-fns";
+
+const serviceSchema = z.object({
+  name: z.string().min(1, "שם השירות נדרש").max(100),
+  duration: z.number().min(5, "משך מינימלי 5 דקות").max(480, "משך מקסימלי 8 שעות"),
+  price: z.number().min(0, "מחיר לא יכול להיות שלילי").max(99999),
+  max_capacity: z.number().min(2, "קבוצה דורשת לפחות 2 מקומות").max(100),
+});
+
+type EditState = {
+  id?: string;
+  name: string;
+  duration: number;
+  price: number;
+  service_type: 'private' | 'group';
+  max_capacity: number;
+};
+
+type AddSessionState = {
+  service_id: string;
+  service_name: string;
+  date: string;
+  time: string;
+};
 
 export function ServicesTab() {
   const { t } = useLang();
   const { services, isLoading, upsertService, deleteService } = useProviderServices();
-  const [editing, setEditing] = useState<{ id?: string; name: string; duration: number; price: number } | null>(null);
+  const { sessions, addSession, deleteSession } = useProviderSessions();
+  const [editing, setEditing] = useState<EditState | null>(null);
+  const [addingSession, setAddingSession] = useState<AddSessionState | null>(null);
+  const [expandedService, setExpandedService] = useState<string | null>(null);
 
   const handleSave = async () => {
-    if (!editing || !editing.name.trim()) return;
+    if (!editing) return;
+    const result = serviceSchema.omit({ max_capacity: editing.service_type === 'private' }).safeParse({
+      name: editing.name.trim(),
+      duration: editing.duration,
+      price: editing.price,
+      ...(editing.service_type === 'group' ? { max_capacity: editing.max_capacity } : {}),
+    });
+
+    if (!result.success) {
+      toast.error(result.error.errors[0].message);
+      return;
+    }
     try {
-      await upsertService.mutateAsync(editing);
+      await upsertService.mutateAsync({
+        ...editing,
+        name: editing.name.trim(),
+        max_capacity: editing.service_type === 'group' ? editing.max_capacity : 1,
+      });
       toast.success(t("serviceSaved"));
       setEditing(null);
-    } catch {
-      toast.error("Error saving service");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("reviewError"));
     }
   };
 
@@ -33,28 +78,113 @@ export function ServicesTab() {
     }
   };
 
+  const handleAddSession = async () => {
+    if (!addingSession) return;
+    if (!addingSession.date || !addingSession.time) {
+      toast.error("בחר תאריך ושעה");
+      return;
+    }
+    try {
+      await addSession.mutateAsync({
+        service_id: addingSession.service_id,
+        session_date: addingSession.date,
+        session_time: addingSession.time,
+      });
+      toast.success("המפגש נוסף בהצלחה");
+      setAddingSession(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "שגיאה בהוספת מפגש");
+    }
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    try {
+      await deleteSession.mutateAsync(id);
+      toast.success("המפגש נמחק");
+    } catch {
+      toast.error("שגיאה במחיקת מפגש");
+    }
+  };
+
+  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 10 });
+
+  const openEdit = (svc: typeof services[number]) => setEditing({
+    id: svc.id,
+    name: svc.name,
+    duration: svc.duration,
+    price: svc.price,
+    service_type: (svc.service_type as 'private' | 'group') || 'private',
+    max_capacity: svc.max_capacity || 10,
+  });
+
+  const openAddSession = (svc: typeof services[number]) => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    setAddingSession({
+      service_id: svc.id,
+      service_name: svc.name,
+      date: today,
+      time: "09:00",
+    });
+  };
+
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{t("manageServices")}</h2>
-        <Button size="sm" onClick={() => setEditing({ name: "", duration: 30, price: 0 })} className="gap-1.5">
+        <Button size="sm" onClick={openNew} className="gap-1.5">
           <Plus className="h-4 w-4" />
           {t("addService")}
         </Button>
       </div>
 
+      {/* Service editor form */}
       <AnimatePresence>
         {editing && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="rounded-2xl border border-border bg-card p-4 space-y-3"
+            className="rounded-2xl border border-border bg-card p-4 space-y-3 overflow-hidden"
           >
             <div>
               <Label>{t("serviceName")}</Label>
               <Input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />
             </div>
+
+            <div>
+              <Label className="mb-1.5 block">{t("serviceType")}</Label>
+              <div className="flex rounded-xl border border-border overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setEditing({ ...editing, service_type: 'private', max_capacity: 1 })}
+                  className={cn(
+                    "flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
+                    editing.service_type === 'private'
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-card text-muted-foreground hover:bg-secondary"
+                  )}
+                >
+                  <User className="h-3.5 w-3.5" />
+                  {t("privateService")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditing({ ...editing, service_type: 'group', max_capacity: Math.max(2, editing.max_capacity) })}
+                  className={cn(
+                    "flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
+                    editing.service_type === 'group'
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-card text-muted-foreground hover:bg-secondary"
+                  )}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  {t("groupClass")}
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>{t("duration")} ({t("min")})</Label>
@@ -65,9 +195,73 @@ export function ServicesTab() {
                 <Input type="number" value={editing.price} onChange={e => setEditing({ ...editing, price: Number(e.target.value) })} onFocus={e => e.target.select()} />
               </div>
             </div>
+
+            {editing.service_type === 'group' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+              >
+                <Label>{t("maxCapacity")}</Label>
+                <Input
+                  type="number"
+                  min={2}
+                  max={100}
+                  value={editing.max_capacity}
+                  onChange={e => setEditing({ ...editing, max_capacity: Math.max(2, Number(e.target.value)) })}
+                  onFocus={e => e.target.select()}
+                />
+              </motion.div>
+            )}
+
             <div className="flex gap-2">
               <Button size="sm" onClick={handleSave} disabled={upsertService.isPending}>{t("save")}</Button>
               <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>{t("cancel")}</Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Add session form */}
+      <AnimatePresence>
+        {addingSession && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="rounded-2xl border border-accent/30 bg-accent/5 p-4 space-y-3 overflow-hidden"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold flex items-center gap-1.5">
+                <CalendarPlus className="h-4 w-4 text-accent" />
+                הוסף מפגש — {addingSession.service_name}
+              </p>
+              <button onClick={() => setAddingSession(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>תאריך</Label>
+                <Input
+                  type="date"
+                  min={todayStr}
+                  value={addingSession.date}
+                  onChange={e => setAddingSession({ ...addingSession, date: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>שעה</Label>
+                <Input
+                  type="time"
+                  value={addingSession.time}
+                  onChange={e => setAddingSession({ ...addingSession, time: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleAddSession} disabled={addSession.isPending}>הוסף מפגש</Button>
+              <Button size="sm" variant="ghost" onClick={() => setAddingSession(null)}>{t("cancel")}</Button>
             </div>
           </motion.div>
         )}
@@ -86,31 +280,95 @@ export function ServicesTab() {
         </div>
       ) : (
         <div className="space-y-2">
-          {services.map((svc, i) => (
-            <motion.div
-              key={svc.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-3"
-            >
-              <div>
-                <p className="font-medium text-sm">{svc.name}</p>
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {svc.duration} {t("min")} · ₪{svc.price}
-                </p>
-              </div>
-              <div className="flex gap-1">
-                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditing({ id: svc.id, name: svc.name, duration: svc.duration, price: svc.price })}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => handleDelete(svc.id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </motion.div>
-          ))}
+          {services.map((svc, i) => {
+            const isGroup = svc.service_type === 'group';
+            const svcSessions = sessions.filter(s => s.service_id === svc.id);
+            const isExpanded = expandedService === svc.id;
+
+            return (
+              <motion.div
+                key={svc.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="rounded-2xl border border-border bg-card overflow-hidden"
+              >
+                {/* Service row */}
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-sm">{svc.name}</p>
+                      {isGroup ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                          <Users className="h-2.5 w-2.5" />
+                          {t("groupClass")} · {t("maxCapacity")}: {svc.max_capacity}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium">
+                          <User className="h-2.5 w-2.5" />
+                          {t("privateService")}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Clock className="h-3 w-3" />
+                      {svc.duration} {t("min")} · ₪{svc.price}
+                      {svcSessions.length > 0 && (
+                        <span className="ms-1 text-accent font-medium">· {svcSessions.length} מפגשים</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-accent"
+                      onClick={() => {
+                        setExpandedService(isExpanded ? null : svc.id);
+                        openAddSession(svc);
+                      }}
+                      title="הוסף מפגש"
+                    >
+                      <CalendarPlus className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(svc)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => handleDelete(svc.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Sessions list */}
+                {svcSessions.length > 0 && (
+                  <div className="border-t border-border/50 bg-secondary/30 px-4 py-2 space-y-1">
+                    {svcSessions.map(session => {
+                      const dateObj = new Date(session.session_date + "T" + session.session_time);
+                      const timeDisplay = session.session_time.slice(0, 5); // HH:MM
+                      return (
+                        <div key={session.id} className="flex items-center justify-between text-xs py-1">
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <Calendar className="h-3 w-3 text-accent" />
+                            <span className="font-medium text-foreground">
+                              {format(new Date(session.session_date), "dd/MM/yyyy")}
+                            </span>
+                            <span className="font-semibold text-accent">@ {timeDisplay}</span>
+                          </span>
+                          <button
+                            onClick={() => handleDeleteSession(session.id)}
+                            className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>

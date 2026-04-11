@@ -1,5 +1,7 @@
 import { useEffect, type ChangeEvent } from "react";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,19 +13,22 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { categories } from "@/lib/mock-data";
 import { toast } from "sonner";
 
-interface FormValues {
-  business_name: string;
-  category: string;
-  address: string;
-  about: string;
-  phone: string;
-}
+const profileSchema = z.object({
+  business_name: z.string().min(2, "שם העסק חייב להכיל לפחות 2 תווים").max(100),
+  category: z.string().min(1),
+  address: z.string().max(200).optional().default(""),
+  about: z.string().max(1000).optional().default(""),
+  phone: z.string().regex(/^[+\d\s\-()]*$/, "מספר טלפון לא תקין").max(20).optional().default(""),
+});
+
+type FormValues = z.infer<typeof profileSchema>;
 
 export function BusinessProfileTab() {
   const { t } = useLang();
-  const { profile, upsertProfile, uploadCoverImage } = useProviderProfile();
+  const { profile, upsertProfile, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
 
-  const { register, handleSubmit, setValue, watch, reset } = useForm<FormValues>({
+  const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormValues>({
+    resolver: zodResolver(profileSchema),
     defaultValues: { business_name: "", category: "barber", address: "", about: "", phone: "" },
   });
 
@@ -41,20 +46,38 @@ export function BusinessProfileTab() {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      await upsertProfile.mutateAsync(values);
+      await upsertProfile.mutateAsync({
+        business_name: values.business_name,
+        category: values.category,
+        address: values.address ?? "",
+        about: values.about ?? "",
+        phone: values.phone ?? "",
+      });
       toast.success(t("profileSaved"));
-    } catch {
-      toast.error("Error saving profile");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error saving profile");
     }
   };
 
   const handleCoverUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     try {
       await uploadCoverImage.mutateAsync(file);
       toast.success(t("coverImageUploaded"));
+    } catch {
+      toast.error(t("coverImageUploadError"));
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      await uploadAvatarImage.mutateAsync(file);
+      toast.success(t("avatarUploaded") || "תמונת פרופיל עודכנה");
     } catch {
       toast.error(t("coverImageUploadError"));
     } finally {
@@ -84,6 +107,30 @@ export function BusinessProfileTab() {
       <h2 className="text-lg font-semibold">{t("businessProfile")}</h2>
 
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+        {/* Avatar */}
+        <div>
+          <Label htmlFor="avatar-upload">{t("avatarImage") || "תמונת פרופיל"}</Label>
+          <div className="mt-2 flex items-center gap-4">
+            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-accent/20 to-accent/5 border border-border">
+              {profile?.avatar_image ? (
+                <img src={profile.avatar_image} alt="avatar" className="h-full w-full object-cover" loading="lazy" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-accent/40">
+                  {businessInitial}
+                </div>
+              )}
+            </div>
+            <Input
+              id="avatar-upload"
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              disabled={uploadAvatarImage.isPending}
+              className="flex-1"
+            />
+          </div>
+        </div>
+
         <div>
           <Label htmlFor="cover-upload">{t("coverImage")}</Label>
           <div className="mt-2 space-y-3">
@@ -108,7 +155,8 @@ export function BusinessProfileTab() {
 
         <div>
           <Label>{t("businessName")}</Label>
-          <Input {...register("business_name")} />
+          <Input {...register("business_name")} className={errors.business_name ? "border-destructive" : ""} />
+          {errors.business_name && <p className="text-xs text-destructive mt-1">{errors.business_name.message}</p>}
         </div>
 
         <div>
@@ -138,7 +186,7 @@ export function BusinessProfileTab() {
           <Textarea {...register("about")} rows={3} />
         </div>
 
-        <Button type="submit" className="w-full" disabled={upsertProfile.isPending || uploadCoverImage.isPending}>
+        <Button type="submit" className="w-full" disabled={upsertProfile.isPending || uploadCoverImage.isPending || uploadAvatarImage.isPending}>
           {t("saveProfile")}
         </Button>
       </div>

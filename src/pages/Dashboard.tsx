@@ -49,7 +49,7 @@ export default function Dashboard() {
   if (!isLoading && !profile) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-5 gap-4">
-        <p className="text-muted-foreground text-center">הפרופיל העסקי שלך עדיין לא הוגדר.<br />פנה למנהל המערכת.</p>
+        <p className="text-muted-foreground text-center">{t("profileNotSetup")}</p>
         <Button onClick={() => navigate("/")}>{t("home")}</Button>
       </div>
     );
@@ -70,7 +70,7 @@ export default function Dashboard() {
               className={`p-2 rounded-xl transition-colors active:scale-95 ${
                 isSubscribed ? "bg-accent/10 text-accent" : "bg-secondary text-muted-foreground"
               }`}
-              title={isSubscribed ? "התראות פעילות" : "הפעל התראות"}
+              title={isSubscribed ? t("notificationsActive") : t("enableNotifications")}
             >
               {isSubscribed ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
             </button>

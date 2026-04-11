@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const VAPID_PUBLIC_KEY = "BOQDmhg_isQmpT_eUr5WHn5jGeWczzgpY6g25nxkDqzO8Y3qXHkTl2yXhK58BF7JagbighBNyo8KuSf4SmnyxMA";
 
@@ -53,18 +54,16 @@ export function usePushSubscription() {
   useEffect(() => {
     if (!isSupported || !user) return;
     // Check existing subscription
-    navigator.serviceWorker.getRegistration("/sw-push.js").then(async (reg) => {
-      if (reg) {
-        const sub = await reg.pushManager.getSubscription();
-        setIsSubscribed(!!sub);
+    navigator.serviceWorker.ready.then(async (reg) => {
+      const sub = await reg.pushManager.getSubscription();
+      setIsSubscribed(!!sub);
 
-        // Re-sync subscription record in case DB row was removed
-        if (sub) {
-          try {
-            await persistSubscription(sub);
-          } catch (err) {
-            console.error("Push subscription sync failed:", err);
-          }
+      // Re-sync subscription record in case DB row was removed
+      if (sub) {
+        try {
+          await persistSubscription(sub);
+        } catch {
+          // Silently ignore sync failures
         }
       }
     });
@@ -78,9 +77,8 @@ export function usePushSubscription() {
         throw new Error("Notifications permission is blocked in browser settings");
       }
 
-      // Register the push SW
-      const registration = await navigator.serviceWorker.register("/sw-push.js");
-      await navigator.serviceWorker.ready;
+      // Use the VitePWA-generated SW (which imports sw-push.js handlers)
+      const registration = await navigator.serviceWorker.ready;
 
       // Force-refresh subscription to avoid stale VAPID key subscriptions
       const existingSubscription = await registration.pushManager.getSubscription();
@@ -101,7 +99,12 @@ export function usePushSubscription() {
       await persistSubscription(subscription);
       setIsSubscribed(true);
     } catch (err) {
-      console.error("Push subscription failed:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("blocked") || message.includes("denied")) {
+        toast.error("הרשאות התראות חסומות בדפדפן — אנא אפשר בהגדרות");
+      } else {
+        toast.error("שגיאה בהפעלת התראות: " + message);
+      }
     } finally {
       setLoading(false);
     }
@@ -111,7 +114,7 @@ export function usePushSubscription() {
     if (!user) return;
     setLoading(true);
     try {
-      const registration = await navigator.serviceWorker.getRegistration("/sw-push.js");
+      const registration = await navigator.serviceWorker.getRegistration();
       if (registration) {
         const sub = await registration.pushManager.getSubscription();
         if (sub) {
@@ -125,7 +128,8 @@ export function usePushSubscription() {
       }
       setIsSubscribed(false);
     } catch (err) {
-      console.error("Push unsubscribe failed:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error("שגיאה בביטול התראות: " + message);
     } finally {
       setLoading(false);
     }

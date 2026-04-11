@@ -8,6 +8,7 @@ export function useProviderServices() {
 
   const servicesQuery = useQuery({
     queryKey: ["provider-services", profile?.id],
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       if (!profile) return [];
       const { data, error } = await supabase
@@ -27,18 +28,29 @@ export function useProviderServices() {
       name: string;
       duration: number;
       price: number;
+      service_type: 'private' | 'group';
+      max_capacity: number;
+      scheduled_time?: string | null;
     }) => {
       if (!profile) throw new Error("No provider profile");
+      const payload = {
+        name: service.name,
+        duration: service.duration,
+        price: service.price,
+        service_type: service.service_type,
+        max_capacity: service.service_type === 'group' ? service.max_capacity : 1,
+        scheduled_time: service.scheduled_time || null,
+      };
       if (service.id) {
         const { error } = await supabase
           .from("provider_services")
-          .update({ name: service.name, duration: service.duration, price: service.price })
+          .update(payload)
           .eq("id", service.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("provider_services")
-          .insert({ provider_id: profile.id, name: service.name, duration: service.duration, price: service.price });
+          .insert({ provider_id: profile.id, ...payload });
         if (error) throw error;
       }
     },
@@ -53,5 +65,5 @@ export function useProviderServices() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["provider-services"] }),
   });
 
-  return { services: servicesQuery.data || [], isLoading: servicesQuery.isLoading, upsertService, deleteService };
+  return { services: servicesQuery.data || [], isLoading: servicesQuery.isLoading, error: servicesQuery.error, upsertService, deleteService };
 }

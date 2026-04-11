@@ -104,12 +104,6 @@ const ProviderDetail = () => {
                 ({reviewCount})
               </span>
             )}
-            {provider.distance !== "—" && (
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
-                {provider.distance} {t("km")}
-              </span>
-            )}
           </div>
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             <MapPin className="h-3 w-3 shrink-0" />
@@ -144,33 +138,6 @@ const ProviderDetail = () => {
                   <p className="text-sm font-bold">₪{service.price}</p>
                 </div>
               </motion.div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Working Hours */}
-      {provider.workingHours.length > 0 && (
-        <section className="px-5 mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("hours")}</h2>
-          <div className="flex flex-col gap-1.5">
-            {provider.workingHours.map((wh, i) => (
-              <div key={i} className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{wh.day[lang]}</span>
-                <span className="font-medium">{wh.hours}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Photos */}
-      {provider.photos.length > 0 && (
-        <section className="px-5 mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("photos")}</h2>
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
-            {provider.photos.map((photo, i) => (
-              <img key={i} src={photo} alt={`${provider.name[lang]} ${i + 1}`} className="w-32 h-32 rounded-xl object-cover shrink-0" loading="lazy" />
             ))}
           </div>
         </section>

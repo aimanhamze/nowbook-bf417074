@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.99.3";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
@@ -54,12 +54,10 @@ Deno.serve(async (req) => {
 
       if (existing && existing.length > 0) continue;
 
-      // Get provider name
-      const dbProviderId = booking.provider_id.replace(/^db-/, "");
       const { data: provider } = await supabase
         .from("provider_profiles")
         .select("business_name")
-        .eq("id", dbProviderId)
+        .eq("id", booking.provider_id)
         .single();
 
       const providerName = provider?.business_name || "ספק";

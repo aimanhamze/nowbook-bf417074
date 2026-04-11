@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { useProviderProfile } from "./useProviderProfile";
 
 export interface EnrichedBooking {
@@ -18,6 +17,8 @@ export interface EnrichedBooking {
   customer_phone: string | null;
   customer_avatar: string | null;
   service_names: string[];
+  is_group_service: boolean;
+  service_capacity: number;
 }
 
 export function useProviderBookings() {
@@ -32,7 +33,7 @@ export function useProviderBookings() {
         .from("bookings")
         .select("*")
         .eq("provider_id", profile.id)
-        .in("status", ["confirmed", "pending"])
+        .in("status", ["confirmed", "pending", "cancelled"])
         .order("booking_date", { ascending: true });
       if (error) throw error;
       if (!bookings || bookings.length === 0) return [];
@@ -45,24 +46,27 @@ export function useProviderBookings() {
 
       const { data: services } = await supabase
         .from("provider_services")
-        .select("id, name")
+        .select("id, name, service_type, max_capacity")
         .eq("provider_id", profile.id);
 
       const profileMap = new Map(
         (profiles || []).map((p) => [p.user_id, p])
       );
       const serviceMap = new Map(
-        (services || []).map((s) => [s.id, s.name])
+        (services || []).map((s) => [s.id, s])
       );
 
       return bookings.map((b): EnrichedBooking => {
         const customer = profileMap.get(b.user_id);
+        const primaryService = serviceMap.get(b.service_ids?.[0]);
         return {
           ...b,
           customer_name: customer?.display_name || null,
           customer_phone: customer?.phone || null,
           customer_avatar: customer?.avatar_url || null,
-          service_names: b.service_ids.map((id) => serviceMap.get(id) || id),
+          service_names: (b.service_ids || []).map((id) => serviceMap.get(id)?.name || id),
+          is_group_service: primaryService?.service_type === 'group',
+          service_capacity: primaryService?.max_capacity ?? 1,
         };
       });
     },
@@ -74,7 +78,6 @@ export function useCancelBooking() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (bookingId: string) => {
-      // Get booking details before cancelling to notify the customer
       const { data: booking } = await supabase
         .from("bookings")
         .select("user_id, booking_date, booking_time, provider_id")
@@ -87,9 +90,7 @@ export function useCancelBooking() {
         .eq("id", bookingId);
       if (error) throw error;
 
-      // Notify customer about cancellation
       if (booking) {
-        // Get provider name
         const { data: provider } = await supabase
           .from("provider_profiles")
           .select("business_name")
@@ -104,7 +105,57 @@ export function useCancelBooking() {
             url: "/bookings",
             type: "booking_cancelled",
           },
-        }).catch((err) => console.error("Push to customer failed:", err));
+        }).catch(() => { /* best-effort */ });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
+    },
+  });
+}
+
+export function useCancelGroupClass() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (bookingIds: string[]) => {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: "cancelled" })
+        .in("id", bookingIds);
+      if (error) throw error;
+
+      // Notify all participants
+      const { data: bookings } = await supabase
+        .from("bookings")
+        .select("user_id, booking_date, booking_time, provider_id")
+        .in("id", bookingIds)
+        .limit(1);
+
+      if (bookings?.[0]) {
+        const { data: provider } = await supabase
+          .from("provider_profiles")
+          .select("business_name")
+          .eq("id", bookings[0].provider_id)
+          .single();
+
+        for (const id of bookingIds) {
+          const { data: b } = await supabase
+            .from("bookings")
+            .select("user_id")
+            .eq("id", id)
+            .single();
+          if (b) {
+            supabase.functions.invoke("notify-user", {
+              body: {
+                user_id: b.user_id,
+                title: "השיעור בוטל ❌",
+                body: `השיעור ב-${provider?.business_name || "העסק"} בתאריך ${bookings[0].booking_date} בשעה ${bookings[0].booking_time} בוטל`,
+                url: "/bookings",
+                type: "booking_cancelled",
+              },
+            }).catch(() => { /* best-effort */ });
+          }
+        }
       }
     },
     onSuccess: () => {

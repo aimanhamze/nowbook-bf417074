@@ -14,6 +14,7 @@ export function BottomNav() {
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ["unread-notifications", user?.id],
+    staleTime: 30 * 1000,
     queryFn: async () => {
       if (!user) return 0;
       const { count, error } = await supabase
@@ -32,14 +33,14 @@ export function BottomNav() {
     ? [
         { icon: LayoutDashboard, label: t("providerDashboard"), path: "/dashboard" },
         { icon: Search, label: t("explore"), path: "/explore" },
-        { icon: Bell, label: "התראות", path: "/notifications", badge: unreadCount },
+        { icon: Bell, label: t("notificationsLabel"), path: "/notifications", badge: unreadCount },
         { icon: User, label: t("profile"), path: "/profile" },
       ]
     : [
         { icon: Home, label: t("home"), path: "/" },
         { icon: Search, label: t("explore"), path: "/explore" },
         { icon: Calendar, label: t("bookings"), path: "/bookings" },
-        { icon: Bell, label: "התראות", path: "/notifications", badge: unreadCount },
+        { icon: Bell, label: t("notificationsLabel"), path: "/notifications", badge: unreadCount },
         { icon: User, label: t("profile"), path: "/profile" },
       ];
 

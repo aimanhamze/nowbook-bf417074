@@ -1,4 +1,4 @@
-import { Star, MapPin } from "lucide-react";
+import { Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Provider } from "@/lib/mock-data";
 import { motion } from "framer-motion";
@@ -12,7 +12,7 @@ interface ProviderCardProps {
 
 export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
   const navigate = useNavigate();
-  const { lang, t } = useLang();
+  const { lang } = useLang();
 
   return (
     <motion.button
@@ -38,12 +38,10 @@ export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
         <div className="flex items-center gap-3 mt-0.5">
           <span className="flex items-center gap-1 text-xs font-medium">
             <Star className="h-3.5 w-3.5 fill-accent text-accent" />
-            {provider.rating}
-            <span className="text-muted-foreground">({provider.reviewCount})</span>
-          </span>
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="h-3 w-3" />
-            {provider.distance} {t("km")}
+            {provider.rating > 0 ? provider.rating.toFixed(1) : "—"}
+            {provider.reviewCount > 0 && (
+              <span className="text-muted-foreground">({provider.reviewCount})</span>
+            )}
           </span>
         </div>
       </div>

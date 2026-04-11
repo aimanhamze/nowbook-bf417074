@@ -84,6 +84,7 @@ export function useProviderAvailability() {
     availability: availabilityQuery.data || [],
     blockedDates: blockedDatesQuery.data || [],
     isLoading: availabilityQuery.isLoading,
+    error: availabilityQuery.error,
     upsertAvailability,
     blockDate,
     unblockDate,

@@ -1,3 +1,9 @@
+# Environment files — never commit secrets
+.env
+.env.local
+.env.production
+.env.*.local
+
 # Logs
 logs
 *.log
@@ -11,6 +17,9 @@ node_modules
 dist
 dist-ssr
 *.local
+
+# Claude Code memory/session files
+.claude/
 
 # Editor directories and files
 .vscode/*
