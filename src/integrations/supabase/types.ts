@@ -1,3 +1,4 @@
+Initialising login role...
 export type Json =
   | string
   | number
@@ -10,7 +11,32 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -51,7 +77,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bookings_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       favorites: {
         Row: {
@@ -72,7 +106,15 @@ export type Database = {
           provider_id?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "favorites_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
@@ -209,6 +251,7 @@ export type Database = {
           about: string | null
           address: string | null
           avatar_image: string | null
+          average_rating: number | null
           business_name: string
           category: string
           cover_image: string | null
@@ -222,6 +265,7 @@ export type Database = {
           about?: string | null
           address?: string | null
           avatar_image?: string | null
+          average_rating?: number | null
           business_name?: string
           category?: string
           cover_image?: string | null
@@ -235,6 +279,7 @@ export type Database = {
           about?: string | null
           address?: string | null
           avatar_image?: string | null
+          average_rating?: number | null
           business_name?: string
           category?: string
           cover_image?: string | null
@@ -301,28 +346,28 @@ export type Database = {
       }
       provider_sessions: {
         Row: {
+          created_at: string | null
           id: string
           provider_id: string
           service_id: string
           session_date: string
           session_time: string
-          created_at: string
         }
         Insert: {
+          created_at?: string | null
           id?: string
           provider_id: string
           service_id: string
           session_date: string
           session_time: string
-          created_at?: string
         }
         Update: {
+          created_at?: string | null
           id?: string
           provider_id?: string
           service_id?: string
           session_date?: string
           session_time?: string
-          created_at?: string
         }
         Relationships: [
           {
@@ -407,6 +452,13 @@ export type Database = {
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "reviews_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_roles: {
@@ -436,16 +488,16 @@ export type Database = {
       get_display_name: { Args: { _user_id: string }; Returns: string }
       get_slot_capacity: {
         Args: {
-          p_provider_id: string
           p_date: string
-          p_time: string
+          p_provider_id: string
           p_service_id: string
+          p_time: string
         }
         Returns: {
-          max_capacity: number
-          booked_count: number
           available_spots: number
+          booked_count: number
           is_full: boolean
+          max_capacity: number
         }[]
       }
       has_role: {
@@ -583,6 +635,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "provider", "user"],

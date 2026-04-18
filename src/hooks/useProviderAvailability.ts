@@ -29,19 +29,13 @@ export function useProviderAvailability() {
       is_available: boolean;
     }) => {
       if (!profile) throw new Error("No provider profile");
-      const existing = availabilityQuery.data?.find(a => a.day_of_week === slot.day_of_week);
-      if (existing) {
-        const { error } = await supabase
-          .from("provider_availability")
-          .update({ start_time: slot.start_time, end_time: slot.end_time, is_available: slot.is_available })
-          .eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("provider_availability")
-          .insert({ provider_id: profile.id, ...slot });
-        if (error) throw error;
-      }
+      const { error } = await supabase
+        .from("provider_availability")
+        .upsert(
+          { provider_id: profile.id, ...slot },
+          { onConflict: "provider_id,day_of_week" }
+        );
+      if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["provider-availability"] }),
   });

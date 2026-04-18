@@ -32,8 +32,8 @@ export function AvailabilityTab() {
         is_available: checked,
       });
       toast.success(t("availabilitySaved"));
-    } catch {
-      toast.error("Error");
+    } catch (err: any) {
+      toast.error(err?.message || "Error saving availability");
     }
   };
 
@@ -46,8 +46,9 @@ export function AvailabilityTab() {
         end_time: field === "end_time" ? value : (existing?.end_time || "17:00"),
         is_available: existing?.is_available ?? true,
       });
-    } catch {
-      toast.error("Error");
+      toast.success(t("availabilitySaved"));
+    } catch (err: any) {
+      toast.error(err?.message || "Error saving availability");
     }
   };
 
@@ -58,8 +59,8 @@ export function AvailabilityTab() {
       toast.success(t("dateBlocked"));
       setBlockingDate(undefined);
       setBlockReason("");
-    } catch {
-      toast.error("Error");
+    } catch (err: any) {
+      toast.error(err?.message || "Error blocking date");
     }
   };
 

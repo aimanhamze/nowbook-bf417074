@@ -1,4 +1,4 @@
-import { Calendar, Clock, Star, XCircle } from "lucide-react";
+import { Calendar, Clock, Phone, Star, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -12,6 +12,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { Tables } from "@/integrations/supabase/types";
+
+const CANCELLATION_HOURS_THRESHOLD = 5;
 
 const Bookings = () => {
   const navigate = useNavigate();
@@ -89,7 +91,14 @@ const Bookings = () => {
       ) : (
         <div className="px-5 space-y-3">
           {bookings.map((booking, i) => (
-            <BookingCard key={booking.id} booking={booking} index={i} getProviderName={getProviderName} getServiceNames={getServiceNames} />
+            <BookingCard
+            key={booking.id}
+            booking={booking}
+            index={i}
+            getProviderName={getProviderName}
+            getServiceNames={getServiceNames}
+            providerPhone={allProviders.find((p) => p.id === booking.provider_id)?.phone ?? null}
+          />
           ))}
           <div className="flex justify-between items-center pt-2 pb-4">
             <button
@@ -116,11 +125,12 @@ const Bookings = () => {
   );
 };
 
-function BookingCard({ booking, index, getProviderName, getServiceNames }: {
+function BookingCard({ booking, index, getProviderName, getServiceNames, providerPhone }: {
   booking: Tables<"bookings">;
   index: number;
   getProviderName: (id: string) => string;
   getServiceNames: (ids: string[]) => string;
+  providerPhone: string | null;
 }) {
   const { t } = useLang();
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -128,9 +138,13 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
 
   const queryClient = useQueryClient();
   const bookingDateTime = new Date(`${booking.booking_date}T${booking.booking_time}:00`);
-  const isPast = bookingDateTime < new Date();
+  const now = new Date();
+  const isPast = bookingDateTime < now;
+  const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+  const isActive = !isPast && (booking.status === "confirmed" || booking.status === "pending");
+  const canCancel = isActive && hoursUntilBooking > CANCELLATION_HOURS_THRESHOLD;
+  const canCallToCancel = isActive && hoursUntilBooking <= CANCELLATION_HOURS_THRESHOLD;
   const canReview = isPast && booking.status === "confirmed" && !existingReview;
-  const canCancel = !isPast && (booking.status === "confirmed" || booking.status === "pending");
 
   const cancelMutation = useMutation({
     mutationFn: async () => {
@@ -224,10 +238,39 @@ function BookingCard({ booking, index, getProviderName, getServiceNames }: {
                 {cancelMutation.isPending ? t("cancelling") : t("cancelBooking")}
               </Button>
             )}
+            {canCallToCancel && (
+              <div className="flex items-center gap-1.5">
+                {providerPhone && (
+                  <a
+                    href={`tel:${providerPhone}`}
+                    className="inline-flex items-center gap-1 text-[11px] h-7 px-2.5 rounded-md border border-orange-300 bg-orange-50 text-orange-700 font-medium hover:bg-orange-100 transition-colors"
+                  >
+                    <Phone className="h-3 w-3" />
+                    {t("callToCancel")}
+                  </a>
+                )}
+                {providerPhone && (
+                  <a
+                    href={`https://wa.me/972${providerPhone.replace(/^0/, "").replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] h-7 px-2.5 rounded-md border border-green-300 bg-green-50 text-green-700 font-medium hover:bg-green-100 transition-colors"
+                  >
+                    WhatsApp
+                  </a>
+                )}
+              </div>
+            )}
           </div>
           <span className="text-sm font-bold">₪{booking.total_price}</span>
         </div>
       </div>
+
+      {canCallToCancel && (
+        <div className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700">
+          {t("cancellationBlocked")}
+        </div>
+      )}
 
       {showReviewForm && (
         <ReviewForm
