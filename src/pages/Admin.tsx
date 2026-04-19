@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ArrowLeft, BarChart3, Store, Users } from "lucide-react";
+import { BarChart3, Store, Users } from "lucide-react";
+import { BackArrow } from "@/components/ui/directional-icon";
 import { useNavigate } from "react-router-dom";
 import { AdminStats } from "@/components/admin/AdminStats";
 import { AdminProviders } from "@/components/admin/AdminProviders";
@@ -25,7 +26,7 @@ const Admin = () => {
       <header className="px-5 pt-12 pb-4">
         <div className="flex items-center gap-3 mb-4">
           <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-secondary active:scale-95">
-            <ArrowLeft className="h-5 w-5" />
+            <BackArrow variant="arrow" className="h-5 w-5" />
           </button>
           <h1 className="text-xl font-bold">{t("adminDashboard")}</h1>
         </div>

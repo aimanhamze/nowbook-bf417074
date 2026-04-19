@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { useLang } from "@/contexts/LangContext";
-import { ChevronLeft, Download, Share, Plus } from "lucide-react";
+import { Download, Share, Plus } from "lucide-react";
+import { BackArrow } from "@/components/ui/directional-icon";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -10,7 +10,6 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const Install = () => {
-  const { isRtl } = useLang();
   const navigate = useNavigate();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -57,7 +56,7 @@ const Install = () => {
     <div className="min-h-screen flex flex-col">
       <header className="px-5 pt-12 pb-4 flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-secondary transition-colors active:scale-95">
-          <ChevronLeft className={`h-5 w-5 ${isRtl ? "rotate-180" : ""}`} />
+          <BackArrow className="h-5 w-5" />
         </button>
         <h1 className="text-xl font-bold">התקן את האפליקציה</h1>
       </header>
