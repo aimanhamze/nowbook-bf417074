@@ -14,10 +14,10 @@ import { Button } from "@/components/ui/button";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 const tabs = [
-  { id: "services", icon: Briefcase },
-  { id: "calendar", icon: Calendar },
   { id: "profile", icon: User },
   { id: "availability", icon: Clock },
+  { id: "calendar", icon: Calendar },
+  { id: "services", icon: Briefcase },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -34,7 +34,7 @@ export default function Dashboard() {
   const { user, isProvider } = useAuth();
   const { profile, isLoading } = useProviderProfile();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabId>("services");
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
   const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
 
   if (!user || !isProvider) {
@@ -106,10 +106,10 @@ export default function Dashboard() {
         transition={{ duration: 0.25 }}
         className="px-5 pt-4"
       >
-        {activeTab === "services" && <ServicesTab />}
-        {activeTab === "calendar" && <CalendarTab />}
         {activeTab === "profile" && <BusinessProfileTab />}
         {activeTab === "availability" && <AvailabilityTab />}
+        {activeTab === "calendar" && <CalendarTab />}
+        {activeTab === "services" && <ServicesTab />}
       </motion.div>
     </div>
   );
