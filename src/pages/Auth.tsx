@@ -4,14 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { useLang } from "@/contexts/LangContext";
 import { motion } from "framer-motion";
-import { ChevronLeft } from "lucide-react";
+import { BackArrow } from "@/components/ui/directional-icon";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 const emailSchema = z.string().email();
 
 const Auth = () => {
-  const { t, isRtl } = useLang();
+  const { t } = useLang();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -81,7 +81,7 @@ const Auth = () => {
     <div className="min-h-screen flex flex-col">
       <header className="px-5 pt-12 pb-4 flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-secondary transition-colors active:scale-95">
-          <ChevronLeft className={`h-5 w-5 ${isRtl ? "rotate-180" : ""}`} />
+          <BackArrow className="h-5 w-5" />
         </button>
         <h1 className="text-xl font-bold select-none" onClick={handleLogoTap}>{t("signIn")}</h1>
       </header>

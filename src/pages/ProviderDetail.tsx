@@ -3,7 +3,8 @@ import { categoryNames } from "@/lib/mock-data";
 import { useProviderById } from "@/hooks/useAllProviders";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
-import { ArrowLeft, Heart, Star, MapPin, Clock, Share2 } from "lucide-react";
+import { Heart, Star, MapPin, Clock, Share2 } from "lucide-react";
+import { BackArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useLang } from "@/contexts/LangContext";
@@ -79,7 +80,7 @@ const ProviderDetail = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-10">
           <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
-            <ArrowLeft className="h-5 w-5" />
+            <BackArrow variant="arrow" className="h-5 w-5" />
           </button>
           <div className="flex gap-2">
             <button className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">

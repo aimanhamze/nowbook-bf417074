@@ -1,4 +1,5 @@
-import { User, Settings, LogIn, LogOut, Bell, BellOff, HelpCircle, ChevronLeft, Globe, Briefcase } from "lucide-react";
+import { User, Settings, LogIn, LogOut, Bell, BellOff, HelpCircle, Globe, Briefcase } from "lucide-react";
+import { ForwardArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -97,7 +98,7 @@ const Profile = () => {
                 <Icon className="h-4 w-4 text-muted-foreground" />
                 {label}
               </span>
-              <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+              <ForwardArrow className="h-4 w-4 text-muted-foreground" />
             </motion.button>
           ))}
         </div>

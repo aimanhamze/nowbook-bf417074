@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Briefcase, Calendar, User, Clock, ChevronLeft, Bell, BellOff } from "lucide-react";
+import { Briefcase, Calendar, User, Clock, Bell, BellOff } from "lucide-react";
+import { BackArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -60,7 +61,7 @@ export default function Dashboard() {
       <header className="px-5 pt-12 pb-2">
         <div className="flex items-center gap-3 mb-4">
           <button onClick={() => navigate(-1)} className="active:scale-95">
-            <ChevronLeft className="h-5 w-5" />
+            <BackArrow className="h-5 w-5" />
           </button>
           <h1 className="text-xl font-bold flex-1">{t("providerDashboard")}</h1>
           {isSupported && (

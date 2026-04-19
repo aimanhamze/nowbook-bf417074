@@ -2,7 +2,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useProviderById, useRealAvailability } from "@/hooks/useAllProviders";
 import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import type { Service } from "@/lib/mock-data";
-import { ArrowLeft, Check, Clock, CalendarDays, Users, Calendar } from "lucide-react";
+import { Check, Clock, CalendarDays, Users, Calendar } from "lucide-react";
+import { BackArrow } from "@/components/ui/directional-icon";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -232,7 +233,7 @@ const BookAppointment = () => {
           onClick={() => (step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3) : navigate(-1))}
           className="p-2 rounded-full active:scale-95"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <BackArrow variant="arrow" className="h-5 w-5" />
         </button>
         <div>
           <h1 className="text-lg font-bold">{t("bookAt")} {provider.name[lang]}</h1>
