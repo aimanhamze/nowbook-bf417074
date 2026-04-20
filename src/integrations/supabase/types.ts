@@ -257,6 +257,7 @@ export type Database = {
           cover_image: string | null
           created_at: string
           id: string
+          min_lead_time_minutes: number
           phone: string | null
           updated_at: string
           user_id: string
@@ -271,6 +272,7 @@ export type Database = {
           cover_image?: string | null
           created_at?: string
           id?: string
+          min_lead_time_minutes?: number
           phone?: string | null
           updated_at?: string
           user_id: string
@@ -285,6 +287,7 @@ export type Database = {
           cover_image?: string | null
           created_at?: string
           id?: string
+          min_lead_time_minutes?: number
           phone?: string | null
           updated_at?: string
           user_id?: string

@@ -14,6 +14,7 @@ export interface DbProvider {
   cover_image: string | null;
   avatar_image: string | null;
   average_rating: number | null;
+  min_lead_time_minutes: number;
 }
 
 export interface DbService {
@@ -52,6 +53,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[]): Provider 
     coverImage: dbp.cover_image ?? "",
     address,
     about,
+    minLeadTimeMinutes: dbp.min_lead_time_minutes ?? 15,
     services: services.filter(s => s.is_active).map(s => ({
       id: s.id,
       name: { he: s.name, ar: s.name, en: s.name },

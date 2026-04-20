@@ -29,6 +29,7 @@ export function useProviderProfile() {
       address: string;
       about: string;
       phone: string;
+      min_lead_time_minutes: number;
     }) => {
       if (!user) throw new Error("Not authenticated");
 
