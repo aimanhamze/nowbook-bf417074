@@ -21,6 +21,7 @@ export interface Provider {
   address: Record<Lang, string>;
   about: Record<Lang, string>;
   services: Service[];
+  minLeadTimeMinutes: number;
 }
 
 export const categories = [

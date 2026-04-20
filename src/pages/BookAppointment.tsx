@@ -4,7 +4,7 @@ import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import type { Service } from "@/lib/mock-data";
 import { Check, Clock, CalendarDays, Users, Calendar } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, parseISO } from "date-fns";
@@ -42,6 +42,13 @@ const BookAppointment = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [loading, setLoading] = useState(false);
+
+  // Live clock — re-filters slots every 60 s so stale "near-future" slots disappear
+  const [now, setNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   if (!user) {
     return (
@@ -111,12 +118,13 @@ const BookAppointment = () => {
   const selectedSession = allSessions.find(s => s.id === selectedSessionId);
 
   // For open-availability (no sessions): slot generation
-  const now = new Date();
+  const minLeadTimeMinutes = provider.minLeadTimeMinutes;
   const isToday =
     selectedDate.getFullYear() === now.getFullYear() &&
     selectedDate.getMonth() === now.getMonth() &&
     selectedDate.getDate() === now.getDate();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  // Cutoff: slot start must be strictly greater than now + lead time
+  const leadTimeCutoff = now.getHours() * 60 + now.getMinutes() + minLeadTimeMinutes;
 
   const allSlotsRaw = !hasScheduledSessions && !isGroupBooking
     ? getAvailableSlots(selectedDate, totalDuration || 15)
@@ -125,7 +133,7 @@ const BookAppointment = () => {
   const availableSlots = isToday
     ? allSlotsRaw.filter((slot) => {
         const [h, m] = slot.split(":").map(Number);
-        return h * 60 + m > currentMinutes;
+        return h * 60 + m > leadTimeCutoff;
       })
     : allSlotsRaw;
 
@@ -136,7 +144,7 @@ const BookAppointment = () => {
   const availableGroupSlots = isToday
     ? groupSlotsRaw.filter((slot) => {
         const [h, m] = slot.time.split(":").map(Number);
-        return h * 60 + m > currentMinutes;
+        return h * 60 + m > leadTimeCutoff;
       })
     : groupSlotsRaw;
 
@@ -186,7 +194,16 @@ const BookAppointment = () => {
       });
       setLoading(false);
       if (error) {
-        toast.error(error.message);
+        if (error.message === "LEAD_TIME_VIOLATION") {
+          const leadTimeLabels: Record<number, string> = {
+            15: t("leadTime15"), 30: t("leadTime30"), 60: t("leadTime60"),
+            120: t("leadTime120"), 240: t("leadTime240"), 1440: t("leadTime1440"),
+          };
+          const timeDisplay = leadTimeLabels[minLeadTimeMinutes] ?? `${minLeadTimeMinutes} ${t("min")}`;
+          toast.error(t("leadTimeError").replace("{time}", timeDisplay));
+        } else {
+          toast.error(error.message);
+        }
         return;
       }
 
@@ -323,7 +340,8 @@ const BookAppointment = () => {
                     const sessionDate = parseISO(session.session_date);
                     const timeDisplay = session.session_time.slice(0, 5);
                     const isSelected = selectedSessionId === session.id;
-                    const isPast = new Date(session.session_date + "T" + session.session_time) < now;
+                    const leadTimeCutoffMs = minLeadTimeMinutes * 60 * 1000;
+                    const isPast = new Date(session.session_date + "T" + session.session_time) < new Date(now.getTime() + leadTimeCutoffMs);
 
                     if (isPast) return null;
 
@@ -371,7 +389,7 @@ const BookAppointment = () => {
                       </button>
                     );
                   })}
-                  {serviceSessions.filter(s => new Date(s.session_date + "T" + s.session_time) >= now).length === 0 && (
+                  {serviceSessions.filter(s => new Date(s.session_date + "T" + s.session_time) >= new Date(now.getTime() + minLeadTimeMinutes * 60 * 1000)).length === 0 && (
                     <div className="text-center py-8 text-muted-foreground text-sm">
                       אין מפגשים זמינים כרגע
                     </div>
@@ -445,9 +463,7 @@ const BookAppointment = () => {
                     ) : (
                       <div className="text-center py-6">
                         <p className="text-sm text-muted-foreground">
-                          {allGroupSlotsPassed
-                            ? (lang === "he" ? "כל השעות של היום כבר עברו, בחר תאריך אחר" : "All times for today have passed")
-                            : t("unavailable")}
+                          {allGroupSlotsPassed ? t("noSlotsToday") : t("unavailable")}
                         </p>
                       </div>
                     )
@@ -466,9 +482,7 @@ const BookAppointment = () => {
                     ) : (
                       <div className="text-center py-6">
                         <p className="text-sm text-muted-foreground">
-                          {allSlotsPassed
-                            ? (lang === "he" ? "כל השעות של היום כבר עברו, בחר תאריך אחר" : "All times for today have passed, pick another date")
-                            : t("unavailable")}
+                          {allSlotsPassed ? t("noSlotsToday") : t("unavailable")}
                         </p>
                       </div>
                     )

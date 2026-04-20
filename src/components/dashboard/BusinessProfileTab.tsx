@@ -13,12 +13,15 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { categories } from "@/lib/mock-data";
 import { toast } from "sonner";
 
+const LEAD_TIME_OPTIONS = [15, 30, 60, 120, 240, 1440] as const;
+
 const profileSchema = z.object({
   business_name: z.string().min(2, "שם העסק חייב להכיל לפחות 2 תווים").max(100),
   category: z.string().min(1),
   address: z.string().max(200).optional().default(""),
   about: z.string().max(1000).optional().default(""),
   phone: z.string().regex(/^[+\d\s\-()]*$/, "מספר טלפון לא תקין").max(20).optional().default(""),
+  min_lead_time_minutes: z.number().int().min(0).max(1440),
 });
 
 type FormValues = z.infer<typeof profileSchema>;
@@ -29,7 +32,7 @@ export function BusinessProfileTab() {
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { business_name: "", category: "barber", address: "", about: "", phone: "" },
+    defaultValues: { business_name: "", category: "barber", address: "", about: "", phone: "", min_lead_time_minutes: 15 },
   });
 
   useEffect(() => {
@@ -40,6 +43,7 @@ export function BusinessProfileTab() {
         address: profile.address || "",
         about: profile.about || "",
         phone: profile.phone || "",
+        min_lead_time_minutes: profile.min_lead_time_minutes ?? 15,
       });
     }
   }, [profile, reset]);
@@ -52,6 +56,7 @@ export function BusinessProfileTab() {
         address: values.address ?? "",
         about: values.about ?? "",
         phone: values.phone ?? "",
+        min_lead_time_minutes: values.min_lead_time_minutes,
       });
       toast.success(t("profileSaved"));
     } catch (err) {
@@ -179,6 +184,23 @@ export function BusinessProfileTab() {
         <div>
           <Label>{t("phone")}</Label>
           <Input {...register("phone")} type="tel" />
+        </div>
+
+        <div>
+          <Label>{t("minLeadTimeLabel")}</Label>
+          <Select
+            value={String(watch("min_lead_time_minutes"))}
+            onValueChange={v => setValue("min_lead_time_minutes", Number(v))}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {LEAD_TIME_OPTIONS.map(minutes => (
+                <SelectItem key={minutes} value={String(minutes)}>
+                  {t(`leadTime${minutes}` as Parameters<typeof t>[0])}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div>
