@@ -91,9 +91,7 @@ const BookAppointment = () => {
 
   const toggleService = (service: Service) => {
     setSelectedServices((prev) =>
-      prev.find((s) => s.id === service.id)
-        ? prev.filter((s) => s.id !== service.id)
-        : [...prev, service]
+      prev.find((s) => s.id === service.id) ? [] : [service]
     );
     setSelectedSessionId("");
     setSelectedTime("");
