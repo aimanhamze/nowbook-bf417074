@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Provider, Service } from "@/lib/mock-data";
 import type { Lang } from "@/lib/translations";
+import type { SocialLinks } from "@/lib/socialLinks";
 
 export interface DbProvider {
   id: string;
@@ -15,6 +16,7 @@ export interface DbProvider {
   avatar_image: string | null;
   average_rating: number | null;
   min_lead_time_minutes: number;
+  social_links: SocialLinks | null;
 }
 
 export interface DbService {
@@ -54,6 +56,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[]): Provider 
     address,
     about,
     minLeadTimeMinutes: dbp.min_lead_time_minutes ?? 15,
+    socialLinks: dbp.social_links ?? null,
     services: services.filter(s => s.is_active).map(s => ({
       id: s.id,
       name: { he: s.name, ar: s.name, en: s.name },

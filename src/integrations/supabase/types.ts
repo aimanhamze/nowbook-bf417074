@@ -259,6 +259,14 @@ export type Database = {
           id: string
           min_lead_time_minutes: number
           phone: string | null
+          social_links: {
+            whatsapp?: string
+            instagram?: string
+            tiktok?: string
+            facebook?: string
+            waze?: string
+            website?: string
+          } | null
           updated_at: string
           user_id: string
         }
@@ -274,6 +282,15 @@ export type Database = {
           id?: string
           min_lead_time_minutes?: number
           phone?: string | null
+          social_links?: {
+            phone?: string
+            whatsapp?: string
+            instagram?: string
+            tiktok?: string
+            facebook?: string
+            waze?: string
+            website?: string
+          } | null
           updated_at?: string
           user_id: string
         }
@@ -289,6 +306,15 @@ export type Database = {
           id?: string
           min_lead_time_minutes?: number
           phone?: string | null
+          social_links?: {
+            phone?: string
+            whatsapp?: string
+            instagram?: string
+            tiktok?: string
+            facebook?: string
+            waze?: string
+            website?: string
+          } | null
           updated_at?: string
           user_id?: string
         }

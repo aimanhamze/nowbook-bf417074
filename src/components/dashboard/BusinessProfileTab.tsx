@@ -1,5 +1,5 @@
-import { useEffect, type ChangeEvent } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState, type ChangeEvent } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
@@ -8,12 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { categories } from "@/lib/mock-data";
+import { buildSocialLinks } from "@/lib/socialLinks";
 import { toast } from "sonner";
 
 const LEAD_TIME_OPTIONS = [15, 30, 60, 120, 240, 1440] as const;
+const SOCIAL_FIELDS = ["social_whatsapp", "social_instagram", "social_tiktok", "social_facebook", "social_waze", "social_website"] as const;
 
 const profileSchema = z.object({
   business_name: z.string().min(2, "שם העסק חייב להכיל לפחות 2 תווים").max(100),
@@ -22,6 +25,12 @@ const profileSchema = z.object({
   about: z.string().max(1000).optional().default(""),
   phone: z.string().regex(/^[+\d\s\-()]*$/, "מספר טלפון לא תקין").max(20).optional().default(""),
   min_lead_time_minutes: z.number().int().min(0).max(1440),
+  social_whatsapp: z.string().optional().default(""),
+  social_instagram: z.string().optional().default(""),
+  social_tiktok: z.string().optional().default(""),
+  social_facebook: z.string().optional().default(""),
+  social_waze: z.string().optional().default(""),
+  social_website: z.string().optional().default(""),
 });
 
 type FormValues = z.infer<typeof profileSchema>;
@@ -30,13 +39,21 @@ export function BusinessProfileTab() {
   const { t } = useLang();
   const { profile, upsertProfile, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
 
-  const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormValues>({
+  const [accordionValue, setAccordionValue] = useState("");
+
+  const { register, handleSubmit, setValue, watch, reset, control, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { business_name: "", category: "barber", address: "", about: "", phone: "", min_lead_time_minutes: 15 },
+    defaultValues: {
+      business_name: "", category: "barber", address: "", about: "", phone: "",
+      min_lead_time_minutes: 15,
+      social_whatsapp: "", social_instagram: "",
+      social_tiktok: "", social_facebook: "", social_waze: "", social_website: "",
+    },
   });
 
   useEffect(() => {
     if (profile) {
+      const sl = profile.social_links;
       reset({
         business_name: profile.business_name || "",
         category: profile.category || "barber",
@@ -44,12 +61,38 @@ export function BusinessProfileTab() {
         about: profile.about || "",
         phone: profile.phone || "",
         min_lead_time_minutes: profile.min_lead_time_minutes ?? 15,
+        social_whatsapp: sl?.whatsapp || profile.phone || "",
+        social_instagram: sl?.instagram || "",
+        social_tiktok: sl?.tiktok || "",
+        social_facebook: sl?.facebook || "",
+        social_waze: sl?.waze || "",
+        social_website: sl?.website || "",
       });
     }
   }, [profile, reset]);
 
+  const socialValues = useWatch({
+    control,
+    name: ["social_whatsapp", "social_instagram", "social_tiktok", "social_facebook", "social_waze", "social_website"],
+  });
+  const socialFilledCount = socialValues.filter(v => v && v.trim() !== "").length;
+
+  useEffect(() => {
+    if (SOCIAL_FIELDS.some(f => errors[f])) {
+      setAccordionValue("social");
+    }
+  }, [errors]);
+
   const onSubmit = async (values: FormValues) => {
     try {
+      const social_links = buildSocialLinks({
+        social_whatsapp: values.social_whatsapp ?? "",
+        social_instagram: values.social_instagram ?? "",
+        social_tiktok: values.social_tiktok ?? "",
+        social_facebook: values.social_facebook ?? "",
+        social_waze: values.social_waze ?? "",
+        social_website: values.social_website ?? "",
+      });
       await upsertProfile.mutateAsync({
         business_name: values.business_name,
         category: values.category,
@@ -57,6 +100,7 @@ export function BusinessProfileTab() {
         about: values.about ?? "",
         phone: values.phone ?? "",
         min_lead_time_minutes: values.min_lead_time_minutes,
+        social_links,
       });
       toast.success(t("profileSaved"));
     } catch (err) {
@@ -185,6 +229,54 @@ export function BusinessProfileTab() {
           <Label>{t("phone")}</Label>
           <Input {...register("phone")} type="tel" />
         </div>
+
+        {/* Contact & Social Links */}
+        <Accordion type="single" collapsible value={accordionValue} onValueChange={setAccordionValue} className="border-t border-border -mx-4 px-4">
+          <AccordionItem value="social" className="border-b-0">
+            <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
+              {socialFilledCount > 0
+                ? `${t("socialLinks")} (${socialFilledCount} ${t("socialLinksAdded")})`
+                : t("socialLinks")}
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3 pb-1">
+              <div>
+                <Label>{t("socialLinksWhatsapp")}</Label>
+                <Input {...register("social_whatsapp")} type="tel" placeholder={t("socialLinksHelperPhone")} />
+                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperPhone")}</p>
+              </div>
+
+              <div>
+                <Label>{t("socialLinksInstagram")}</Label>
+                <Input {...register("social_instagram")} placeholder={t("socialLinksHelperHandle")} />
+                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperHandle")}</p>
+              </div>
+
+              <div>
+                <Label>{t("socialLinksTiktok")}</Label>
+                <Input {...register("social_tiktok")} placeholder={t("socialLinksHelperHandle")} />
+                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperHandle")}</p>
+              </div>
+
+              <div>
+                <Label>{t("socialLinksFacebook")}</Label>
+                <Input {...register("social_facebook")} placeholder={t("socialLinksHelperHandle")} />
+                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperHandle")}</p>
+              </div>
+
+              <div>
+                <Label>{t("socialLinksWaze")}</Label>
+                <Input {...register("social_waze")} placeholder={t("socialLinksHelperWaze")} />
+                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperWaze")}</p>
+              </div>
+
+              <div>
+                <Label>{t("socialLinksWebsite")}</Label>
+                <Input {...register("social_website")} type="url" placeholder={t("socialLinksHelperWebsite")} />
+                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperWebsite")}</p>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
 
         <div>
           <Label>{t("minLeadTimeLabel")}</Label>
