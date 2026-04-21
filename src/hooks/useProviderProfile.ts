@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import type { SocialLinks } from "@/lib/socialLinks";
 
 export function useProviderProfile() {
   const { user } = useAuth();
@@ -30,6 +31,7 @@ export function useProviderProfile() {
       about: string;
       phone: string;
       min_lead_time_minutes: number;
+      social_links: SocialLinks | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
 

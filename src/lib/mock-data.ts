@@ -1,4 +1,5 @@
 import type { Lang } from "./translations";
+import type { SocialLinks } from "./socialLinks";
 
 export interface Service {
   id: string;
@@ -22,6 +23,7 @@ export interface Provider {
   about: Record<Lang, string>;
   services: Service[];
   minLeadTimeMinutes: number;
+  socialLinks?: SocialLinks | null;
 }
 
 export const categories = [
