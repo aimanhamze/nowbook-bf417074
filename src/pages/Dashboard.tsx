@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Briefcase, Calendar, User, Clock, Bell, BellOff } from "lucide-react";
+import { Briefcase, Calendar, User, Clock, Bell, BellOff, Images } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -10,6 +10,7 @@ import { ServicesTab } from "@/components/dashboard/ServicesTab";
 import { CalendarTab } from "@/components/dashboard/CalendarTab";
 import { BusinessProfileTab } from "@/components/dashboard/BusinessProfileTab";
 import { AvailabilityTab } from "@/components/dashboard/AvailabilityTab";
+import { PhotosTab } from "@/components/dashboard/PhotosTab";
 import { Button } from "@/components/ui/button";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 
@@ -18,6 +19,7 @@ const tabs = [
   { id: "availability", icon: Clock },
   { id: "calendar", icon: Calendar },
   { id: "services", icon: Briefcase },
+  { id: "gallery", icon: Images },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -27,6 +29,7 @@ const TAB_LABELS: Record<TabId, string> = {
   calendar: "bookingsCalendar",
   profile: "businessProfile",
   availability: "availability",
+  gallery: "gallery",
 };
 
 export default function Dashboard() {
@@ -110,6 +113,7 @@ export default function Dashboard() {
         {activeTab === "availability" && <AvailabilityTab />}
         {activeTab === "calendar" && <CalendarTab />}
         {activeTab === "services" && <ServicesTab />}
+        {activeTab === "gallery" && <PhotosTab />}
       </motion.div>
     </div>
   );

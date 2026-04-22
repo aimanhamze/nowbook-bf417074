@@ -3,10 +3,11 @@ import { categoryNames } from "@/lib/mock-data";
 import { useProviderById } from "@/hooks/useAllProviders";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
-import { Heart, Star, MapPin, Clock, Share2, Navigation, Globe } from "lucide-react";
+import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
+import { Heart, Star, MapPin, Clock, Share2, Navigation, Globe, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { WhatsAppIcon, TikTokIcon } from "@/components/icons/SocialIcons";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -109,11 +110,13 @@ const ProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [coverImgSrc, setCoverImgSrc] = useState("");
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { lang, t } = useLang();
   const { user } = useAuth();
   const { provider, isLoading } = useProviderById(id);
   const { data: dbReviews } = useProviderReviews(id);
   const { isFavorite, toggleFavorite } = useFavorites();
+  const { data: photos = [] } = usePublicProviderPhotos(id);
   const liked = id ? isFavorite(id) : false;
 
   const reviewCount = dbReviews?.length || 0;
@@ -215,6 +218,84 @@ const ProviderDetail = () => {
           <p className="text-sm leading-relaxed">{provider.about[lang]}</p>
         </section>
       )}
+
+      {/* Photo Gallery */}
+      {photos.length > 0 && (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 px-5">{t("ourWork")}</h2>
+          <div className="flex gap-2 overflow-x-auto px-5 pb-2 scrollbar-hide">
+            {photos.map((photo, i) => (
+              <motion.button
+                key={photo.id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.04, duration: 0.3 }}
+                onClick={() => setLightboxIndex(i)}
+                className="flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden bg-secondary active:scale-95 transition-transform"
+              >
+                <img src={photo.url} alt={photo.caption ?? ""} className="w-full h-full object-cover" />
+              </motion.button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Lightbox */}
+      <AnimatePresence>
+        {lightboxIndex !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
+            onClick={() => setLightboxIndex(null)}
+          >
+            <button
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white z-10"
+              onClick={() => setLightboxIndex(null)}
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {lightboxIndex > 0 && (
+              <button
+                className="absolute left-3 p-2 rounded-full bg-white/10 text-white z-10"
+                onClick={e => { e.stopPropagation(); setLightboxIndex(lightboxIndex - 1); }}
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+            )}
+            {lightboxIndex < photos.length - 1 && (
+              <button
+                className="absolute right-3 p-2 rounded-full bg-white/10 text-white z-10"
+                onClick={e => { e.stopPropagation(); setLightboxIndex(lightboxIndex + 1); }}
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            )}
+            <motion.div
+              key={lightboxIndex}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.2 }}
+              className="max-w-full max-h-full px-12"
+              onClick={e => e.stopPropagation()}
+            >
+              <img
+                src={photos[lightboxIndex].url}
+                alt={photos[lightboxIndex].caption ?? ""}
+                className="max-w-[90vw] max-h-[80vh] rounded-xl object-contain"
+              />
+              {photos[lightboxIndex].caption && (
+                <p className="text-white/80 text-sm text-center mt-3">{photos[lightboxIndex].caption}</p>
+              )}
+            </motion.div>
+            <p className="absolute bottom-6 text-white/50 text-xs">
+              {lightboxIndex + 1} / {photos.length}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Services */}
       {provider.services.length > 0 && (
