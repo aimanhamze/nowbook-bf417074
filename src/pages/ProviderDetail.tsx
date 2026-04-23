@@ -4,9 +4,9 @@ import { useProviderById } from "@/hooks/useAllProviders";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
 import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
-import { Heart, Star, MapPin, Clock, Share2, Navigation, Globe, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
-import { WhatsAppIcon, TikTokIcon } from "@/components/icons/SocialIcons";
+import { FaWhatsapp, FaInstagram, FaTiktok, FaFacebook, FaWaze } from "react-icons/fa6";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useLang } from "@/contexts/LangContext";
@@ -19,8 +19,17 @@ interface SocialLinkEntry {
   href: string;
   icon: React.ReactNode;
   label: string;
-  external: boolean;
+  frameClass: string;
 }
+
+const PLATFORM_PALETTE = {
+  whatsapp:  { frameClass: "bg-[#25D366]/15" },
+  instagram: { frameClass: "bg-[#E4405F]/15" },
+  facebook:  { frameClass: "bg-[#1877F2]/15" },
+  tiktok:    { frameClass: "bg-foreground/10" },
+  waze:      { frameClass: "bg-[#05C3DE]/15" },
+  website:   { frameClass: "bg-foreground/10" },
+};
 
 function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | undefined }) {
   const { t } = useLang();
@@ -30,74 +39,64 @@ function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | und
   if (socialLinks?.whatsapp) {
     entries.push({
       href: buildWhatsAppLink(socialLinks.whatsapp),
-      icon: <WhatsAppIcon className="h-5 w-5" />,
+      icon: <FaWhatsapp className="h-6 w-6" style={{ color: "#25D366" }} />,
       label: t("socialLinksWhatsapp"),
-      external: true,
+      frameClass: PLATFORM_PALETTE.whatsapp.frameClass,
     });
   }
   if (socialLinks?.instagram) {
     entries.push({
       href: socialLinks.instagram,
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
-          <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-          <circle cx="12" cy="12" r="4" />
-          <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" stroke="none" />
-        </svg>
-      ),
+      icon: <FaInstagram className="h-6 w-6" style={{ color: "#E4405F" }} />,
       label: t("socialLinksInstagram"),
-      external: true,
+      frameClass: PLATFORM_PALETTE.instagram.frameClass,
     });
   }
   if (socialLinks?.tiktok) {
     entries.push({
       href: socialLinks.tiktok,
-      icon: <TikTokIcon className="h-5 w-5" />,
+      icon: <FaTiktok className="h-6 w-6" />,
       label: t("socialLinksTiktok"),
-      external: true,
+      frameClass: PLATFORM_PALETTE.tiktok.frameClass,
     });
   }
   if (socialLinks?.facebook) {
     entries.push({
       href: socialLinks.facebook,
-      icon: (
-        <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5" aria-hidden="true">
-          <path d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.313 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.268h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z" />
-        </svg>
-      ),
+      icon: <FaFacebook className="h-6 w-6" style={{ color: "#1877F2" }} />,
       label: t("socialLinksFacebook"),
-      external: true,
+      frameClass: PLATFORM_PALETTE.facebook.frameClass,
     });
   }
   if (socialLinks?.waze) {
     entries.push({
       href: socialLinks.waze,
-      icon: <Navigation className="h-5 w-5" />,
+      icon: <FaWaze className="h-6 w-6" style={{ color: "#05C3DE" }} />,
       label: t("socialLinksWaze"),
-      external: true,
+      frameClass: PLATFORM_PALETTE.waze.frameClass,
     });
   }
   if (socialLinks?.website) {
     entries.push({
       href: socialLinks.website,
-      icon: <Globe className="h-5 w-5" />,
+      icon: <Globe className="h-6 w-6" />,
       label: t("socialLinksWebsite"),
-      external: true,
+      frameClass: PLATFORM_PALETTE.website.frameClass,
     });
   }
 
   if (entries.length === 0) return null;
 
   return (
-    <div className="flex gap-2 mt-3 flex-wrap">
+    <div className="flex gap-3 mt-3 flex-wrap justify-center">
       {entries.map(entry => (
         <a
           key={entry.label}
           href={entry.href}
           aria-label={entry.label}
-          target={entry.external ? "_blank" : undefined}
-          rel={entry.external ? "noopener noreferrer" : undefined}
-          className="p-2 rounded-full bg-secondary/60 active:scale-95 transition-transform"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`flex items-center justify-center h-12 w-12 rounded-2xl ${entry.frameClass} active:scale-95 hover:brightness-110 transition-all`}
         >
           {entry.icon}
         </a>
@@ -192,9 +191,9 @@ const ProviderDetail = () => {
 
       {/* Info */}
       <motion.div className="px-5 -mt-6 relative" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-        <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
+        <div className="bg-card rounded-2xl border border-border p-5 shadow-sm text-center">
           <h1 className="text-xl font-bold mb-1">{provider.name[lang]}</h1>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground mb-3">
+          <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground mb-3">
             {reviewCount > 0 && (
               <span className="flex items-center gap-1">
                 <Star className="h-4 w-4 fill-accent text-accent" />
@@ -203,7 +202,7 @@ const ProviderDetail = () => {
               </span>
             )}
           </div>
-          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
             <MapPin className="h-3 w-3 shrink-0" />
             {provider.address[lang]}
           </p>
