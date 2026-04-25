@@ -1,8 +1,10 @@
-import { Star } from "lucide-react";
+import { Star, Heart, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Provider } from "@/lib/mock-data";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFavorites } from "@/hooks/useFavorites";
 import { categoryNames } from "@/lib/mock-data";
 
 interface ProviderCardProps {
@@ -12,7 +14,17 @@ interface ProviderCardProps {
 
 export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
   const navigate = useNavigate();
-  const { lang } = useLang();
+  const { lang, t } = useLang();
+  const { user } = useAuth();
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const liked = isFavorite(provider.id);
+  const isPending = toggleFavorite.isPending && toggleFavorite.variables === provider.id;
+
+  const handleFavorite = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) { navigate("/auth"); return; }
+    toggleFavorite.mutate(provider.id);
+  };
 
   return (
     <motion.button
@@ -21,7 +33,7 @@ export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
       viewport={{ once: true, amount: 0.2 }}
       transition={{ delay: index * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       onClick={() => navigate(`/provider/${provider.id}`)}
-      className="flex gap-4 p-3 rounded-2xl bg-card border border-border/60 shadow-sm hover:shadow-md transition-shadow text-right w-full active:scale-[0.98]"
+      className="relative flex gap-4 p-3 rounded-2xl bg-card border border-border/60 shadow-sm hover:shadow-md transition-shadow text-right w-full active:scale-[0.98]"
     >
       <div className="w-20 h-20 rounded-xl shrink-0 bg-gradient-to-br from-accent/20 to-accent/5 overflow-hidden">
         <img
@@ -45,6 +57,20 @@ export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
           </span>
         </div>
       </div>
+
+      {user && (
+        <button
+          onClick={handleFavorite}
+          aria-label={liked ? t("removeFromFavorites") : t("addToFavorites")}
+          className="absolute top-3 right-3 p-1.5 rounded-full bg-background/80 backdrop-blur-sm active:scale-90 transition-transform"
+        >
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : (
+            <Heart className={`h-4 w-4 transition-colors ${liked ? "fill-accent text-accent" : "text-muted-foreground"}`} />
+          )}
+        </button>
+      )}
     </motion.button>
   );
 }

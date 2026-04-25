@@ -238,6 +238,10 @@ export const translations = {
     uploadProgress: "מעלה...",
     maxPhotos: "הגעת למקסימום 20 תמונות",
     noPhotos: "עדיין לא הועלו תמונות",
+    myFavorites: "המועדפים שלי",
+    addToFavorites: "הוסף למועדפים",
+    removeFromFavorites: "הסר ממועדפים",
+    noFavorites: "עדיין אין מועדפים",
   },
   ar: {
     appName: "Dori",
@@ -476,6 +480,10 @@ export const translations = {
     uploadProgress: "جاري الرفع...",
     maxPhotos: "وصلت للحد الأقصى 20 صورة",
     noPhotos: "لم تُرفع صور بعد",
+    myFavorites: "المفضلة لديّ",
+    addToFavorites: "أضف للمفضلة",
+    removeFromFavorites: "إزالة من المفضلة",
+    noFavorites: "لا يوجد مفضلات بعد",
   },
   en: {
     appName: "Dori",
@@ -714,6 +722,10 @@ export const translations = {
     uploadProgress: "Uploading...",
     maxPhotos: "Maximum 20 photos reached",
     noPhotos: "No photos uploaded yet",
+    myFavorites: "My Favorites",
+    addToFavorites: "Add to Favorites",
+    removeFromFavorites: "Remove from Favorites",
+    noFavorites: "No favorites yet",
   },
 } as const;
 
