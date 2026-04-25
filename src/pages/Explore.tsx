@@ -2,6 +2,7 @@ import { useSearchParams } from "react-router-dom";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { categories, categoryNames, beautyCategories, healthCategories, fitnessCategories } from "@/lib/mock-data";
 import { useAllProviders } from "@/hooks/useAllProviders";
+import { useFavorites } from "@/hooks/useFavorites";
 import { ProviderCard } from "@/components/home/ProviderCard";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
@@ -18,6 +19,7 @@ const Explore = () => {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { lang, t } = useLang();
   const { providers } = useAllProviders();
+  const { favoriteIds } = useFavorites();
 
   // Sync activeCategory when URL param changes (e.g. from "See All")
   useEffect(() => {
@@ -48,15 +50,21 @@ const Explore = () => {
     setProviderPage(0);
   }, [debouncedQuery, activeCategory, group]);
 
-  const filtered = providers.filter((p) => {
-    const matchesGroup = !groupCategories || groupCategories.includes(p.category);
-    const matchesCategory = !activeCategory || p.category === activeCategory;
-    const matchesQuery =
-      !debouncedQuery ||
-      p.name[lang].toLowerCase().includes(debouncedQuery.toLowerCase()) ||
-      (categoryNames[p.category]?.[lang] || "").toLowerCase().includes(debouncedQuery.toLowerCase());
-    return matchesGroup && matchesCategory && matchesQuery;
-  });
+  const filtered = providers
+    .filter((p) => {
+      const matchesGroup = !groupCategories || groupCategories.includes(p.category);
+      const matchesCategory = !activeCategory || p.category === activeCategory;
+      const matchesQuery =
+        !debouncedQuery ||
+        p.name[lang].toLowerCase().includes(debouncedQuery.toLowerCase()) ||
+        (categoryNames[p.category]?.[lang] || "").toLowerCase().includes(debouncedQuery.toLowerCase());
+      return matchesGroup && matchesCategory && matchesQuery;
+    })
+    .sort((a, b) => {
+      const aFav = favoriteIds.includes(a.id) ? 1 : 0;
+      const bFav = favoriteIds.includes(b.id) ? 1 : 0;
+      return bFav - aFav;
+    });
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pagedProviders = filtered.slice(providerPage * PAGE_SIZE, (providerPage + 1) * PAGE_SIZE);
