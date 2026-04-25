@@ -87,6 +87,7 @@ export function AvailabilityTab() {
               {isAvail ? (
                 <div className="flex items-center gap-1.5 flex-1">
                   <Input
+                    key={`${dow}-start-${slot?.start_time ?? "09:00"}`}
                     type="time"
                     className="h-8 text-xs flex-1"
                     defaultValue={slot?.start_time?.slice(0, 5) || "09:00"}
@@ -94,6 +95,7 @@ export function AvailabilityTab() {
                   />
                   <span className="text-xs text-muted-foreground">–</span>
                   <Input
+                    key={`${dow}-end-${slot?.end_time ?? "17:00"}`}
                     type="time"
                     className="h-8 text-xs flex-1"
                     defaultValue={slot?.end_time?.slice(0, 5) || "17:00"}
