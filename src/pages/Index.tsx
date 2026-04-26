@@ -69,7 +69,7 @@ const Index = () => {
       </header>
 
       <div className="px-5 mb-6">
-        <SearchBar />
+        <SearchBar onNearbyClick={() => navigate("/nearby")} />
       </div>
 
       {/* My Favorites — only when logged in with at least 1 favorite */}

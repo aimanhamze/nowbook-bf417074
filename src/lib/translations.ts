@@ -256,6 +256,12 @@ export const translations = {
     locationErrorUnavailable: "לא הצלחנו לזהות את המיקום שלך. נסה שוב בחוץ או בדוק את החיבור לאינטרנט.",
     locationErrorUnsupported: "הדפדפן שלך אינו תומך בשירותי מיקום.",
     locationErrorTimeout: "הבקשה לאיתור מיקום פגה. אנא נסה שוב.",
+    nearbyTitle: "ספקים בסביבה",
+    nearbyNoProviders: "אף ספק עדיין לא שיתף את המיקום שלו.",
+    nearbyNoProvidersSubtext: "בדוק שוב בקרוב.",
+    viewProfile: "צפה בפרופיל",
+    locateMe: "אתר אותי",
+    kmAway: "{distance} ק״מ ממך",
   },
   ar: {
     appName: "Dori",
@@ -512,6 +518,12 @@ export const translations = {
     locationErrorUnavailable: "لم نتمكن من تحديد موقعك. حاول مرة أخرى في الخارج أو تحقق من الاتصال.",
     locationErrorUnsupported: "متصفحك لا يدعم خدمات الموقع.",
     locationErrorTimeout: "انتهت مهلة طلب الموقع. يرجى المحاولة مرة أخرى.",
+    nearbyTitle: "مزودون في محيطك",
+    nearbyNoProviders: "لم يشارك أي مزود موقعه بعد.",
+    nearbyNoProvidersSubtext: "تحقق مجدداً قريباً.",
+    viewProfile: "عرض الملف الشخصي",
+    locateMe: "حدد موقعي",
+    kmAway: "{distance} كم منك",
   },
   en: {
     appName: "Dori",
@@ -768,6 +780,12 @@ export const translations = {
     locationErrorUnavailable: "Couldn't determine your location. Try again outdoors or check your connection.",
     locationErrorUnsupported: "Your browser doesn't support location services.",
     locationErrorTimeout: "Location request timed out. Please try again.",
+    nearbyTitle: "Nearby Providers",
+    nearbyNoProviders: "No providers have shared their location yet.",
+    nearbyNoProvidersSubtext: "Check back soon.",
+    viewProfile: "View profile",
+    locateMe: "Locate me",
+    kmAway: "{distance} km away",
   },
 } as const;
 

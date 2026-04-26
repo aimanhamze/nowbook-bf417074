@@ -67,6 +67,9 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: ["leaflet", "react-leaflet-cluster"],
+  },
   build: {
     rollupOptions: {
       output: {
@@ -74,6 +77,7 @@ export default defineConfig(({ mode }) => ({
           "vendor-react": ["react", "react-dom", "react-router-dom"],
           "vendor-ui": ["framer-motion", "@radix-ui/react-dialog", "@radix-ui/react-select", "@radix-ui/react-tabs", "@radix-ui/react-dropdown-menu"],
           "vendor-supabase": ["@supabase/supabase-js"],
+          "vendor-map": ["leaflet", "react-leaflet", "react-leaflet-cluster"],
         },
       },
     },

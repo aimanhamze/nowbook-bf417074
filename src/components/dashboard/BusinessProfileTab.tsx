@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { MapPin, Loader2 } from "lucide-react";
+import { useUserLocation } from "@/hooks/useUserLocation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -49,7 +50,13 @@ export function BusinessProfileTab() {
 
   const [accordionValue, setAccordionValue] = useState("");
   const [locationAccordionValue, setLocationAccordionValue] = useState("");
-  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+
+  const {
+    position: detectedPosition,
+    isLocating: isDetectingLocation,
+    errorCode: locationErrorCode,
+    locate,
+  } = useUserLocation();
 
   const { register, handleSubmit, setValue, watch, reset, control, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(profileSchema),
@@ -94,31 +101,21 @@ export function BusinessProfileTab() {
   const lngValue = watch("longitude") ?? null;
   const hasLocation = latValue !== null && lngValue !== null;
 
-  const handleSetLocation = () => {
-    if (!navigator.geolocation) {
-      toast.error(t("locationErrorUnsupported"));
-      return;
-    }
-    setIsDetectingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setIsDetectingLocation(false);
-        setValue("latitude", roundCoord(pos.coords.latitude), { shouldDirty: true });
-        setValue("longitude", roundCoord(pos.coords.longitude), { shouldDirty: true });
-      },
-      (err) => {
-        setIsDetectingLocation(false);
-        if (err.code === err.PERMISSION_DENIED) {
-          toast.error(t("locationErrorDenied"));
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
-          toast.error(t("locationErrorUnavailable"));
-        } else if (err.code === err.TIMEOUT) {
-          toast.error(t("locationErrorTimeout"));
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
-  };
+  // Apply detected coordinates into form state
+  useEffect(() => {
+    if (!detectedPosition) return;
+    setValue("latitude", roundCoord(detectedPosition.latitude), { shouldDirty: true });
+    setValue("longitude", roundCoord(detectedPosition.longitude), { shouldDirty: true });
+  }, [detectedPosition, setValue]);
+
+  // Show per-code toast on geolocation error
+  useEffect(() => {
+    if (locationErrorCode === null) return;
+    if (locationErrorCode === -1) toast.error(t("locationErrorUnsupported"));
+    else if (locationErrorCode === 1) toast.error(t("locationErrorDenied"));
+    else if (locationErrorCode === 2) toast.error(t("locationErrorUnavailable"));
+    else if (locationErrorCode === 3) toast.error(t("locationErrorTimeout"));
+  }, [locationErrorCode, t]);
 
   const handleClearLocation = () => {
     setValue("latitude", null, { shouldDirty: true });
@@ -358,7 +355,7 @@ export function BusinessProfileTab() {
                   variant={hasLocation ? "outline" : "default"}
                   size="sm"
                   disabled={isDetectingLocation}
-                  onClick={handleSetLocation}
+                  onClick={locate}
                 >
                   {isDetectingLocation ? (
                     <>
