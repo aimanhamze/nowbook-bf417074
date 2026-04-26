@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
+import { MapPin, Loader2 } from "lucide-react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,6 +17,11 @@ import { buildSocialLinks } from "@/lib/socialLinks";
 import { toast } from "sonner";
 
 const LEAD_TIME_OPTIONS = [15, 30, 60, 120, 240, 1440] as const;
+
+function roundCoord(v: number): number {
+  return Math.round(v * 1e6) / 1e6;
+}
+
 const SOCIAL_FIELDS = ["social_whatsapp", "social_instagram", "social_tiktok", "social_facebook", "social_waze", "social_website"] as const;
 
 const profileSchema = z.object({
@@ -31,6 +37,8 @@ const profileSchema = z.object({
   social_facebook: z.string().optional().default(""),
   social_waze: z.string().optional().default(""),
   social_website: z.string().optional().default(""),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
 });
 
 type FormValues = z.infer<typeof profileSchema>;
@@ -40,6 +48,8 @@ export function BusinessProfileTab() {
   const { profile, upsertProfile, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
 
   const [accordionValue, setAccordionValue] = useState("");
+  const [locationAccordionValue, setLocationAccordionValue] = useState("");
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
 
   const { register, handleSubmit, setValue, watch, reset, control, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(profileSchema),
@@ -48,6 +58,7 @@ export function BusinessProfileTab() {
       min_lead_time_minutes: 15,
       social_whatsapp: "", social_instagram: "",
       social_tiktok: "", social_facebook: "", social_waze: "", social_website: "",
+      latitude: null, longitude: null,
     },
   });
 
@@ -67,6 +78,8 @@ export function BusinessProfileTab() {
         social_facebook: sl?.facebook || "",
         social_waze: sl?.waze || "",
         social_website: sl?.website || "",
+        latitude: profile.latitude ?? null,
+        longitude: profile.longitude ?? null,
       });
     }
   }, [profile, reset]);
@@ -76,6 +89,41 @@ export function BusinessProfileTab() {
     name: ["social_whatsapp", "social_instagram", "social_tiktok", "social_facebook", "social_waze", "social_website"],
   });
   const socialFilledCount = socialValues.filter(v => v && v.trim() !== "").length;
+
+  const latValue = watch("latitude") ?? null;
+  const lngValue = watch("longitude") ?? null;
+  const hasLocation = latValue !== null && lngValue !== null;
+
+  const handleSetLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error(t("locationErrorUnsupported"));
+      return;
+    }
+    setIsDetectingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsDetectingLocation(false);
+        setValue("latitude", roundCoord(pos.coords.latitude), { shouldDirty: true });
+        setValue("longitude", roundCoord(pos.coords.longitude), { shouldDirty: true });
+      },
+      (err) => {
+        setIsDetectingLocation(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          toast.error(t("locationErrorDenied"));
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          toast.error(t("locationErrorUnavailable"));
+        } else if (err.code === err.TIMEOUT) {
+          toast.error(t("locationErrorTimeout"));
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  };
+
+  const handleClearLocation = () => {
+    setValue("latitude", null, { shouldDirty: true });
+    setValue("longitude", null, { shouldDirty: true });
+  };
 
   useEffect(() => {
     if (SOCIAL_FIELDS.some(f => errors[f])) {
@@ -101,6 +149,8 @@ export function BusinessProfileTab() {
         phone: values.phone ?? "",
         min_lead_time_minutes: values.min_lead_time_minutes,
         social_links,
+        latitude: values.latitude ?? null,
+        longitude: values.longitude ?? null,
       });
       toast.success(t("profileSaved"));
     } catch (err) {
@@ -273,6 +323,64 @@ export function BusinessProfileTab() {
                 <Label>{t("socialLinksWebsite")}</Label>
                 <Input {...register("social_website")} type="url" placeholder={t("socialLinksHelperWebsite")} />
                 <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperWebsite")}</p>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
+        {/* Location on Map */}
+        <Accordion type="single" collapsible value={locationAccordionValue} onValueChange={setLocationAccordionValue} className="border-t border-border -mx-4 px-4">
+          <AccordionItem value="location" className="border-b-0">
+            <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 shrink-0" />
+                <span>{t("locationOnMap")}</span>
+                {hasLocation && <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />}
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3 pb-1">
+              <p className="text-xs text-muted-foreground">{t("locationHelperText")}</p>
+              <p className="text-xs text-muted-foreground">{t("locationPrivacyNote")}</p>
+              <p className="text-xs text-muted-foreground">{t("locationWazeCrossRef")}</p>
+
+              {hasLocation ? (
+                <p className="text-sm">
+                  <span className="text-green-600 font-medium">{t("locationSetLabel")}</span>{" "}
+                  <span dir="ltr">{latValue!.toFixed(4)}, {lngValue!.toFixed(4)}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("locationNotSet")}</p>
+              )}
+
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  type="button"
+                  variant={hasLocation ? "outline" : "default"}
+                  size="sm"
+                  disabled={isDetectingLocation}
+                  onClick={handleSetLocation}
+                >
+                  {isDetectingLocation ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t("locationDetecting")}
+                    </>
+                  ) : hasLocation ? (
+                    t("locationUpdateLocation")
+                  ) : (
+                    t("locationSetCurrentLocation")
+                  )}
+                </Button>
+                {hasLocation && !isDetectingLocation && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearLocation}
+                  >
+                    {t("locationClearLocation")}
+                  </Button>
+                )}
               </div>
             </AccordionContent>
           </AccordionItem>

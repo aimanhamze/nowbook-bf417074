@@ -257,6 +257,8 @@ export type Database = {
           cover_image: string | null
           created_at: string
           id: string
+          latitude: number | null
+          longitude: number | null
           min_lead_time_minutes: number
           phone: string | null
           social_links: {
@@ -280,6 +282,8 @@ export type Database = {
           cover_image?: string | null
           created_at?: string
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           min_lead_time_minutes?: number
           phone?: string | null
           social_links?: {
@@ -304,6 +308,8 @@ export type Database = {
           cover_image?: string | null
           created_at?: string
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           min_lead_time_minutes?: number
           phone?: string | null
           social_links?: {
