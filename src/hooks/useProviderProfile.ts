@@ -32,6 +32,8 @@ export function useProviderProfile() {
       phone: string;
       min_lead_time_minutes: number;
       social_links: SocialLinks | null;
+      latitude?: number | null;
+      longitude?: number | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
 
