@@ -26,6 +26,7 @@ const Notifications = lazy(() => import("./pages/Notifications"));
 const Admin = lazy(() => import("./pages/Admin"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Nearby = lazy(() => import("./pages/Nearby"));
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,7 @@ function PageTitleUpdater() {
     const routeTitles: Record<string, string> = {
       "/": `Dori — ${t("home")}`,
       "/explore": `Dori — ${t("explore")}`,
+      "/nearby": `Dori — ${t("nearbyTitle")}`,
       "/bookings": `Dori — ${t("myBookings")}`,
       "/favorites": `Dori — ${t("favorites")}`,
       "/profile": `Dori — ${t("profile")}`,
@@ -78,6 +80,7 @@ const App = () => (
                 <Routes>
                   <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
                   <Route path="/explore" element={<ErrorBoundary><Explore /></ErrorBoundary>} />
+                  <Route path="/nearby" element={<ErrorBoundary><Nearby /></ErrorBoundary>} />
                   <Route path="/provider/:id" element={<ErrorBoundary><ProviderDetail /></ErrorBoundary>} />
                   <Route path="/provider/:id/book" element={<ProtectedRoute><ErrorBoundary><BookAppointment /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/booking-confirmed" element={<ProtectedRoute><ErrorBoundary><BookingConfirmed /></ErrorBoundary></ProtectedRoute>} />

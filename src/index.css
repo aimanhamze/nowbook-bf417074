@@ -78,3 +78,26 @@
     text-wrap: balance;
   }
 }
+
+/* ── Leaflet map integration ─────────────────────────────────────────────── */
+
+/* Pulse animation for user location pin */
+@keyframes user-pin-ping {
+  0%, 100% { transform: scale(1);   opacity: 0.5; }
+  50%       { transform: scale(1.9); opacity: 0;   }
+}
+.user-pin-pulse {
+  animation: user-pin-ping 1.8s ease-in-out infinite;
+}
+
+/* Avatar map markers */
+.avatar-marker-icon {
+  cursor: pointer;
+}
+/* The transition is on the inner circle div so it animates CSS property changes.
+   Note: Leaflet replaces the entire DivIcon DOM node on icon prop change,
+   so this transition fires on hover/focus state changes but NOT between
+   normal↔selected states (a known DivIcon limitation — the change is instant). */
+.avatar-marker-icon > div {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}

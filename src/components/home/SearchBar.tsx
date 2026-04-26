@@ -3,7 +3,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
 
-export function SearchBar() {
+interface SearchBarProps {
+  onNearbyClick?: () => void;
+}
+
+export function SearchBar({ onNearbyClick }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
   const { t } = useLang();
@@ -28,7 +32,11 @@ export function SearchBar() {
           onChange={(e) => setQuery(e.target.value)}
           className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground outline-none"
         />
-        <button type="button" className="flex items-center gap-1 text-xs text-accent font-medium shrink-0">
+        <button
+          type="button"
+          onClick={onNearbyClick}
+          className="flex items-center gap-1 text-xs text-accent font-medium shrink-0 active:opacity-70 transition-opacity"
+        >
           <MapPin className="h-3.5 w-3.5" />
           {t("nearby")}
         </button>

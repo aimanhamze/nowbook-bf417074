@@ -44,8 +44,8 @@ export function BottomNav() {
         { icon: User, label: t("profile"), path: "/profile" },
       ];
 
-  // Hide BottomNav on provider detail and booking pages
-  if (location.pathname.startsWith("/provider/")) {
+  // Hide BottomNav on full-screen pages
+  if (location.pathname.startsWith("/provider/") || location.pathname === "/nearby") {
     return null;
   }
 
