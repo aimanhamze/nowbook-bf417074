@@ -1,6 +1,7 @@
 import { SearchBar } from "@/components/home/SearchBar";
 import { CategoryRow } from "@/components/home/CategoryRow";
 import { ProviderCard } from "@/components/home/ProviderCard";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { useAllProviders } from "@/hooks/useAllProviders";
 import { useFavorites } from "@/hooks/useFavorites";
 import { beautyCategories, healthCategories, fitnessCategories } from "@/lib/mock-data";
@@ -8,6 +9,7 @@ import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate, useNavigate } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
 import type { Provider } from "@/lib/mock-data";
 
 const MAX_FAVORITES_SHOWN = 10;
@@ -53,37 +55,39 @@ const Index = () => {
   );
 
   return (
-    <div className="min-h-screen pb-24">
-      <header className="px-5 pt-12 pb-6">
+    <div className="min-h-screen pb-28">
+
+      {/* ── Hero header ──────────────────────────────────────────────────── */}
+      <header className="px-5 pt-14 pb-8 bg-gradient-to-b from-accent/[0.07] to-transparent rounded-b-[2rem]">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
-          <p className="text-sm text-muted-foreground mb-1">{t("goodMorning")}</p>
-          <h1 className="text-2xl font-bold leading-tight">
+          <p className="text-sm text-foreground/45 mb-1">{t("goodMorning")}</p>
+          <h1 className="text-3xl font-extrabold leading-[1.15] tracking-tight">
             {t("findAppointment")}<br />
-            <span className="text-accent">{t("nextAppointment")}</span>
+            <span className="text-accent font-black">{t("nextAppointment")}</span>
           </h1>
         </motion.div>
       </header>
 
-      <div className="px-5 mb-6">
+      {/* ── Search bar ───────────────────────────────────────────────────── */}
+      <div className="px-5 mb-10">
         <SearchBar onNearbyClick={() => navigate("/nearby")} />
       </div>
 
-      {/* My Favorites — only when logged in with at least 1 favorite */}
+      {/* ── My Favorites — only when logged in with at least 1 favorite ─── */}
       {user && favoriteProviders.length > 0 && (
-        <section className="px-5 mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              {t("myFavorites")} ⭐
-            </h2>
+        <section className="px-5 mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <SectionLabel>{t("myFavorites")}</SectionLabel>
             <button
-              className="text-xs text-accent font-semibold"
+              className="flex items-center gap-0.5 text-sm font-semibold text-accent"
               onClick={() => navigate("/favorites")}
             >
               {t("seeAll")}
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none -mx-1.5 px-1.5">
@@ -96,7 +100,7 @@ const Index = () => {
                 onClick={() => navigate(`/provider/${p.id}`)}
                 className="flex flex-col items-center gap-1.5 min-w-[72px] active:scale-95 transition-transform"
               >
-                <div className="w-14 h-14 rounded-2xl overflow-hidden bg-gradient-to-br from-accent/20 to-accent/5 border border-border/50 shrink-0">
+                <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-accent/20 to-accent/5 ring-1 ring-border/60 shadow-sm shrink-0">
                   <img
                     src={p.image}
                     alt={p.name["he"]}
@@ -105,7 +109,7 @@ const Index = () => {
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
-                <span className="text-[11px] font-medium text-center w-16 truncate leading-tight">
+                <span className="text-[11px] font-semibold text-center w-16 truncate leading-tight">
                   {p.name["he"]}
                 </span>
               </motion.button>
@@ -114,40 +118,39 @@ const Index = () => {
         </section>
       )}
 
-      {/* Beauty & Cosmetics */}
-      <section className="px-5 mb-8">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-          {t("beautyAndCosmetics")}
-        </h2>
+      {/* ── Category chip rows ───────────────────────────────────────────── */}
+      <section className="px-5 mb-10">
+        <div className="mb-4">
+          <SectionLabel>{t("beautyAndCosmetics")}</SectionLabel>
+        </div>
         <CategoryRow filter={[...beautyCategories]} />
       </section>
 
-      {/* Health & Medical */}
-      <section className="px-5 mb-8">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-          {t("healthProfessionals")}
-        </h2>
+      <section className="px-5 mb-10">
+        <div className="mb-4">
+          <SectionLabel>{t("healthProfessionals")}</SectionLabel>
+        </div>
         <CategoryRow filter={[...healthCategories]} />
       </section>
 
-      {/* Fitness & Sports */}
-      <section className="px-5 mb-8">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-          🏋️ {t("fitnessStudio")}
-        </h2>
+      <section className="px-5 mb-10">
+        <div className="mb-4">
+          <SectionLabel>{t("fitnessStudio")}</SectionLabel>
+        </div>
         <CategoryRow filter={[...fitnessCategories]} />
       </section>
 
-      {/* Popular nearby - beauty */}
+      {/* ── Provider lists ───────────────────────────────────────────────── */}
       {beautyProviders.length > 0 && (
-        <section className="px-5 mb-8">
+        <section className="px-5 mt-4 mb-10">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">{t("beautyAndCosmetics")}</h2>
+            <SectionLabel>{t("beautyAndCosmetics")}</SectionLabel>
             <button
-              className="text-xs text-accent font-semibold"
+              className="flex items-center gap-0.5 text-sm font-semibold text-accent"
               onClick={() => navigate("/explore?group=beauty")}
             >
               {t("seeAll")}
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
           <div className="flex flex-col gap-3">
@@ -158,16 +161,16 @@ const Index = () => {
         </section>
       )}
 
-      {/* Popular nearby - health */}
       {healthProviders.length > 0 && (
-        <section className="px-5 mb-8">
+        <section className="px-5 mb-10">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">{t("healthProfessionals")}</h2>
+            <SectionLabel>{t("healthProfessionals")}</SectionLabel>
             <button
-              className="text-xs text-accent font-semibold"
+              className="flex items-center gap-0.5 text-sm font-semibold text-accent"
               onClick={() => navigate("/explore?group=health")}
             >
               {t("seeAll")}
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
           <div className="flex flex-col gap-3">
@@ -178,16 +181,16 @@ const Index = () => {
         </section>
       )}
 
-      {/* Fitness providers */}
       {fitnessProviders.length > 0 && (
         <section className="px-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">🏋️ {t("fitnessStudio")}</h2>
+            <SectionLabel>{t("fitnessStudio")}</SectionLabel>
             <button
-              className="text-xs text-accent font-semibold"
+              className="flex items-center gap-0.5 text-sm font-semibold text-accent"
               onClick={() => navigate("/explore?group=fitness")}
             >
               {t("seeAll")}
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
           <div className="flex flex-col gap-3">
@@ -202,7 +205,7 @@ const Index = () => {
       {providers.length === 0 && (
         <section className="px-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">{t("popularNearby")}</h2>
+            <SectionLabel>{t("popularNearby")}</SectionLabel>
           </div>
         </section>
       )}

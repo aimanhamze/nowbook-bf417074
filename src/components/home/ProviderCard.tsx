@@ -33,9 +33,9 @@ export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
       viewport={{ once: true, amount: 0.2 }}
       transition={{ delay: index * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       onClick={() => navigate(`/provider/${provider.id}`)}
-      className="relative flex gap-4 p-3 rounded-2xl bg-card border border-border/60 shadow-sm hover:shadow-md transition-shadow text-right w-full active:scale-[0.98]"
+      className="relative flex gap-4 p-3 rounded-2xl bg-card border border-border/60 shadow-[0_1px_8px_rgba(0,0,0,0.06)] hover:shadow-md transition-shadow text-right w-full active:scale-[0.98]"
     >
-      <div className="w-20 h-20 rounded-xl shrink-0 bg-gradient-to-br from-accent/20 to-accent/5 overflow-hidden">
+      <div className="w-[84px] h-[84px] rounded-2xl shrink-0 bg-gradient-to-br from-accent/20 to-accent/5 overflow-hidden">
         <img
           src={provider.image}
           alt={provider.name[lang]}
