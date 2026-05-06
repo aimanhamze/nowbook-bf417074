@@ -106,6 +106,48 @@ export function useProviderById(id: string | undefined) {
   return { provider, isLoading };
 }
 
+/**
+ * Fetch a provider's weekly availability rows + blocked dates for public/read-only use
+ * (e.g. status pills on the provider detail page). Reuses the same query keys as
+ * useRealAvailability so React Query dedupes the network calls when both are mounted.
+ */
+export function usePublicProviderSchedule(providerId: string | undefined) {
+  const availabilityQuery = useQuery({
+    queryKey: ["provider-availability-public", providerId],
+    queryFn: async () => {
+      if (!providerId) return [];
+      const { data, error } = await supabase
+        .from("provider_availability")
+        .select("*")
+        .eq("provider_id", providerId)
+        .order("day_of_week");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!providerId,
+  });
+
+  const blockedDatesQuery = useQuery({
+    queryKey: ["provider-blocked-dates-public", providerId],
+    queryFn: async () => {
+      if (!providerId) return [];
+      const { data, error } = await supabase
+        .from("provider_blocked_dates")
+        .select("blocked_date")
+        .eq("provider_id", providerId);
+      if (error) throw error;
+      return (data || []).map(d => d.blocked_date);
+    },
+    enabled: !!providerId,
+  });
+
+  return {
+    availability: availabilityQuery.data || [],
+    blockedDates: blockedDatesQuery.data || [],
+    isLoading: availabilityQuery.isLoading || blockedDatesQuery.isLoading,
+  };
+}
+
 /** Fetch real availability for a provider */
 export function useRealAvailability(providerId: string | undefined) {
   const availabilityQuery = useQuery({
