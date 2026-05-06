@@ -24,10 +24,14 @@ export function CategoryRow({ filter }: CategoryRowProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           onClick={() => navigate(`/explore?category=${cat.id}`)}
-          className="flex flex-col items-center gap-2 min-w-[72px] py-3 px-2 rounded-2xl bg-secondary hover:bg-accent/10 transition-colors active:scale-95"
+          className="flex flex-col items-center gap-2.5 min-w-[80px] py-3.5 px-2.5 rounded-2xl bg-card border border-border/50 shadow-sm hover:bg-accent/5 hover:border-accent/20 transition-colors active:scale-95"
         >
-          <span className="text-2xl">{cat.icon}</span>
-          <span className="text-xs font-medium text-foreground whitespace-nowrap">{categoryNames[cat.id][lang]}</span>
+          <div className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center text-lg shrink-0">
+            {cat.icon}
+          </div>
+          <span className="text-[11px] font-semibold tracking-tight text-foreground whitespace-nowrap">
+            {categoryNames[cat.id][lang]}
+          </span>
         </motion.button>
       ))}
     </div>

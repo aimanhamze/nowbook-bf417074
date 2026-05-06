@@ -9,6 +9,7 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
 import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { FaWhatsapp, FaInstagram, FaTiktok, FaFacebook, FaWaze } from "react-icons/fa6";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
@@ -111,14 +112,6 @@ function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | und
   );
 }
 
-function SectionLabel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <h2 className={`flex items-center gap-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground ${className}`}>
-      <span aria-hidden className="block h-3.5 w-1 rounded-full bg-accent" />
-      {children}
-    </h2>
-  );
-}
 
 const ProviderDetail = () => {
   const { id } = useParams();
