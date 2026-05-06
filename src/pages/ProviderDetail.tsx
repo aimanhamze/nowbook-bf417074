@@ -1,6 +1,9 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { categoryNames } from "@/lib/mock-data";
-import { useProviderById } from "@/hooks/useAllProviders";
+import { useProviderById, usePublicProviderSchedule } from "@/hooks/useAllProviders";
+import { getProviderStatus, type ProviderStatus } from "@/lib/providerStatus";
+import WeeklyHoursTable from "@/components/provider-detail/WeeklyHoursTable";
+import WriteReviewSection from "@/components/reviews/WriteReviewSection";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
 import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
@@ -88,20 +91,32 @@ function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | und
   if (entries.length === 0) return null;
 
   return (
-    <div className="flex gap-3 mt-3 flex-wrap justify-center">
-      {entries.map(entry => (
-        <a
-          key={entry.label}
-          href={entry.href}
-          aria-label={entry.label}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`flex items-center justify-center h-12 w-12 rounded-2xl ${entry.frameClass} active:scale-95 hover:brightness-110 transition-all`}
-        >
-          {entry.icon}
-        </a>
-      ))}
-    </div>
+    <>
+      <div className="mx-auto my-4 h-px w-12 bg-border" />
+      <div className="flex flex-wrap justify-center gap-3">
+        {entries.map(entry => (
+          <a
+            key={entry.label}
+            href={entry.href}
+            aria-label={entry.label}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`flex h-12 w-12 items-center justify-center rounded-2xl ring-1 ring-inset ring-white/40 ${entry.frameClass} transition-all hover:brightness-110 active:scale-95`}
+          >
+            {entry.icon}
+          </a>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function SectionLabel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <h2 className={`flex items-center gap-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground ${className}`}>
+      <span aria-hidden className="block h-3.5 w-1 rounded-full bg-accent" />
+      {children}
+    </h2>
   );
 }
 
@@ -116,7 +131,20 @@ const ProviderDetail = () => {
   const { data: dbReviews } = useProviderReviews(id);
   const { isFavorite, toggleFavorite } = useFavorites();
   const { data: photos = [] } = usePublicProviderPhotos(id);
+  const { availability, blockedDates } = usePublicProviderSchedule(id);
   const liked = id ? isFavorite(id) : false;
+
+  const [status, setStatus] = useState<ProviderStatus>(() =>
+    getProviderStatus(availability, blockedDates, new Date()),
+  );
+
+  useEffect(() => {
+    setStatus(getProviderStatus(availability, blockedDates, new Date()));
+    const intervalId = setInterval(() => {
+      setStatus(getProviderStatus(availability, blockedDates, new Date()));
+    }, 60_000);
+    return () => clearInterval(intervalId);
+  }, [availability, blockedDates]);
 
   const reviewCount = dbReviews?.length || 0;
   const avgRating = dbReviews && dbReviews.length > 0
@@ -160,50 +188,90 @@ const ProviderDetail = () => {
   return (
     <div className="min-h-screen pb-36">
       {/* Cover */}
-      <div className="relative h-56 bg-gradient-to-br from-accent/20 to-accent/5">
+      <div className="relative h-72 overflow-hidden bg-gradient-to-br from-accent/15 via-secondary to-secondary/40">
         {coverImgSrc ? (
           <img
             src={coverImgSrc}
             alt={provider.name[lang]}
-            className="w-full h-full object-cover"
+            className="h-full w-full object-cover"
             onError={handleCoverImageError}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-5xl font-bold text-accent/30">{provider.name[lang]?.charAt(0)?.toUpperCase()}</span>
+          <div className="flex h-full w-full items-center justify-center">
+            <span className="select-none text-[7rem] font-extralight leading-none tracking-tighter text-foreground/25 md:text-[9rem]">
+              {provider.name[lang]?.charAt(0)?.toUpperCase()}
+            </span>
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-10">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/45 via-black/0 to-secondary/40" />
+        {status.hasSchedule && (() => {
+          const basePillClass = "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-md backdrop-blur-md";
+          const statusPillClass = `${basePillClass} ${
+            status.isOpen
+              ? "border-green-500/30 bg-green-500/15 text-green-700"
+              : "border-red-500/30 bg-red-500/15 text-red-700"
+          }`;
+          const hoursPillClass = `${basePillClass} ${
+            status.isOpen
+              ? "border-green-500/30 bg-green-500/15 text-green-700"
+              : "border-white/40 bg-white/85"
+          }`;
+          return (
+            <div className="absolute inset-x-4 bottom-12 z-10 flex translate-y-1/2 items-center justify-between">
+              {status.todayHours && (
+                <div className={hoursPillClass}>
+                  <span dir="ltr">{status.todayHours.open} - {status.todayHours.close}</span>
+                </div>
+              )}
+              <div className={statusPillClass}>
+                <span
+                  aria-hidden
+                  className={`block h-1.5 w-1.5 rounded-full ${status.isOpen ? "bg-green-500" : "bg-red-500"}`}
+                />
+                <span>{t(status.isOpen ? "providerStatusOpen" : "providerStatusClosed")}</span>
+              </div>
+            </div>
+          );
+        })()}
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95"
+          >
             <BackArrow variant="arrow" className="h-5 w-5" />
           </button>
           <div className="flex gap-2">
-            <button className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
+            <button className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95">
               <Share2 className="h-5 w-5" />
             </button>
-            <button onClick={() => { if (user && id) toggleFavorite.mutate(id); else if (!user) navigate("/auth"); }} className="p-2 rounded-full bg-card/80 backdrop-blur-sm active:scale-95">
-              <Heart className={`h-5 w-5 transition-colors ${liked ? "fill-accent text-accent" : ""}`} />
+            <button
+              onClick={() => { if (user && id) toggleFavorite.mutate(id); else if (!user) navigate("/auth"); }}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-all active:scale-95"
+            >
+              <Heart className={`h-5 w-5 transition-all ${liked ? "scale-110 fill-accent text-accent" : ""}`} />
             </button>
           </div>
         </div>
       </div>
 
       {/* Info */}
-      <motion.div className="px-5 -mt-6 relative" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-        <div className="bg-card rounded-2xl border border-border p-5 shadow-sm text-center">
-          <h1 className="text-xl font-bold mb-1">{provider.name[lang]}</h1>
-          <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground mb-3">
-            {reviewCount > 0 && (
-              <span className="flex items-center gap-1">
-                <Star className="h-4 w-4 fill-accent text-accent" />
-                <span className="font-medium text-foreground">{avgRating.toFixed(1)}</span>
-                ({reviewCount})
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
-            <MapPin className="h-3 w-3 shrink-0" />
+      <motion.div
+        className="relative -mt-12 px-5"
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <div className="rounded-3xl bg-card p-6 text-center shadow-[0_10px_40px_-12px_rgba(0,0,0,0.12)]">
+          <h1 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">{provider.name[lang]}</h1>
+          {reviewCount > 0 && (
+            <div className="mb-3 flex items-center justify-center gap-1 text-sm text-muted-foreground">
+              <Star className="h-4 w-4 fill-accent text-accent" />
+              <span className="font-medium text-foreground">{avgRating.toFixed(1)}</span>
+              <span>({reviewCount})</span>
+            </div>
+          )}
+          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5 shrink-0 text-accent" />
             {provider.address[lang]}
           </p>
           <SocialLinksRow socialLinks={provider.socialLinks} />
@@ -212,16 +280,16 @@ const ProviderDetail = () => {
 
       {/* About */}
       {provider.about[lang] && (
-        <section className="px-5 mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">{t("about")}</h2>
-          <p className="text-sm leading-relaxed">{provider.about[lang]}</p>
+        <section className="mt-8 px-5">
+          <SectionLabel className="mb-3">{t("about")}</SectionLabel>
+          <p className="text-start text-sm leading-relaxed text-foreground/80">{provider.about[lang]}</p>
         </section>
       )}
 
       {/* Photo Gallery */}
       {photos.length > 0 && (
-        <section className="mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 px-5">{t("ourWork")}</h2>
+        <section className="mt-8">
+          <SectionLabel className="mb-3 px-5">{t("ourWork")}</SectionLabel>
           <div className="flex gap-2 overflow-x-auto px-5 pb-2 scrollbar-hide">
             {photos.map((photo, i) => (
               <motion.button
@@ -296,22 +364,43 @@ const ProviderDetail = () => {
         )}
       </AnimatePresence>
 
+      {/* Weekly Hours */}
+      {status.hasSchedule && (
+        <section className="mt-8 px-5">
+          <SectionLabel className="mb-3">{t("workingHoursLabel")}</SectionLabel>
+          <WeeklyHoursTable
+            availability={availability}
+            blockedDates={blockedDates}
+            status={status}
+            lang={lang}
+            t={t}
+          />
+        </section>
+      )}
+
       {/* Services */}
       {provider.services.length > 0 && (
-        <section className="px-5 mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("services")}</h2>
+        <section className="mt-8 px-5">
+          <SectionLabel className="mb-3">{t("services")}</SectionLabel>
           <div className="flex flex-col gap-2">
             {provider.services.map((service, i) => (
-              <motion.div key={service.id} initial={{ opacity: 0, x: 12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }} className="flex items-center justify-between p-4 rounded-xl bg-secondary/60">
-                <div>
-                  <p className="text-sm font-medium">{service.name[lang]}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+              <motion.div
+                key={service.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 + i * 0.06, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card p-4 transition-colors hover:border-accent/30"
+              >
+                <div className="min-w-0 text-start">
+                  <p className="truncate text-sm font-medium">{service.name[lang]}</p>
+                  <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
                     <Clock className="h-3 w-3" />
                     {service.duration} {t("min")}
-                  </p>
+                  </span>
                 </div>
-                <div className="text-left">
-                  <p className="text-sm font-bold">₪{service.price}</p>
+                <div className="flex shrink-0 items-baseline gap-0.5 text-end">
+                  <span className="text-sm text-muted-foreground">₪</span>
+                  <span className="text-lg font-semibold tracking-tight">{service.price}</span>
                 </div>
               </motion.div>
             ))}
@@ -321,8 +410,8 @@ const ProviderDetail = () => {
 
       {/* Reviews */}
       {dbReviews && dbReviews.length > 0 && (
-        <section className="px-5 mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{t("reviews")}</h2>
+        <section className="mt-8 px-5">
+          <SectionLabel className="mb-3">{t("reviews")}</SectionLabel>
           <div className="flex flex-col gap-3">
             {dbReviews.map((review, i) => (
               <ReviewCard key={review.id} review={review} index={i} />
@@ -331,14 +420,20 @@ const ProviderDetail = () => {
         </section>
       )}
 
+      {/* Write a Review */}
+      <WriteReviewSection providerId={provider.id} />
+
       {/* Sticky Book Button */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/90 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl shadow-lg">
-        <button
-          onClick={() => navigate(`/provider/${provider.id}/book`)}
-          className="w-full py-3.5 rounded-2xl bg-accent text-accent-foreground font-semibold text-sm active:scale-[0.98] transition-transform"
-        >
-          {t("bookAppointment")}
-        </button>
+      <div className="fixed inset-x-0 bottom-0 z-50">
+        <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-background to-transparent" />
+        <div className="border-t border-border/60 bg-card/85 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl">
+          <button
+            onClick={() => navigate(`/provider/${provider.id}/book`)}
+            className="w-full rounded-2xl bg-accent py-4 text-base font-semibold text-accent-foreground shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)] transition-transform active:scale-[0.98]"
+          >
+            {t("bookAppointment")}
+          </button>
+        </div>
       </div>
     </div>
   );
