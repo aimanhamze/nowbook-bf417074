@@ -192,6 +192,8 @@ const BookAppointment = () => {
       });
       setLoading(false);
       if (error) {
+        // Mirrors the LEAD_TIME_VIOLATION pattern. If you add similar exception
+        // types, follow the same handling shape.
         if (error.message === "LEAD_TIME_VIOLATION") {
           const leadTimeLabels: Record<number, string> = {
             15: t("leadTime15"), 30: t("leadTime30"), 60: t("leadTime60"),
@@ -199,6 +201,9 @@ const BookAppointment = () => {
           };
           const timeDisplay = leadTimeLabels[minLeadTimeMinutes] ?? `${minLeadTimeMinutes} ${t("min")}`;
           toast.error(t("leadTimeError").replace("{time}", timeDisplay));
+        } else if (error.message === "GROUP_CAPACITY_EXCEEDED") {
+          toast.error(t("bookingCapacityFullError"));
+          queryClient.invalidateQueries({ queryKey: ["provider-bookings-public", provider.id] });
         } else {
           toast.error(error.message);
         }
