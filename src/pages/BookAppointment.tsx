@@ -2,8 +2,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useProviderById, useRealAvailability } from "@/hooks/useAllProviders";
 import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import type { Service } from "@/lib/mock-data";
-import { Check, Clock, CalendarDays, Users, Calendar } from "lucide-react";
+import { Check, Clock, CalendarDays, Users, Calendar, CalendarX } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,6 +23,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { addDays } from "date-fns";
+
+const SPRING = { duration: 0.5, ease: [0.16, 1, 0.3, 1] } as const;
 
 const BookAppointment = () => {
   const { id } = useParams();
@@ -247,55 +250,82 @@ const BookAppointment = () => {
   const stepLabels = [t("selectServices"), t("selectDate"), t("confirm")];
 
   return (
-    <div className="min-h-screen pb-28">
-      <header className="flex items-center gap-3 px-5 pt-10 pb-4">
-        <button
-          onClick={() => (step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3) : navigate(-1))}
-          className="p-2 rounded-full active:scale-95"
-        >
-          <BackArrow variant="arrow" className="h-5 w-5" />
-        </button>
-        <div>
+    <div className="min-h-screen pb-32">
+
+      {/* ── Header ── */}
+      <header className="px-5 pt-10 pb-6 bg-gradient-to-b from-accent/[0.07] to-transparent rounded-b-[2rem]">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => (step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3) : navigate(-1))}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95 shrink-0"
+          >
+            <BackArrow variant="arrow" className="h-5 w-5" />
+          </button>
           <h1 className="text-lg font-bold">{t("bookAt")} {provider.name[lang]}</h1>
-          <p className="text-xs text-muted-foreground">
-            {t("step")} {step} {t("of")} 3 — {stepLabels[step - 1]}
-          </p>
         </div>
       </header>
 
-      <div className="flex gap-1.5 px-5 mb-6">
-        {[1, 2, 3].map((s) => (
-          <div key={s} className={cn("h-1 flex-1 rounded-full transition-colors duration-300", s <= step ? "bg-accent" : "bg-border")} />
-        ))}
+      {/* ── Step indicator ── */}
+      <div className="px-5 mb-6">
+        <div className="flex gap-1.5 mb-2">
+          {[1, 2, 3].map((s) => (
+            <div
+              key={s}
+              className={cn(
+                "h-1.5 flex-1 rounded-full transition-colors duration-300",
+                s <= step ? "bg-accent" : "bg-border"
+              )}
+            />
+          ))}
+        </div>
+        <p className="text-xs font-semibold text-accent text-end">
+          {stepLabels[step - 1]}
+        </p>
       </div>
 
       <AnimatePresence mode="wait">
+
         {/* ── STEP 1: Select Service ── */}
         {step === 1 && (
-          <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="px-5">
+          <motion.div
+            key="step1"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={SPRING}
+            className="px-5"
+          >
             <div className="flex flex-col gap-2">
-              {provider.services.map((service) => {
+              {provider.services.map((service, i) => {
                 const isSelected = !!selectedServices.find((s) => s.id === service.id);
                 const isGroup = service.service_type === 'group';
                 const sessionCount = allSessions.filter(s => s.service_id === service.id).length;
 
                 return (
-                  <button key={service.id} onClick={() => toggleService(service)}
+                  <motion.button
+                    key={service.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ ...SPRING, delay: i * 0.06 }}
+                    onClick={() => toggleService(service)}
                     className={cn(
-                      "flex items-center justify-between p-4 rounded-xl border transition-all active:scale-[0.98]",
-                      isSelected ? "border-accent bg-accent/5" : "border-border bg-card"
-                    )}>
-                    <div className="text-right flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-medium">{service.name[lang]}</p>
+                      "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
+                      isSelected
+                        ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
+                        : "border-border/60 bg-card hover:border-accent/30"
+                    )}
+                  >
+                    <div className="text-right flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p className="text-sm font-semibold">{service.name[lang]}</p>
                         {isGroup && (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-semibold">
                             <Users className="h-2.5 w-2.5" /> {t("groupClass")}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
                           <Clock className="h-3 w-3" />
                           {service.duration} {t("min")}
                         </span>
@@ -312,15 +342,18 @@ const BookAppointment = () => {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 ms-3">
-                      <span className="text-sm font-bold">₪{service.price}</span>
+                    <div className="flex items-center gap-3 ms-3 shrink-0">
+                      <div className="text-end">
+                        <span className="text-xs text-accent">₪</span>
+                        <span className="text-base font-bold">{service.price}</span>
+                      </div>
                       {isSelected && (
                         <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0">
                           <Check className="h-3 w-3 text-accent-foreground" />
                         </div>
                       )}
                     </div>
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
@@ -329,15 +362,22 @@ const BookAppointment = () => {
 
         {/* ── STEP 2: Pick Session or Date+Time ── */}
         {step === 2 && (
-          <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="px-5">
+          <motion.div
+            key="step2"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={SPRING}
+            className="px-5"
+          >
 
             {hasScheduledSessions ? (
               /* Provider has scheduled sessions → pick from list */
               <div>
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                  <CalendarDays className="h-4 w-4 text-accent" />
+                <SectionLabel className="mb-4">
+                  <CalendarDays className="h-3.5 w-3.5" />
                   בחר מפגש
-                </h3>
+                </SectionLabel>
                 <div className="flex flex-col gap-2">
                   {serviceSessions.map(session => {
                     const sessionDate = parseISO(session.session_date);
@@ -354,8 +394,10 @@ const BookAppointment = () => {
                         onClick={() => setSelectedSessionId(session.id)}
                         disabled={isPast}
                         className={cn(
-                          "flex items-center justify-between p-4 rounded-xl border transition-all active:scale-[0.98]",
-                          isSelected ? "border-accent bg-accent/5" : "border-border bg-card",
+                          "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
+                          isSelected
+                            ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
+                            : "border-border/60 bg-card hover:border-accent/30",
                           isPast && "opacity-40 cursor-not-allowed"
                         )}
                       >
@@ -393,8 +435,9 @@ const BookAppointment = () => {
                     );
                   })}
                   {serviceSessions.filter(s => new Date(s.session_date + "T" + s.session_time) >= new Date(now.getTime() + minLeadTimeMinutes * 60 * 1000)).length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground text-sm">
-                      אין מפגשים זמינים כרגע
+                    <div className="rounded-2xl bg-secondary p-8 text-center">
+                      <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground">אין מפגשים זמינים כרגע</p>
                     </div>
                   )}
                 </div>
@@ -403,20 +446,24 @@ const BookAppointment = () => {
               /* No sessions → open availability: date strip + time grid */
               <div>
                 <div className="mb-6">
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                    <CalendarDays className="h-4 w-4 text-accent" />
-                    {t("selectDate")}
-                  </h3>
+                  <SectionLabel className="mb-3">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {format(selectedDate, "MMMM yyyy", { locale: dateFnsLocale })}
+                  </SectionLabel>
                   <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
                     {dates.map((date) => {
                       const isSelected = format(date, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
                       return (
-                        <button key={date.toISOString()}
+                        <button
+                          key={date.toISOString()}
                           onClick={() => { setSelectedDate(date); setSelectedTime(""); }}
                           className={cn(
-                            "flex flex-col items-center min-w-[56px] py-2.5 px-3 rounded-xl transition-colors",
-                            isSelected ? "bg-accent text-accent-foreground" : "bg-secondary text-foreground"
-                          )}>
+                            "flex flex-col items-center min-w-[60px] py-2.5 px-3 rounded-xl transition-all",
+                            isSelected
+                              ? "bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.35)]"
+                              : "bg-secondary text-foreground"
+                          )}
+                        >
                           <span className="text-[10px] font-medium uppercase">{format(date, "EEE", { locale: dateFnsLocale })}</span>
                           <span className="text-lg font-bold">{format(date, "d", { locale: dateFnsLocale })}</span>
                           <span className="text-[10px]">{format(date, "MMM", { locale: dateFnsLocale })}</span>
@@ -427,10 +474,10 @@ const BookAppointment = () => {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                    <Clock className="h-4 w-4 text-accent" />
+                  <SectionLabel className="mb-3">
+                    <Clock className="h-3.5 w-3.5" />
                     {t("availableTimes")}
-                  </h3>
+                  </SectionLabel>
 
                   {isGroupBooking ? (
                     availableGroupSlots.length > 0 ? (
@@ -441,9 +488,9 @@ const BookAppointment = () => {
                             onClick={() => !slotInfo.isFull && setSelectedTime(slotInfo.time)}
                             disabled={slotInfo.isFull}
                             className={cn(
-                              "py-2.5 px-1 rounded-xl text-xs font-medium transition-colors active:scale-95 flex flex-col items-center gap-0.5",
+                              "py-3 px-1 rounded-2xl text-sm font-semibold transition-all active:scale-95 flex flex-col items-center gap-1",
                               selectedTime === slotInfo.time
-                                ? "bg-accent text-accent-foreground"
+                                ? "bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
                                 : slotInfo.isFull
                                 ? "bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
                                 : slotInfo.spotsLeft === 1
@@ -452,19 +499,33 @@ const BookAppointment = () => {
                             )}
                           >
                             <span>{slotInfo.time}</span>
-                            <span className={cn("text-[9px] leading-none",
+                            <span className={cn(
+                              "text-[9px] leading-none flex items-center gap-1",
                               selectedTime === slotInfo.time ? "text-accent-foreground/80"
                               : slotInfo.isFull ? "text-muted-foreground"
                               : slotInfo.spotsLeft === 1 ? "text-orange-600"
                               : "text-emerald-600"
                             )}>
-                              {slotInfo.isFull ? `🔴 ${t("spotsFull")}` : slotInfo.spotsLeft === 1 ? `⚠️ ${t("lastSpot")}` : `${slotInfo.spotsLeft} ${t("spotsLeft")}`}
+                              {slotInfo.isFull ? (
+                                <>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />
+                                  {t("spotsFull")}
+                                </>
+                              ) : slotInfo.spotsLeft === 1 ? (
+                                <>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+                                  {t("lastSpot")}
+                                </>
+                              ) : (
+                                `${slotInfo.spotsLeft} ${t("spotsLeft")}`
+                              )}
                             </span>
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-6">
+                      <div className="rounded-2xl bg-secondary p-8 text-center">
+                        <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
                         <p className="text-sm text-muted-foreground">
                           {allGroupSlotsPassed ? t("noSlotsToday") : t("unavailable")}
                         </p>
@@ -474,16 +535,23 @@ const BookAppointment = () => {
                     availableSlots.length > 0 ? (
                       <div className="grid grid-cols-3 gap-2">
                         {availableSlots.map((slot) => (
-                          <button key={slot} onClick={() => setSelectedTime(slot)}
-                            className={cn("py-2.5 rounded-xl text-xs font-medium transition-colors active:scale-95",
-                              selectedTime === slot ? "bg-accent text-accent-foreground" : "bg-secondary text-foreground hover:bg-secondary/80"
-                            )}>
+                          <button
+                            key={slot}
+                            onClick={() => setSelectedTime(slot)}
+                            className={cn(
+                              "py-3 rounded-2xl text-sm font-semibold transition-all active:scale-95",
+                              selectedTime === slot
+                                ? "bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
+                                : "bg-secondary text-foreground hover:bg-secondary/80"
+                            )}
+                          >
                             {slot}
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-6">
+                      <div className="rounded-2xl bg-secondary p-8 text-center">
+                        <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
                         <p className="text-sm text-muted-foreground">
                           {allSlotsPassed ? t("noSlotsToday") : t("unavailable")}
                         </p>
@@ -498,71 +566,130 @@ const BookAppointment = () => {
 
         {/* ── STEP 3: Confirm ── */}
         {step === 3 && (
-          <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="px-5">
-            <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
+          <motion.div
+            key="step3"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={SPRING}
+            className="px-5 space-y-3"
+          >
+            {/* Zone A — Booking hero */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...SPRING, delay: 0.08 }}
+              className="rounded-3xl bg-card p-6 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.12)] text-center"
+            >
+              <p className="text-xs font-semibold text-accent uppercase tracking-widest mb-2">
+                {format(parseISO(effectiveDate), "EEEE", { locale: dateFnsLocale })}
+              </p>
+              <p className="text-3xl font-black tracking-tight mb-1 text-balance">
+                {format(parseISO(effectiveDate), "d MMMM", { locale: dateFnsLocale })}
+              </p>
+              <p className="text-2xl font-bold text-foreground/70" dir="ltr">
+                {effectiveTime}
+              </p>
+            </motion.div>
+
+            {/* Zone B — Service + price summary */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...SPRING, delay: 0.14 }}
+              className="rounded-2xl border border-border/60 bg-card p-5 space-y-3"
+            >
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">{t("provider")}</p>
-                <p className="font-semibold">{provider.name[lang]}</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{t("provider")}</p>
+                <p className="text-sm font-semibold">{provider.name[lang]}</p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">{t("dateTime")}</p>
-                <p className="font-semibold">
-                  {format(parseISO(effectiveDate), "EEE, MMM d", { locale: dateFnsLocale })} — {effectiveTime}
-                </p>
-              </div>
+              <div className="h-px bg-border/40" />
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">{t("services")}</p>
                 {selectedServices.map((s) => (
-                  <div key={s.id} className="flex justify-between text-sm py-1">
-                    <span className="flex items-center gap-1.5">
-                      {s.service_type === 'group' && <Users className="h-3.5 w-3.5 text-blue-600" />}
-                      {s.name[lang]} <span className="text-muted-foreground">({s.duration} {t("min")})</span>
+                  <div key={s.id} className="flex justify-between items-center text-sm py-0.5">
+                    <span className="flex items-center gap-1.5 text-foreground/80">
+                      {s.service_type === 'group' && <Users className="h-3.5 w-3.5 text-accent" />}
+                      {s.name[lang]}
+                      <span className="text-muted-foreground text-xs">· {s.duration} {t("min")}</span>
                     </span>
                     <span className="font-medium">₪{s.price}</span>
                   </div>
                 ))}
               </div>
-              <div className="border-t border-border pt-3 flex justify-between">
-                <p className="text-sm text-muted-foreground">{t("total")} ({totalDuration} {t("min")})</p>
-                <p className="text-lg font-bold">₪{total}</p>
+              <div className="h-px bg-border/40" />
+              <div className="flex items-baseline justify-between pt-0.5">
+                <p className="text-xs text-muted-foreground">{t("total")} · {totalDuration} {t("min")}</p>
+                <p className="text-3xl font-black text-accent">₪{total}</p>
               </div>
-            </div>
+            </motion.div>
+
+            {/* Group notice */}
             {isGroupBooking && (
-              <div className="mt-3 p-3 rounded-xl bg-blue-50 border border-blue-100 flex items-center gap-2 text-sm text-blue-700">
-                <Users className="h-4 w-4 shrink-0" />
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...SPRING, delay: 0.18 }}
+                className="p-3 rounded-xl bg-secondary border border-border/60 flex items-center gap-2 text-sm text-foreground/70"
+              >
+                <Users className="h-4 w-4 text-accent shrink-0" />
                 <span>{t("groupClass")} · {t("maxCapacity")}: {groupMaxCapacity}</span>
-              </div>
+              </motion.div>
             )}
-            <div className="mt-4 p-4 rounded-xl bg-secondary/60 text-sm text-muted-foreground">
+
+            {/* Pay at venue */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...SPRING, delay: isGroupBooking ? 0.22 : 0.18 }}
+              className="p-4 rounded-xl bg-accent/[0.08] border border-accent/20 text-sm text-foreground/70"
+            >
               {t("payAtVenue")}
-            </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* ── Bottom bar ── */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-card/80 backdrop-blur-xl border-t border-border">
-        <div className="flex items-center justify-between mb-3">
+        {step === 3 ? (
+          /* Step 3: price + provider name on top, full-width confirm below */
           <div>
-            <p className="text-xs text-muted-foreground">
-              {selectedServices.length} {selectedServices.length !== 1 ? t("serviceCount") : t("service")}
-            </p>
-            <p className="text-lg font-bold">₪{total}</p>
+            <div className="flex items-baseline justify-between mb-3">
+              <p className="text-xs text-muted-foreground">{provider.name[lang]}</p>
+              <p className="text-lg font-bold">₪{total}</p>
+            </div>
+            <button
+              onClick={handleConfirm}
+              disabled={loading}
+              className="w-full rounded-2xl bg-accent text-accent-foreground py-4 text-base font-semibold shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)] transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <span className="w-4 h-4 rounded-full border-2 border-accent-foreground/30 border-t-accent-foreground animate-spin" />
+              ) : t("confirmBooking")}
+            </button>
           </div>
-          {step < 3 ? (
-            <button disabled={!canProceed} onClick={handleNext}
-              className={cn("px-8 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.97]",
-                canProceed ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground cursor-not-allowed"
-              )}>
+        ) : (
+          /* Steps 1–2: price left, continue right */
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">
+                {selectedServices.length} {selectedServices.length !== 1 ? t("serviceCount") : t("service")}
+              </p>
+              <p className="text-lg font-bold">₪{total}</p>
+            </div>
+            <button
+              disabled={!canProceed}
+              onClick={handleNext}
+              className={cn(
+                "px-8 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.97] bg-accent text-accent-foreground",
+                !canProceed && "opacity-40 pointer-events-none"
+              )}
+            >
               {t("continue")}
             </button>
-          ) : (
-            <button onClick={handleConfirm} disabled={loading}
-              className="px-8 py-3 rounded-2xl bg-accent text-accent-foreground text-sm font-semibold active:scale-[0.97] transition-transform disabled:opacity-50">
-              {loading ? "..." : t("confirmBooking")}
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
