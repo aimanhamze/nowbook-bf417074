@@ -1,8 +1,10 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Provider, Service } from "@/lib/mock-data";
 import type { Lang } from "@/lib/translations";
 import type { SocialLinks } from "@/lib/socialLinks";
+import type { AvailabilityRow } from "@/lib/providerStatus";
 
 export interface DbProvider {
   id: string;
@@ -144,6 +146,74 @@ export function usePublicProviderSchedule(providerId: string | undefined) {
   return {
     availability: availabilityQuery.data || [],
     blockedDates: blockedDatesQuery.data || [],
+    isLoading: availabilityQuery.isLoading || blockedDatesQuery.isLoading,
+  };
+}
+
+export interface ProviderSchedule {
+  availability: AvailabilityRow[];
+  blockedDates: string[];
+}
+
+/**
+ * Batched schedule fetch for ALL providers — used by the Home page to render
+ * open/closed status pills without an N+1 per-provider query. Two round-trips
+ * total (availability + future blocked dates), grouped by provider_id in JS.
+ */
+export function useAllProviderSchedules() {
+  const availabilityQuery = useQuery({
+    queryKey: ["all-provider-availability"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("provider_availability")
+        .select("provider_id, day_of_week, start_time, end_time, is_available");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const blockedDatesQuery = useQuery({
+    queryKey: ["all-provider-blocked-dates"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from("provider_blocked_dates")
+        .select("provider_id, blocked_date")
+        .gte("blocked_date", today);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const schedulesByProviderId = useMemo(() => {
+    const map = new Map<string, ProviderSchedule>();
+    const ensure = (id: string): ProviderSchedule => {
+      let entry = map.get(id);
+      if (!entry) {
+        entry = { availability: [], blockedDates: [] };
+        map.set(id, entry);
+      }
+      return entry;
+    };
+
+    for (const row of availabilityQuery.data || []) {
+      ensure(row.provider_id).availability.push({
+        day_of_week: row.day_of_week,
+        start_time: row.start_time,
+        end_time: row.end_time,
+        is_available: row.is_available,
+      });
+    }
+    for (const row of blockedDatesQuery.data || []) {
+      ensure(row.provider_id).blockedDates.push(row.blocked_date);
+    }
+    return map;
+  }, [availabilityQuery.data, blockedDatesQuery.data]);
+
+  return {
+    schedulesByProviderId,
     isLoading: availabilityQuery.isLoading || blockedDatesQuery.isLoading,
   };
 }

@@ -24,9 +24,9 @@ export function CategoryRow({ filter }: CategoryRowProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.06, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           onClick={() => navigate(`/explore?category=${cat.id}`)}
-          className="flex flex-col items-center gap-2.5 min-w-[80px] py-3.5 px-2.5 rounded-2xl bg-card border border-border/50 shadow-sm hover:bg-accent/5 hover:border-accent/20 transition-colors active:scale-95"
+          className="glass-card-md flex flex-col items-center gap-2.5 min-w-[80px] py-3.5 px-2.5 rounded-2xl hover:bg-accent/[0.08] transition-colors active:scale-95"
         >
-          <div className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center text-lg shrink-0">
+          <div className="w-9 h-9 rounded-full bg-accent/15 flex items-center justify-center text-lg shrink-0">
             {cat.icon}
           </div>
           <span className="text-[11px] font-semibold tracking-tight text-foreground whitespace-nowrap">

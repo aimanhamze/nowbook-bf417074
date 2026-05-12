@@ -44,6 +44,17 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 24 80% 55%;
+
+    /* Home page warm-gradient atmosphere: peach → cream → soft lavender.
+       Kept as a single token so dark mode can swap stops in one place later. */
+    --bg-atmosphere:
+      linear-gradient(
+        180deg,
+        hsl(24 90% 94%) 0%,
+        hsl(40 30% 96%) 35%,
+        hsl(40 30% 96%) 60%,
+        hsl(265 45% 93%) 100%
+      );
   }
 }
 
@@ -76,6 +87,66 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Soft glassmorphism atom used on the Home page.
+     NOTE: This deliberately departs from Apple HIG `blur-purpose` guidance
+     (blur should signal modal/sheet dismissal). We accept the trade-off
+     because Dori ships as a PWA, not a native iOS app, and the warm
+     gradient + frosted surfaces is the chosen Home-page aesthetic.
+     Booking flow / Provider Detail / Booking Confirmed stay flat-white
+     for transactional clarity — do not adopt this utility there. */
+  .glass-card {
+    background-color: hsl(0 0% 100% / 0.65);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid hsl(0 0% 100% / 0.7);
+    box-shadow:
+      0 1px 2px rgba(40, 20, 10, 0.04),
+      0 18px 40px -22px rgba(120, 70, 30, 0.22);
+  }
+
+  .glass-card-md {
+    background-color: hsl(0 0% 100% / 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid hsl(0 0% 100% / 0.65);
+    box-shadow:
+      0 1px 2px rgba(40, 20, 10, 0.04),
+      0 10px 24px -16px rgba(120, 70, 30, 0.18);
+  }
+
+  /* Graceful fallback for browsers without backdrop-filter support
+     (older Android WebView, Firefox without layout.css.backdrop-filter.enabled).
+     Also fires when the user has Reduce Transparency enabled in macOS/iOS. */
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass-card,
+    .glass-card-md {
+      background-color: hsl(0 0% 100% / 0.9);
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .glass-card,
+    .glass-card-md {
+      background-color: hsl(0 0% 100% / 0.92);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
+  /* Horizontal snap-scroll rail for per-category provider lists.
+     RTL-correct via native flex + logical scroll behavior — no flex-row-reverse,
+     no dir-aware JS. Snap alignment is set per child via `snap-start`. */
+  .scroll-rail {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .scroll-rail::-webkit-scrollbar {
+    display: none;
   }
 }
 

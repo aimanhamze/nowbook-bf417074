@@ -75,3 +75,8 @@ Slot availability (`useRealAvailability()`): generates 15-min slots, filters ove
 
 ### Build
 Vite splits output into three manual chunks: `vendor-react`, `vendor-ui`, `vendor-supabase`. PWA via `vite-plugin-pwa` with Workbox autoUpdate strategy.
+
+## Known Issues — Follow-up
+
+- **`getProviderStatus` does not handle past-midnight closing times.** If `provider_availability.end_time` is e.g. `02:00` (next day), the helper compares `nowMins < 120` and reports closed all day. Affects Home status pills and Provider Detail status pill. Fix would need to detect `end_time < start_time` and treat as cross-midnight window.
+- **`getProviderStatus` does not handle mid-day breaks.** Schema is one row per `(provider_id, day_of_week)`, so a provider open `09:00–12:00` and `16:00–22:00` cannot be represented; the helper treats whatever single window is stored as contiguous. Schema + helper change required.
