@@ -269,6 +269,7 @@ export const translations = {
     viewProfile: "צפה בפרופיל",
     locateMe: "אתר אותי",
     kmAway: "{distance} ק״מ ממך",
+    shareLinkCopied: "הקישור הועתק",
   },
   ar: {
     appName: "Dori",
@@ -538,6 +539,7 @@ export const translations = {
     viewProfile: "عرض الملف الشخصي",
     locateMe: "حدد موقعي",
     kmAway: "{distance} كم منك",
+    shareLinkCopied: "تم نسخ الرابط",
   },
   en: {
     appName: "Dori",
@@ -807,6 +809,7 @@ export const translations = {
     viewProfile: "View profile",
     locateMe: "Locate me",
     kmAway: "{distance} km away",
+    shareLinkCopied: "Link copied!",
   },
 } as const;
 
