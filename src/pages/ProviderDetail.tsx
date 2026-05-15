@@ -12,7 +12,8 @@ import { BackArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { FaWhatsapp, FaInstagram, FaTiktok, FaFacebook, FaWaze } from "react-icons/fa6";
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import ReviewCard from "@/components/reviews/ReviewCard";
@@ -162,6 +163,25 @@ const ProviderDetail = () => {
     setCoverImgSrc("");
   };
 
+  const handleShare = useCallback(async () => {
+    const url = window.location.href;
+    const name = provider?.name ?? "";
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: name, url });
+        return;
+      } catch {
+        // user cancelled or share failed — fall through to clipboard
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(t("shareLinkCopied"));
+    } catch {
+      toast.error(url);
+    }
+  }, [provider?.name, t]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -234,7 +254,7 @@ const ProviderDetail = () => {
             <BackArrow variant="arrow" className="h-5 w-5" />
           </button>
           <div className="flex gap-2">
-            <button className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95">
+            <button onClick={handleShare} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95">
               <Share2 className="h-5 w-5" />
             </button>
             <button
