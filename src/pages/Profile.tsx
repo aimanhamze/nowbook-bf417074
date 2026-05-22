@@ -8,7 +8,7 @@ import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 const Profile = () => {
   const { lang, setLang, t } = useLang();
-  const { user, signOut } = useAuth();
+  const { user, signOut, isProvider } = useAuth();
   const navigate = useNavigate();
   const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
 
@@ -30,7 +30,7 @@ const Profile = () => {
 
   const menuItems = [
     { icon: user ? LogOut : LogIn, label: user ? t("signOut") : t("signInUp"), action: handleSignInOut },
-    ...(user ? [{ icon: Briefcase, label: t("providerDashboard"), action: () => navigate("/dashboard") }] : []),
+    ...(user && isProvider ? [{ icon: Briefcase, label: t("providerDashboard"), action: () => navigate("/dashboard") }] : []),
     ...(user ? [{ icon: Bell, label: t("notificationsLabel"), action: () => navigate("/notifications") }] : []),
     ...(user && isSupported ? [{
       icon: isSubscribed ? Bell : BellOff,
