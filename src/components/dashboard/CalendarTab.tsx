@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday } from "date-fns";
 import { he } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, User, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, User, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/contexts/LangContext";
@@ -10,6 +10,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+
+function toWhatsAppUrl(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  const local = digits.startsWith("0") ? digits.slice(1) : digits;
+  return `https://wa.me/972${local}`;
+}
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   confirmed: { label: "מאושר", className: "bg-emerald-500/15 text-emerald-700 border-emerald-200" },
@@ -45,11 +51,25 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
           <p className="text-sm font-semibold truncate">
             {booking.customer_name || booking.customer_phone || "לקוח אנונימי"}
           </p>
-          {booking.customer_name && booking.customer_phone && (
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Phone className="h-3 w-3" />
-              {booking.customer_phone}
-            </p>
+          {booking.customer_phone && (
+            <div className="flex items-center gap-2 mt-0.5">
+              <a
+                href={`tel:${booking.customer_phone}`}
+                className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
+              >
+                <Phone className="h-3 w-3" />
+                {booking.customer_phone}
+              </a>
+              <a
+                href={toWhatsAppUrl(booking.customer_phone)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-emerald-600 flex items-center gap-0.5 hover:text-emerald-700 transition-colors"
+              >
+                <MessageCircle className="h-3 w-3" />
+                WhatsApp
+              </a>
+            </div>
           )}
         </div>
         <Badge variant="outline" className={`text-[10px] shrink-0 ${status.className}`}>
@@ -165,8 +185,25 @@ function GroupClassCard({ time, bookings, serviceName, maxCapacity, index }: {
                     <p className="text-sm font-medium truncate">
                       {b.customer_name || b.customer_phone || "לקוח אנונימי"}
                     </p>
-                    {b.customer_name && b.customer_phone && (
-                      <p className="text-xs text-muted-foreground">{b.customer_phone}</p>
+                    {b.customer_phone && (
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <a
+                          href={`tel:${b.customer_phone}`}
+                          className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
+                        >
+                          <Phone className="h-3 w-3" />
+                          {b.customer_phone}
+                        </a>
+                        <a
+                          href={toWhatsAppUrl(b.customer_phone)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-emerald-600 flex items-center gap-0.5 hover:text-emerald-700 transition-colors"
+                        >
+                          <MessageCircle className="h-3 w-3" />
+                          WhatsApp
+                        </a>
+                      </div>
                     )}
                   </div>
                   {isCancelled ? (
