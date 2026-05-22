@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 function toWhatsAppUrl(phone: string): string {
   const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("972")) return `https://wa.me/${digits}`;
   const local = digits.startsWith("0") ? digits.slice(1) : digits;
   return `https://wa.me/972${local}`;
 }

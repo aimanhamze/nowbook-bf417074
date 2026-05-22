@@ -26,6 +26,13 @@ function toE164(display: string): string {
   return `+972${digits}`;
 }
 
+function e164ToLocal(e164: string): string {
+  const digits = e164.replace(/\D/g, "");
+  const local = digits.startsWith("972") ? "0" + digits.slice(3) : digits;
+  if (local.length === 10) return `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`;
+  return local;
+}
+
 function isValidIsraeliPhone(display: string): boolean {
   const digits = display.replace(/\D/g, "");
   return /^0[5-9]\d{8}$/.test(digits);
@@ -113,9 +120,17 @@ const Auth = () => {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("display_name")
+      .select("display_name, phone")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    // Sync phone from auth to profiles if not already stored
+    if (user.phone && !profile?.phone) {
+      await supabase
+        .from("profiles")
+        .update({ phone: e164ToLocal(user.phone) })
+        .eq("user_id", user.id);
+    }
 
     if (!profile?.display_name) {
       setShowWelcome(true);
@@ -222,7 +237,9 @@ const Auth = () => {
     setWelcomeLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { error } = await supabase.from("profiles").update({ display_name: name }).eq("user_id", user.id);
+      const updates: Record<string, string> = { display_name: name };
+      if (user.phone) updates.phone = e164ToLocal(user.phone);
+      const { error } = await supabase.from("profiles").update(updates).eq("user_id", user.id);
       if (error) { toast.error(error.message); setWelcomeLoading(false); return; }
     }
     setWelcomeLoading(false);
