@@ -5,6 +5,8 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const Profile = () => {
   const { lang, setLang, t } = useLang();
@@ -42,7 +44,21 @@ const Profile = () => {
     { icon: HelpCircle, label: t("helpSupport") },
   ];
 
-  const displayName = user?.user_metadata?.full_name || user?.phone || t("guest");
+  const { data: profileData } = useQuery({
+    queryKey: ["user-profile", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("user_id", user.id)
+        .single();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const displayName = profileData?.display_name || user?.user_metadata?.full_name || t("guest");
   const subtitle = user ? (user.phone || user.email || "") : t("signInToManage");
 
   return (

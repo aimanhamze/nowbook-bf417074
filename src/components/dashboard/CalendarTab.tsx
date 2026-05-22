@@ -42,8 +42,10 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
           <AvatarFallback className="bg-accent/10 text-accent text-sm font-bold">{initials}</AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate">{booking.customer_name || "לקוח אנונימי"}</p>
-          {booking.customer_phone && (
+          <p className="text-sm font-semibold truncate">
+            {booking.customer_name || booking.customer_phone || "לקוח אנונימי"}
+          </p>
+          {booking.customer_name && booking.customer_phone && (
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Phone className="h-3 w-3" />
               {booking.customer_phone}
@@ -160,8 +162,10 @@ function GroupClassCard({ time, bookings, serviceName, maxCapacity, index }: {
                     <AvatarFallback className="bg-accent/10 text-accent text-xs font-bold">{initials}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{b.customer_name || "לקוח אנונימי"}</p>
-                    {b.customer_phone && (
+                    <p className="text-sm font-medium truncate">
+                      {b.customer_name || b.customer_phone || "לקוח אנונימי"}
+                    </p>
+                    {b.customer_name && b.customer_phone && (
                       <p className="text-xs text-muted-foreground">{b.customer_phone}</p>
                     )}
                   </div>
