@@ -29,7 +29,24 @@ const BookingConfirmed = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-12 bg-gradient-to-b from-accent/[0.07] via-transparent to-transparent">
+    <div
+      className="relative min-h-screen overflow-x-clip flex flex-col items-center justify-center px-5 py-12"
+      style={{ background: "var(--bg-atmosphere)" }}
+    >
+      {/* Radial accent glows — positioned to bleed around the hero stack
+          (success affordance + headline + cards) which sits vertically centered. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[4rem] [inset-inline-end:-5rem] h-[22rem] w-[22rem] rounded-full blur-3xl opacity-55"
+        style={{ background: "radial-gradient(circle, hsl(24 95% 78% / 0.55) 0%, transparent 65%)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-[2rem] [inset-inline-start:-6rem] h-[26rem] w-[26rem] rounded-full blur-3xl opacity-45"
+        style={{ background: "radial-gradient(circle, hsl(265 60% 80% / 0.45) 0%, transparent 65%)" }}
+      />
+
+      <div className="relative w-full flex flex-col items-center">
 
       {/* ── Success affordance ── */}
       {/* 0ms: checkmark scales in; 200ms: ripple blooms and dissipates */}
@@ -69,7 +86,7 @@ const BookingConfirmed = () => {
         transition={{ delay: 0.6, duration: 0.5, ...SPRING }}
       >
         {/* Zone A — Booking hero */}
-        <div className="rounded-3xl bg-card p-6 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.12)] text-center">
+        <div className="glass-card rounded-3xl p-6 text-center">
           <p className="text-xs font-semibold text-accent uppercase tracking-widest mb-2">
             {state.provider}
           </p>
@@ -82,7 +99,7 @@ const BookingConfirmed = () => {
         </div>
 
         {/* Zone B — Service + price */}
-        <div className="rounded-2xl border border-border/60 bg-card p-5 space-y-3">
+        <div className="glass-card rounded-2xl p-5 space-y-3">
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">
               {t("services")}
@@ -100,7 +117,7 @@ const BookingConfirmed = () => {
 
         {/* Group notice */}
         {state.isGroup && state.participantCount !== undefined && (
-          <div className="p-3 rounded-xl bg-secondary border border-border/60 flex items-center gap-2 text-sm text-foreground/70">
+          <div className="surface-soft p-3 rounded-xl flex items-center gap-2 text-sm text-foreground/70">
             <Users className="h-4 w-4 text-accent shrink-0" />
             <p className="font-medium">
               {t("joinedClass")} · {state.participantCount} {t("classParticipants")}
@@ -122,13 +139,14 @@ const BookingConfirmed = () => {
         </motion.button>
         <motion.button
           onClick={() => navigate("/")}
-          className="w-full py-3 rounded-2xl border border-border/60 text-sm font-medium text-foreground/70 active:scale-[0.98] transition-transform"
+          className="w-full py-3 rounded-2xl border border-white/60 bg-white/40 text-sm font-medium text-foreground/70 active:scale-[0.98] transition-transform"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.9, duration: 0.4, ...SPRING }}
         >
           {t("backToHome")}
         </motion.button>
+      </div>
       </div>
     </div>
   );

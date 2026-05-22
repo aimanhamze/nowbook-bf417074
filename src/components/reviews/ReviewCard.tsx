@@ -15,7 +15,7 @@ const ReviewCard = ({ review, index = 0 }: ReviewCardProps) => {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.08, duration: 0.4 }}
-      className="p-4 rounded-xl bg-secondary/60"
+      className="surface-soft p-4 rounded-xl"
     >
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-sm font-semibold">

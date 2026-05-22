@@ -89,13 +89,21 @@
     text-wrap: balance;
   }
 
-  /* Soft glassmorphism atom used on the Home page.
-     NOTE: This deliberately departs from Apple HIG `blur-purpose` guidance
-     (blur should signal modal/sheet dismissal). We accept the trade-off
-     because Dori ships as a PWA, not a native iOS app, and the warm
-     gradient + frosted surfaces is the chosen Home-page aesthetic.
-     Booking flow / Provider Detail / Booking Confirmed stay flat-white
-     for transactional clarity — do not adopt this utility there. */
+  /*
+   * Glass surfaces — applied across customer-facing pages.
+   * Originally restricted to Home (editorial direction for booking flow);
+   * extended to Provider Detail + Booking Flow Steps 1–3 for end-to-end
+   * visual consistency on the warm-gradient atmosphere.
+   *
+   * Tier-1 (.glass-card / .glass-card-md): hero surfaces with backdrop-filter.
+   *   Use sparingly — keep < 10 per page. Never nest.
+   * Tier-2 (.surface-soft): list items and repeated cards. No backdrop-filter,
+   *   so it is cheap at any quantity (service cards, slot cells, reviews).
+   *   Reads as glass via translucency layered on the warm gradient.
+   *
+   * Conversion-critical CTAs (Book / Confirm buttons) stay SOLID accent
+   * with accent-glow shadow. Glass is for atmosphere, not commitments.
+   */
   .glass-card {
     background-color: hsl(0 0% 100% / 0.65);
     backdrop-filter: blur(24px);
@@ -116,6 +124,16 @@
       0 10px 24px -16px rgba(120, 70, 30, 0.18);
   }
 
+  /* Tier-2: no backdrop-filter. Safe to use in lists and grids where
+     Tier-1 would exceed the per-page blur budget. */
+  .surface-soft {
+    background-color: hsl(0 0% 100% / 0.7);
+    border: 1px solid hsl(0 0% 100% / 0.6);
+    box-shadow:
+      0 1px 2px rgba(40, 20, 10, 0.03),
+      0 6px 16px -10px rgba(120, 70, 30, 0.15);
+  }
+
   /* Graceful fallback for browsers without backdrop-filter support
      (older Android WebView, Firefox without layout.css.backdrop-filter.enabled).
      Also fires when the user has Reduce Transparency enabled in macOS/iOS. */
@@ -132,6 +150,9 @@
       background-color: hsl(0 0% 100% / 0.92);
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
+    }
+    .surface-soft {
+      background-color: hsl(0 0% 100% / 0.92);
     }
   }
 
