@@ -250,10 +250,26 @@ const BookAppointment = () => {
   const stepLabels = [t("selectServices"), t("selectDate"), t("confirm")];
 
   return (
-    <div className="min-h-screen pb-32">
+    <div
+      className="relative min-h-screen overflow-x-clip pb-32"
+      style={{ background: "var(--bg-atmosphere)" }}
+    >
+      {/* Radial accent glows — positioned to sit behind content (header is
+          small, sticky bar is bottom) without bleeding into the sticky bar. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[6rem] [inset-inline-end:-5rem] h-[22rem] w-[22rem] rounded-full blur-3xl opacity-55"
+        style={{ background: "radial-gradient(circle, hsl(24 95% 78% / 0.55) 0%, transparent 65%)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[24rem] [inset-inline-start:-6rem] h-[26rem] w-[26rem] rounded-full blur-3xl opacity-45"
+        style={{ background: "radial-gradient(circle, hsl(265 60% 80% / 0.45) 0%, transparent 65%)" }}
+      />
 
+      <div className="relative">
       {/* ── Header ── */}
-      <header className="px-5 pt-10 pb-6 bg-gradient-to-b from-accent/[0.07] to-transparent rounded-b-[2rem]">
+      <header className="px-5 pt-10 pb-6">
         <div className="flex items-center gap-3">
           <button
             onClick={() => (step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3) : navigate(-1))}
@@ -312,7 +328,7 @@ const BookAppointment = () => {
                       "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
                       isSelected
                         ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
-                        : "border-border/60 bg-card hover:border-accent/30"
+                        : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] hover:border-accent/30"
                     )}
                   >
                     <div className="text-right flex-1 min-w-0">
@@ -397,7 +413,7 @@ const BookAppointment = () => {
                           "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
                           isSelected
                             ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
-                            : "border-border/60 bg-card hover:border-accent/30",
+                            : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] hover:border-accent/30",
                           isPast && "opacity-40 cursor-not-allowed"
                         )}
                       >
@@ -435,7 +451,7 @@ const BookAppointment = () => {
                     );
                   })}
                   {serviceSessions.filter(s => new Date(s.session_date + "T" + s.session_time) >= new Date(now.getTime() + minLeadTimeMinutes * 60 * 1000)).length === 0 && (
-                    <div className="rounded-2xl bg-secondary p-8 text-center">
+                    <div className="glass-card-md rounded-2xl p-8 text-center">
                       <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
                       <p className="text-sm text-muted-foreground">אין מפגשים זמינים כרגע</p>
                     </div>
@@ -458,10 +474,10 @@ const BookAppointment = () => {
                           key={date.toISOString()}
                           onClick={() => { setSelectedDate(date); setSelectedTime(""); }}
                           className={cn(
-                            "flex flex-col items-center min-w-[60px] py-2.5 px-3 rounded-xl transition-all",
+                            "flex flex-col items-center min-w-[60px] py-2.5 px-3 rounded-xl border transition-all",
                             isSelected
-                              ? "bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.35)]"
-                              : "bg-secondary text-foreground"
+                              ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.35)]"
+                              : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)]"
                           )}
                         >
                           <span className="text-[10px] font-medium uppercase">{format(date, "EEE", { locale: dateFnsLocale })}</span>
@@ -488,14 +504,14 @@ const BookAppointment = () => {
                             onClick={() => !slotInfo.isFull && setSelectedTime(slotInfo.time)}
                             disabled={slotInfo.isFull}
                             className={cn(
-                              "py-3 px-1 rounded-2xl text-sm font-semibold transition-all active:scale-95 flex flex-col items-center gap-1",
+                              "py-3 px-1 rounded-2xl text-sm font-semibold transition-all active:scale-95 flex flex-col items-center gap-1 border",
                               selectedTime === slotInfo.time
-                                ? "bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
+                                ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
                                 : slotInfo.isFull
-                                ? "bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
+                                ? "border-transparent bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
                                 : slotInfo.spotsLeft === 1
-                                ? "bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100"
-                                : "bg-secondary text-foreground hover:bg-secondary/80"
+                                ? "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+                                : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)] hover:bg-white/80"
                             )}
                           >
                             <span>{slotInfo.time}</span>
@@ -524,7 +540,7 @@ const BookAppointment = () => {
                         ))}
                       </div>
                     ) : (
-                      <div className="rounded-2xl bg-secondary p-8 text-center">
+                      <div className="glass-card-md rounded-2xl p-8 text-center">
                         <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
                         <p className="text-sm text-muted-foreground">
                           {allGroupSlotsPassed ? t("noSlotsToday") : t("unavailable")}
@@ -539,10 +555,10 @@ const BookAppointment = () => {
                             key={slot}
                             onClick={() => setSelectedTime(slot)}
                             className={cn(
-                              "py-3 rounded-2xl text-sm font-semibold transition-all active:scale-95",
+                              "py-3 rounded-2xl text-sm font-semibold transition-all active:scale-95 border",
                               selectedTime === slot
-                                ? "bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
-                                : "bg-secondary text-foreground hover:bg-secondary/80"
+                                ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
+                                : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)] hover:bg-white/80"
                             )}
                           >
                             {slot}
@@ -550,7 +566,7 @@ const BookAppointment = () => {
                         ))}
                       </div>
                     ) : (
-                      <div className="rounded-2xl bg-secondary p-8 text-center">
+                      <div className="glass-card-md rounded-2xl p-8 text-center">
                         <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
                         <p className="text-sm text-muted-foreground">
                           {allSlotsPassed ? t("noSlotsToday") : t("unavailable")}
@@ -579,7 +595,7 @@ const BookAppointment = () => {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ ...SPRING, delay: 0.08 }}
-              className="rounded-3xl bg-card p-6 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.12)] text-center"
+              className="glass-card rounded-3xl p-6 text-center"
             >
               <p className="text-xs font-semibold text-accent uppercase tracking-widest mb-2">
                 {format(parseISO(effectiveDate), "EEEE", { locale: dateFnsLocale })}
@@ -597,7 +613,7 @@ const BookAppointment = () => {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ ...SPRING, delay: 0.14 }}
-              className="rounded-2xl border border-border/60 bg-card p-5 space-y-3"
+              className="glass-card rounded-2xl p-5 space-y-3"
             >
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{t("provider")}</p>
@@ -630,7 +646,7 @@ const BookAppointment = () => {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ ...SPRING, delay: 0.18 }}
-                className="p-3 rounded-xl bg-secondary border border-border/60 flex items-center gap-2 text-sm text-foreground/70"
+                className="surface-soft p-3 rounded-xl flex items-center gap-2 text-sm text-foreground/70"
               >
                 <Users className="h-4 w-4 text-accent shrink-0" />
                 <span>{t("groupClass")} · {t("maxCapacity")}: {groupMaxCapacity}</span>
@@ -642,7 +658,7 @@ const BookAppointment = () => {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ ...SPRING, delay: isGroupBooking ? 0.22 : 0.18 }}
-              className="p-4 rounded-xl bg-accent/[0.08] border border-accent/20 text-sm text-foreground/70"
+              className="p-4 rounded-xl bg-accent/[0.1] border border-accent/20 backdrop-blur-md text-sm text-foreground/70"
             >
               {t("payAtVenue")}
             </motion.div>
@@ -651,7 +667,7 @@ const BookAppointment = () => {
       </AnimatePresence>
 
       {/* ── Bottom bar ── */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-card/80 backdrop-blur-xl border-t border-border">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/70 backdrop-blur-xl border-t border-white/40">
         {step === 3 ? (
           /* Step 3: price + provider name on top, full-width confirm below */
           <div>
@@ -682,14 +698,15 @@ const BookAppointment = () => {
               disabled={!canProceed}
               onClick={handleNext}
               className={cn(
-                "px-8 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.97] bg-accent text-accent-foreground",
-                !canProceed && "opacity-40 pointer-events-none"
+                "px-8 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.97] bg-accent text-accent-foreground shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)]",
+                !canProceed && "opacity-40 pointer-events-none shadow-none"
               )}
             >
               {t("continue")}
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

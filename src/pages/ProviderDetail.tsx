@@ -199,7 +199,24 @@ const ProviderDetail = () => {
   }
 
   return (
-    <div className="min-h-screen pb-36">
+    <div
+      className="relative min-h-screen overflow-x-clip pb-36"
+      style={{ background: "var(--bg-atmosphere)" }}
+    >
+      {/* Radial accent glows — anchored below the cover so they bleed around
+          the info card and into the services area, not behind the cover image. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[16rem] [inset-inline-end:-5rem] h-[24rem] w-[24rem] rounded-full blur-3xl opacity-55"
+        style={{ background: "radial-gradient(circle, hsl(24 95% 78% / 0.55) 0%, transparent 65%)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[44rem] [inset-inline-start:-6rem] h-[30rem] w-[30rem] rounded-full blur-3xl opacity-50"
+        style={{ background: "radial-gradient(circle, hsl(265 60% 80% / 0.45) 0%, transparent 65%)" }}
+      />
+
+      <div className="relative">
       {/* Cover */}
       <div className="relative h-72 overflow-hidden bg-gradient-to-br from-accent/15 via-secondary to-secondary/40">
         {coverImgSrc ? (
@@ -216,7 +233,9 @@ const ProviderDetail = () => {
             </span>
           </div>
         )}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/45 via-black/0 to-secondary/40" />
+        {/* Bottom of cover fades to transparent so the page atmosphere
+            shows through cleanly where the info card lands. */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/45 via-black/0 to-transparent" />
         {status.hasSchedule && (() => {
           const basePillClass = "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-md backdrop-blur-md";
           const statusPillClass = `${basePillClass} ${
@@ -274,7 +293,7 @@ const ProviderDetail = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
       >
-        <div className="rounded-3xl bg-card p-6 text-center shadow-[0_10px_40px_-12px_rgba(0,0,0,0.12)]">
+        <div className="glass-card rounded-3xl p-6 text-center">
           <h1 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">{provider.name[lang]}</h1>
           {reviewCount > 0 && (
             <div className="mb-3 flex items-center justify-center gap-1 text-sm text-muted-foreground">
@@ -402,7 +421,7 @@ const ProviderDetail = () => {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 + i * 0.06, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card p-4 transition-colors hover:border-accent/30"
+                className="surface-soft flex items-center justify-between gap-4 rounded-2xl p-4 transition-colors hover:border-accent/30"
               >
                 <div className="min-w-0 text-start">
                   <p className="truncate text-sm font-medium">{service.name[lang]}</p>
@@ -438,8 +457,8 @@ const ProviderDetail = () => {
 
       {/* Sticky Book Button */}
       <div className="fixed inset-x-0 bottom-0 z-50">
-        <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-background to-transparent" />
-        <div className="border-t border-border/60 bg-card/85 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl">
+        <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[hsl(40_30%_96%)] to-transparent" />
+        <div className="border-t border-white/40 bg-white/70 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl">
           <button
             onClick={() => navigate(`/provider/${provider.id}/book`)}
             className="w-full rounded-2xl bg-accent py-4 text-base font-semibold text-accent-foreground shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)] transition-transform active:scale-[0.98]"
@@ -447,6 +466,7 @@ const ProviderDetail = () => {
             {t("bookAppointment")}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

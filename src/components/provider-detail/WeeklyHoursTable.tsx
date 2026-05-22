@@ -34,7 +34,7 @@ export default function WeeklyHoursTable({ availability, status, t }: Props) {
   const orderedDows = Array.from({ length: 7 }, (_, i) => (todayDow + i) % 7);
 
   return (
-    <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)]">
+    <div className="glass-card rounded-2xl p-4">
       {/* Today row */}
       <div
         className={`flex items-center justify-between rounded-xl px-3 py-2.5 ${
