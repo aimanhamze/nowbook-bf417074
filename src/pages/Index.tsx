@@ -23,6 +23,14 @@ function sortFavoritesFirst(providers: Provider[], favoriteIds: string[]): Provi
   });
 }
 
+const getGreeting = (t: (key: string) => string): string => {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return t('goodMorning');
+  if (hour >= 12 && hour < 17) return t('goodAfternoon');
+  if (hour >= 17 && hour < 21) return t('goodEvening');
+  return t('goodNight');
+};
+
 const Index = () => {
   const { t } = useLang();
   const { isProvider, isAdmin, user } = useAuth();
@@ -89,7 +97,7 @@ const Index = () => {
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-foreground/50 mb-3">
-              {t("goodMorning")}
+              {getGreeting(t)}
             </p>
             <h1 className="text-[2.5rem] leading-[1.05] tracking-tight font-extrabold text-balance">
               {t("findAppointment")}<br />

@@ -4,6 +4,9 @@ export const translations = {
   he: {
     appName: "Dori",
     goodMorning: "בוקר טוב ☀️",
+    goodAfternoon: "צהריים טובים",
+    goodEvening: "ערב טוב",
+    goodNight: "לילה טוב",
     findAppointment: "מצא את התור",
     nextAppointment: "הבא שלך",
     browseByCategory: "חפש לפי קטגוריה",
@@ -274,6 +277,9 @@ export const translations = {
   ar: {
     appName: "Dori",
     goodMorning: "صباح الخير ☀️",
+    goodAfternoon: "مساء الخير",
+    goodEvening: "مساء النور",
+    goodNight: "تصبح على خير",
     findAppointment: "ابحث عن",
     nextAppointment: "موعدك القادم",
     browseByCategory: "تصفح حسب الفئة",
@@ -544,6 +550,9 @@ export const translations = {
   en: {
     appName: "Dori",
     goodMorning: "Good morning ☀️",
+    goodAfternoon: "Good Afternoon",
+    goodEvening: "Good Evening",
+    goodNight: "Good Night",
     findAppointment: "Find your next",
     nextAppointment: "appointment",
     browseByCategory: "Browse by category",
