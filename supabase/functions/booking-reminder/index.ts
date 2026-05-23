@@ -22,8 +22,22 @@ Deno.serve(async (req) => {
     const in60 = new Date(now.getTime() + 60 * 60 * 1000);
     const in75 = new Date(now.getTime() + 75 * 60 * 1000);
 
-    const todayStr = now.toISOString().split("T")[0];
-    const tomorrowStr = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    // Booking times are stored in Israel local time. Derive the current Israel
+    // UTC offset dynamically so DST transitions (Mar/Oct) are handled correctly.
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric", month: "numeric", day: "numeric",
+      hour: "numeric", minute: "numeric", hour12: false,
+    });
+    const parts = fmt.formatToParts(now);
+    const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0");
+    const israelMs = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+    const israelOffsetMs = israelMs - now.getTime(); // e.g. +10800000 for UTC+3
+
+    // Fetch today + tomorrow in Israel local time (covers midnight boundary)
+    const israelNow = new Date(now.getTime() + israelOffsetMs);
+    const todayStr = israelNow.toISOString().split("T")[0];
+    const tomorrowStr = new Date(israelNow.getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
     // Get bookings for today and tomorrow that are confirmed
     const { data: bookings, error: bErr } = await supabase
@@ -35,7 +49,9 @@ Deno.serve(async (req) => {
     if (bErr) throw bErr;
 
     const remindable = (bookings || []).filter((b) => {
-      const bookingDateTime = new Date(`${b.booking_date}T${b.booking_time}:00`);
+      // Parse stored local time, then convert to UTC for comparison
+      const bookingLocalMs = new Date(`${b.booking_date}T${b.booking_time}:00`).getTime();
+      const bookingDateTime = new Date(bookingLocalMs - israelOffsetMs);
       return bookingDateTime >= in60 && bookingDateTime < in75;
     });
 
