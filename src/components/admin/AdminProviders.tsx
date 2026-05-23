@@ -27,22 +27,13 @@ export function AdminProviders() {
 
   const deleteProvider = useMutation({
     mutationFn: async (provider: Tables<"provider_profiles">) => {
-      // Remove provider role
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", provider.user_id)
-        .eq("role", "provider");
-      if (roleError) throw roleError;
-
-      // Delete provider profile
-      const { data: deleted, error } = await supabase
-        .from("provider_profiles")
-        .delete()
-        .eq("id", provider.id)
-        .select("id");
-      if (error) throw error;
-      if (!deleted || deleted.length === 0) throw new Error("מחיקה נכשלה — אין הרשאה למחוק ספק זה");
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await supabase.functions.invoke("delete-provider", {
+        body: { user_id: provider.user_id },
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (res.error) throw res.error;
+      if (res.data?.error) throw new Error(res.data.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
