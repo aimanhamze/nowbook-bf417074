@@ -27,6 +27,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Nearby = lazy(() => import("./pages/Nearby"));
+const ProviderCalendar = lazy(() => import("./pages/ProviderCalendar"));
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,7 @@ function PageTitleUpdater() {
       "/auth": `Dori — ${t("signIn")}`,
       "/notifications": `Dori — ${t("notificationsLabel")}`,
       "/dashboard": `Dori — ${t("dashboard")}`,
+      "/calendar": `Dori — ${t("bookingsCalendar")}`,
       "/admin": `Dori — Admin`,
       "/booking-confirmed": `Dori — ${t("bookingConfirmed")}`,
     };
@@ -90,6 +92,7 @@ const App = () => (
                   <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   <Route path="/reset-password" element={<ErrorBoundary><ResetPassword /></ErrorBoundary>} />
                   <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Dashboard /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/calendar" element={<ProtectedRoute><ErrorBoundary><ProviderCalendar /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/notifications" element={<ProtectedRoute><ErrorBoundary><Notifications /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/admin" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
                   <Route path="/install" element={<ErrorBoundary><Install /></ErrorBoundary>} />
