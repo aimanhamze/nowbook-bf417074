@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderServices } from "@/hooks/useProviderServices";
+import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderSessions } from "@/hooks/useProviderSessions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -37,6 +38,8 @@ type AddSessionState = {
 
 export function ServicesTab() {
   const { t } = useLang();
+  const { profile } = useProviderProfile();
+  const isFitness = profile?.category === 'fitness_studio';
   const { services, isLoading, upsertService, deleteService } = useProviderServices();
   const { sessions, addSession, deleteSession } = useProviderSessions();
   const [editing, setEditing] = useState<EditState | null>(null);
@@ -153,37 +156,39 @@ export function ServicesTab() {
               <Input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />
             </div>
 
-            <div>
-              <Label className="mb-1.5 block">{t("serviceType")}</Label>
-              <div className="flex rounded-xl border border-border overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setEditing({ ...editing, service_type: 'private', max_capacity: 1 })}
-                  className={cn(
-                    "flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
-                    editing.service_type === 'private'
-                      ? "bg-accent text-accent-foreground"
-                      : "bg-card text-muted-foreground hover:bg-secondary"
-                  )}
-                >
-                  <User className="h-3.5 w-3.5" />
-                  {t("privateService")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing({ ...editing, service_type: 'group', max_capacity: Math.max(2, editing.max_capacity) })}
-                  className={cn(
-                    "flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
-                    editing.service_type === 'group'
-                      ? "bg-accent text-accent-foreground"
-                      : "bg-card text-muted-foreground hover:bg-secondary"
-                  )}
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  {t("groupClass")}
-                </button>
+            {isFitness && (
+              <div>
+                <Label className="mb-1.5 block">{t("serviceType")}</Label>
+                <div className="flex rounded-xl border border-border overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setEditing({ ...editing, service_type: 'private', max_capacity: 1 })}
+                    className={cn(
+                      "flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
+                      editing.service_type === 'private'
+                        ? "bg-accent text-accent-foreground"
+                        : "bg-card text-muted-foreground hover:bg-secondary"
+                    )}
+                  >
+                    <User className="h-3.5 w-3.5" />
+                    {t("privateService")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditing({ ...editing, service_type: 'group', max_capacity: Math.max(2, editing.max_capacity) })}
+                    className={cn(
+                      "flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
+                      editing.service_type === 'group'
+                        ? "bg-accent text-accent-foreground"
+                        : "bg-card text-muted-foreground hover:bg-secondary"
+                    )}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    {t("groupClass")}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -196,7 +201,7 @@ export function ServicesTab() {
               </div>
             </div>
 
-            {editing.service_type === 'group' && (
+            {isFitness && editing.service_type === 'group' && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}

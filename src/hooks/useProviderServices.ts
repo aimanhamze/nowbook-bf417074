@@ -33,12 +33,14 @@ export function useProviderServices() {
       scheduled_time?: string | null;
     }) => {
       if (!profile) throw new Error("No provider profile");
+      const isFitness = profile.category === 'fitness_studio';
+      const resolvedType = isFitness ? service.service_type : 'private';
       const payload = {
         name: service.name,
         duration: service.duration,
         price: service.price,
-        service_type: service.service_type,
-        max_capacity: service.service_type === 'group' ? service.max_capacity : 1,
+        service_type: resolvedType,
+        max_capacity: resolvedType === 'group' ? service.max_capacity : 1,
         scheduled_time: service.scheduled_time || null,
       };
       if (service.id) {
