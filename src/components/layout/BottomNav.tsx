@@ -32,7 +32,7 @@ export function BottomNav() {
   const navItems = isProvider
     ? [
         { icon: LayoutDashboard, label: t("providerDashboard"), path: "/dashboard" },
-        { icon: Search, label: t("explore"), path: "/explore" },
+        { icon: Calendar, label: t("calendar"), path: "/calendar" },
         { icon: Bell, label: t("notificationsLabel"), path: "/notifications", badge: unreadCount },
         { icon: User, label: t("profile"), path: "/profile" },
       ]
