@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
-import { categories } from "@/lib/mock-data";
+import { categories, categoryNames } from "@/lib/mock-data";
 import { buildSocialLinks } from "@/lib/socialLinks";
 import { toast } from "sonner";
 
@@ -45,7 +45,7 @@ const profileSchema = z.object({
 type FormValues = z.infer<typeof profileSchema>;
 
 export function BusinessProfileTab() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { profile, upsertProfile, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
 
   const [accordionValue, setAccordionValue] = useState("");
@@ -181,12 +181,6 @@ export function BusinessProfileTab() {
     }
   };
 
-  const categoryLabels: Record<string, string> = {
-    barber: t("barber"), salon: t("salon"), nails: t("nails"),
-    brows: t("brows"), spa: t("spa"), skincare: t("skincare"),
-    makeup: t("makeup") || "איפור",
-  };
-
   const coverPreview = profile?.cover_image?.trim() || "";
   const businessInitial = (watch("business_name") || profile?.business_name || "?")
     .trim()
@@ -261,7 +255,7 @@ export function BusinessProfileTab() {
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {categories.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.icon} {categoryLabels[c.id]}</SelectItem>
+                <SelectItem key={c.id} value={c.id}>{c.icon} {categoryNames[c.id]?.[lang]}</SelectItem>
               ))}
             </SelectContent>
           </Select>
