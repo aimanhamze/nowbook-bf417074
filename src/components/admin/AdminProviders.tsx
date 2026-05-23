@@ -36,11 +36,13 @@ export function AdminProviders() {
       if (roleError) throw roleError;
 
       // Delete provider profile
-      const { error } = await supabase
+      const { data: deleted, error } = await supabase
         .from("provider_profiles")
         .delete()
-        .eq("id", provider.id);
+        .eq("id", provider.id)
+        .select("id");
       if (error) throw error;
+      if (!deleted || deleted.length === 0) throw new Error("מחיקה נכשלה — אין הרשאה למחוק ספק זה");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
