@@ -168,16 +168,21 @@ function BookingCard({ booking, index, getProviderName, getServiceNames, provide
         queryClient.invalidateQueries({ queryKey: ["notifications"] });
       }
 
-      // Notify provider about customer cancellation (best-effort, non-blocking)
-      supabase.functions.invoke("send-push", {
-        body: {
-          provider_id: booking.provider_id,
+      // Notify provider about customer cancellation
+      const { data: providerProfile } = await supabase
+        .from("provider_profiles")
+        .select("user_id")
+        .eq("id", booking.provider_id)
+        .single();
+      if (providerProfile?.user_id) {
+        await supabase.from("notifications").insert({
+          user_id: providerProfile.user_id,
           title: "תור בוטל ❌",
           body: `לקוח ביטל תור בתאריך ${booking.booking_date} בשעה ${booking.booking_time}`,
           url: "/dashboard",
           type: "booking_cancelled",
-        },
-      }).catch(() => { /* best-effort — provider will see updated calendar */ });
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bookings"] });

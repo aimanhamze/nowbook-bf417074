@@ -97,15 +97,13 @@ export function useCancelBooking() {
           .eq("id", booking.provider_id)
           .single();
 
-        supabase.functions.invoke("notify-user", {
-          body: {
-            user_id: booking.user_id,
-            title: "התור בוטל ❌",
-            body: `התור ב-${provider?.business_name || "העסק"} בתאריך ${booking.booking_date} בשעה ${booking.booking_time} בוטל על ידי הספק`,
-            url: "/bookings",
-            type: "booking_cancelled",
-          },
-        }).catch(() => { /* best-effort */ });
+        await supabase.from("notifications").insert({
+          user_id: booking.user_id,
+          title: "התור בוטל ❌",
+          body: `התור ב-${provider?.business_name || "העסק"} בתאריך ${booking.booking_date} בשעה ${booking.booking_time} בוטל על ידי הספק`,
+          url: "/bookings",
+          type: "booking_cancelled",
+        });
       }
     },
     onSuccess: () => {
@@ -118,44 +116,35 @@ export function useCancelGroupClass() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (bookingIds: string[]) => {
+      // Fetch all participant data before cancelling
+      const { data: allBookings } = await supabase
+        .from("bookings")
+        .select("user_id, booking_date, booking_time, provider_id")
+        .in("id", bookingIds);
+
       const { error } = await supabase
         .from("bookings")
         .update({ status: "cancelled" })
         .in("id", bookingIds);
       if (error) throw error;
 
-      // Notify all participants
-      const { data: bookings } = await supabase
-        .from("bookings")
-        .select("user_id, booking_date, booking_time, provider_id")
-        .in("id", bookingIds)
-        .limit(1);
-
-      if (bookings?.[0]) {
+      if (allBookings?.length) {
+        const first = allBookings[0];
         const { data: provider } = await supabase
           .from("provider_profiles")
           .select("business_name")
-          .eq("id", bookings[0].provider_id)
+          .eq("id", first.provider_id)
           .single();
 
-        for (const id of bookingIds) {
-          const { data: b } = await supabase
-            .from("bookings")
-            .select("user_id")
-            .eq("id", id)
-            .single();
-          if (b) {
-            supabase.functions.invoke("notify-user", {
-              body: {
-                user_id: b.user_id,
-                title: "השיעור בוטל ❌",
-                body: `השיעור ב-${provider?.business_name || "העסק"} בתאריך ${bookings[0].booking_date} בשעה ${bookings[0].booking_time} בוטל`,
-                url: "/bookings",
-                type: "booking_cancelled",
-              },
-            }).catch(() => { /* best-effort */ });
-          }
-        }
+        await supabase.from("notifications").insert(
+          allBookings.map(b => ({
+            user_id: b.user_id,
+            title: "השיעור בוטל ❌",
+            body: `השיעור ב-${provider?.business_name || "העסק"} בתאריך ${first.booking_date} בשעה ${first.booking_time} בוטל`,
+            url: "/bookings",
+            type: "booking_cancelled",
+          }))
+        );
       }
     },
     onSuccess: () => {
