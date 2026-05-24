@@ -191,12 +191,10 @@ const BookAppointment = () => {
         booking_date: effectiveDate,
         booking_time: effectiveTime,
         total_price: total,
-        status: "confirmed",
+        status: "pending",
       });
       setLoading(false);
       if (error) {
-        // Mirrors the LEAD_TIME_VIOLATION pattern. If you add similar exception
-        // types, follow the same handling shape.
         if (error.message === "LEAD_TIME_VIOLATION") {
           const leadTimeLabels: Record<number, string> = {
             15: t("leadTime15"), 30: t("leadTime30"), 60: t("leadTime60"),
@@ -213,22 +211,45 @@ const BookAppointment = () => {
         return;
       }
 
-      await supabase.from("notifications").insert({
-        user_id: user.id,
-        title: isGroupBooking ? "הצטרפת לשיעור! ✅" : "התור נקבע בהצלחה! ✅",
-        body: `${isGroupBooking ? "שיעור" : "תור"} ל-${provider.name[lang]} ב-${format(parseISO(effectiveDate), "dd/MM")} בשעה ${effectiveTime}`,
-        url: `/provider/${id}`,
-        type: "booking_confirmed",
-      });
+      // Fetch customer name + provider user_id in parallel for notifications
+      const [{ data: customerProfile }, { data: providerProfile }] = await Promise.all([
+        supabase.from("profiles").select("display_name").eq("user_id", user.id).single(),
+        supabase.from("provider_profiles").select("user_id").eq("id", provider.id).single(),
+      ]);
+      const customerName = customerProfile?.display_name || "לקוח";
+      const serviceName = selectedServices[0]?.name[lang] || "";
+      const dateStr = format(parseISO(effectiveDate), "dd/MM");
+
+      await Promise.all([
+        // Notify customer — booking is pending
+        supabase.from("notifications").insert({
+          user_id: user.id,
+          title: "בקשת תור נשלחה ⏳",
+          body: `הבקשה ל-${provider.name[lang]} ב-${dateStr} בשעה ${effectiveTime} ממתינה לאישור`,
+          url: "/bookings",
+          type: "booking_pending",
+        }),
+        // Notify provider in DB
+        providerProfile?.user_id
+          ? supabase.from("notifications").insert({
+              user_id: providerProfile.user_id,
+              title: t("newBookingRequest"),
+              body: `${customerName} ביקש תור ל-${serviceName} בתאריך ${dateStr} בשעה ${effectiveTime}`,
+              url: "/calendar",
+              type: "booking_new",
+            })
+          : Promise.resolve(),
+      ]);
       queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
 
+      // Push notification to provider
       await supabase.functions.invoke("send-push", {
         body: {
           provider_id: provider.id,
-          title: isGroupBooking ? "משתתף חדש לשיעור! 👥" : "הזמנה חדשה! 🎉",
-          body: `${format(parseISO(effectiveDate), "dd/MM")} בשעה ${effectiveTime}`,
-          url: "/dashboard",
+          title: t("newBookingRequest"),
+          body: `${customerName} ביקש תור ל-${serviceName} ב-${dateStr} בשעה ${effectiveTime}`,
+          url: "/calendar",
           type: "booking_new",
         },
       });

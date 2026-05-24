@@ -168,3 +168,79 @@ export function useDeleteBooking() {
     },
   });
 }
+
+export function useApproveBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { data: booking } = await supabase
+        .from("bookings")
+        .select("user_id, booking_date, booking_time, provider_id")
+        .eq("id", bookingId)
+        .single();
+
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: "confirmed" })
+        .eq("id", bookingId);
+      if (error) throw error;
+
+      if (booking) {
+        const { data: provider } = await supabase
+          .from("provider_profiles")
+          .select("business_name")
+          .eq("id", booking.provider_id)
+          .single();
+
+        await supabase.from("notifications").insert({
+          user_id: booking.user_id,
+          title: "התור שלך אושר! 📅",
+          body: `התור ב-${provider?.business_name || "העסק"} בתאריך ${booking.booking_date} בשעה ${booking.booking_time} אושר`,
+          url: "/bookings",
+          type: "booking_confirmed",
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
+    },
+  });
+}
+
+export function useRejectBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { data: booking } = await supabase
+        .from("bookings")
+        .select("user_id, booking_date, booking_time, provider_id")
+        .eq("id", bookingId)
+        .single();
+
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: "cancelled" })
+        .eq("id", bookingId);
+      if (error) throw error;
+
+      if (booking) {
+        const { data: provider } = await supabase
+          .from("provider_profiles")
+          .select("business_name")
+          .eq("id", booking.provider_id)
+          .single();
+
+        await supabase.from("notifications").insert({
+          user_id: booking.user_id,
+          title: "התור שלך נדחה ❌",
+          body: `הבקשה ב-${provider?.business_name || "העסק"} לתאריך ${booking.booking_date} נדחתה. ניתן לקבוע תור חדש`,
+          url: "/bookings",
+          type: "booking_cancelled",
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
+    },
+  });
+}

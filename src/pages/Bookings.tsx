@@ -202,9 +202,15 @@ function BookingCard({ booking, index, getProviderName, getServiceNames, provide
         <div className="flex justify-between items-start">
           <p className="font-semibold text-sm">{getProviderName(booking.provider_id)}</p>
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-            booking.status === "confirmed" ? "bg-green-100 text-green-700" : booking.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-secondary text-muted-foreground"
+            booking.status === "confirmed" ? "bg-green-100 text-green-700" :
+            booking.status === "cancelled" ? "bg-red-100 text-red-700" :
+            booking.status === "pending" ? "bg-amber-100 text-amber-700" :
+            "bg-secondary text-muted-foreground"
           }`}>
-            {booking.status === "confirmed" ? t("confirmed") : booking.status === "cancelled" ? t("cancelled") : booking.status}
+            {booking.status === "confirmed" ? `${t("confirmed")} ✅` :
+             booking.status === "cancelled" ? `${t("cancelled")} ❌` :
+             booking.status === "pending" ? `${t("pendingApproval")} 🟡` :
+             booking.status}
           </span>
         </div>
         <p className="text-xs text-muted-foreground flex items-center gap-1.5">

@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { CheckCircle2, Users } from "lucide-react";
+import { Clock, Users } from "lucide-react";
 import { ForwardArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
@@ -48,22 +48,21 @@ const BookingConfirmed = () => {
 
       <div className="relative w-full flex flex-col items-center">
 
-      {/* ── Success affordance ── */}
-      {/* 0ms: checkmark scales in; 200ms: ripple blooms and dissipates */}
+      {/* ── Pending affordance ── */}
       <div className="relative flex items-center justify-center mb-5">
         <motion.div
-          className="absolute w-28 h-28 rounded-full border border-accent/20"
+          className="absolute w-28 h-28 rounded-full border border-amber-400/30"
           initial={{ scale: 0.7, opacity: 0.6 }}
           animate={{ scale: 1.1, opacity: 0 }}
           transition={{ delay: 0.2, duration: 0.6, ...SPRING }}
         />
         <motion.div
-          className="w-20 h-20 rounded-full bg-accent/10 flex items-center justify-center shadow-[0_8px_32px_-8px_hsl(var(--accent)/0.4)]"
+          className="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center shadow-[0_8px_32px_-8px_rgba(251,191,36,0.5)]"
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.6, ...SPRING }}
         >
-          <CheckCircle2 className="h-10 w-10 text-accent" />
+          <Clock className="h-10 w-10 text-amber-500" />
         </motion.div>
       </div>
 
@@ -74,8 +73,9 @@ const BookingConfirmed = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.5, ...SPRING }}
       >
-        <h1 className="text-3xl font-black tracking-tight mb-1">{t("bookingConfirmed")}</h1>
-        <p className="text-sm text-muted-foreground">{t("youreAllSet")}</p>
+        <h1 className="text-3xl font-black tracking-tight mb-1">{t("awaitingApproval")}</h1>
+        <p className="text-sm text-muted-foreground">{t("pendingApproval")}</p>
+        <p className="text-xs text-muted-foreground mt-1">תקבל התראה כשהתור יאושר ✅</p>
       </motion.div>
 
       {/* ── Summary card — 600ms ── */}
