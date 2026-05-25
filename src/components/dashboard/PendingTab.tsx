@@ -15,6 +15,13 @@ function toWhatsAppUrl(phone: string): string {
   return `https://wa.me/972${local}`;
 }
 
+function buildDepositMessage(booking: EnrichedBooking): string {
+  const date = format(parseISO(booking.booking_date), "d בMMM", { locale: he });
+  const name = booking.customer_name || "לקוח יקר";
+  const service = booking.service_names.join(", ");
+  return `שלום ${name} 😊\nקיבלנו את בקשת התור שלך:\n📅 תאריך: ${date}\n⏰ שעה: ${booking.booking_time}\n💇 שירות: ${service}\nלאישור התור נבקש מקדמה של ₪${booking.total_price}.\nנשמח לשמוע ממך! 🙏`;
+}
+
 function PendingCard({ booking, index }: { booking: EnrichedBooking; index: number }) {
   const approveBooking = useApproveBooking();
   const rejectBooking = useRejectBooking();
@@ -110,6 +117,19 @@ function PendingCard({ booking, index }: { booking: EnrichedBooking; index: numb
           {rejectBooking.isPending ? "דוחה..." : "דחה תור"}
         </Button>
       </div>
+
+      {/* WhatsApp deposit request */}
+      {booking.customer_phone && (
+        <a
+          href={`${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(buildDepositMessage(booking))}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-1.5 w-full text-xs h-9 rounded-md border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 transition-colors font-medium"
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+          בקשת מקדמה 💰
+        </a>
+      )}
     </motion.div>
   );
 }

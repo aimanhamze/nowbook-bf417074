@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,13 @@ function toWhatsAppUrl(phone: string): string {
   if (digits.startsWith("972")) return `https://wa.me/${digits}`;
   const local = digits.startsWith("0") ? digits.slice(1) : digits;
   return `https://wa.me/972${local}`;
+}
+
+function buildReminderMessage(booking: EnrichedBooking, address: string): string {
+  const date = format(parseISO(booking.booking_date), "d בMMM", { locale: he });
+  const name = booking.customer_name || "לקוח יקר";
+  const service = booking.service_names.join(", ");
+  return `שלום ${name} 😊\nרצינו להזכיר לך את התור שקבעת אצלנו:\n📅 תאריך: ${date}\n⏰ שעה: ${booking.booking_time}\n💇 שירות: ${service}\n📍 כתובת: ${address}\nמצפים לראותך! 🙏`;
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -29,6 +37,7 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
   const deleteBooking = useDeleteBooking();
   const approveBooking = useApproveBooking();
   const rejectBooking = useRejectBooking();
+  const { profile } = useProviderProfile();
 
   const initials = booking.customer_name
     ? booking.customer_name.split(" ").map((w) => w[0]).join("").slice(0, 2)
@@ -37,6 +46,7 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
   const status = statusConfig[booking.status] || statusConfig.confirmed;
   const isCancelled = booking.status === "cancelled";
   const isPending = booking.status === "pending";
+  const isConfirmed = booking.status === "confirmed";
 
   return (
     <motion.div
@@ -147,6 +157,19 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
           {deleteBooking.isPending ? "מוחק..." : "מחק"}
         </Button>
       </div>
+
+      {/* WhatsApp reminder — confirmed bookings only */}
+      {isConfirmed && booking.customer_phone && (
+        <a
+          href={`${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(buildReminderMessage(booking, profile?.address || ""))}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-1.5 w-full text-xs h-8 rounded-md border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 transition-colors font-medium"
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+          שלח תזכורת 🔔
+        </a>
+      )}
     </motion.div>
   );
 }
