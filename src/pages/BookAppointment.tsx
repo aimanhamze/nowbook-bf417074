@@ -133,9 +133,9 @@ const BookAppointment = () => {
 
   const availableSlots = isToday
     ? allSlotsRaw.filter((slot) => {
-        const [h, m] = slot.split(":").map(Number);
-        return h * 60 + m > leadTimeCutoff;
-      })
+      const [h, m] = slot.split(":").map(Number);
+      return h * 60 + m > leadTimeCutoff;
+    })
     : allSlotsRaw;
 
   const groupSlotsRaw = !hasScheduledSessions && isGroupBooking
@@ -144,9 +144,9 @@ const BookAppointment = () => {
 
   const availableGroupSlots = isToday
     ? groupSlotsRaw.filter((slot) => {
-        const [h, m] = slot.time.split(":").map(Number);
-        return h * 60 + m > leadTimeCutoff;
-      })
+      const [h, m] = slot.time.split(":").map(Number);
+      return h * 60 + m > leadTimeCutoff;
+    })
     : groupSlotsRaw;
 
   const allSlotsPassed = isToday && allSlotsRaw.length > 0 && availableSlots.length === 0;
@@ -189,10 +189,7 @@ const BookAppointment = () => {
     const insertedStatus: "pending" | "confirmed" = requiresApproval ? "pending" : "confirmed";
 
     // DEBUG (temporary): pending-toggle investigation
-    console.log("DEBUG: provider.requiresBookingApproval =", provider.requiresBookingApproval);
-    console.log("DEBUG: typeof =", typeof provider.requiresBookingApproval);
-    console.log("DEBUG: full provider object =", provider);
-    console.log("DEBUG: computed insertedStatus =", insertedStatus);
+
 
     if (user) {
       setLoading(true);
@@ -234,19 +231,19 @@ const BookAppointment = () => {
 
       const customerNotif = requiresApproval
         ? {
-            user_id: user.id,
-            title: "בקשת תור נשלחה ⏳",
-            body: `הבקשה ל-${provider.name[lang]} ב-${dateStr} בשעה ${effectiveTime} ממתינה לאישור`,
-            url: "/bookings",
-            type: "booking_pending",
-          }
+          user_id: user.id,
+          title: "בקשת תור נשלחה ⏳",
+          body: `הבקשה ל-${provider.name[lang]} ב-${dateStr} בשעה ${effectiveTime} ממתינה לאישור`,
+          url: "/bookings",
+          type: "booking_pending",
+        }
         : {
-            user_id: user.id,
-            title: "התור שלך אושר! 📅",
-            body: `התור ב-${provider.name[lang]} ב-${dateStr} בשעה ${effectiveTime} אושר`,
-            url: "/bookings",
-            type: "booking_confirmed",
-          };
+          user_id: user.id,
+          title: "התור שלך אושר! 📅",
+          body: `התור ב-${provider.name[lang]} ב-${dateStr} בשעה ${effectiveTime} אושר`,
+          url: "/bookings",
+          type: "booking_confirmed",
+        };
 
       const providerNotifTitle = requiresApproval ? t("newBookingRequest") : "תור חדש 📅";
       const providerNotifBody = requiresApproval
@@ -257,12 +254,12 @@ const BookAppointment = () => {
         supabase.from("notifications").insert(customerNotif),
         providerProfile?.user_id
           ? supabase.from("notifications").insert({
-              user_id: providerProfile.user_id,
-              title: providerNotifTitle,
-              body: providerNotifBody,
-              url: "/calendar",
-              type: "booking_new",
-            })
+            user_id: providerProfile.user_id,
+            title: providerNotifTitle,
+            body: providerNotifBody,
+            url: "/calendar",
+            type: "booking_new",
+          })
           : Promise.resolve(),
       ]);
       queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });
@@ -315,445 +312,445 @@ const BookAppointment = () => {
       />
 
       <div className="relative">
-      {/* ── Header ── */}
-      <header className="px-5 pt-10 pb-6">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => (step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3) : navigate(-1))}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95 shrink-0"
-          >
-            <BackArrow variant="arrow" className="h-5 w-5" />
-          </button>
-          <h1 className="text-lg font-bold">{t("bookAt")} {provider.name[lang]}</h1>
+        {/* ── Header ── */}
+        <header className="px-5 pt-10 pb-6">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => (step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3) : navigate(-1))}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95 shrink-0"
+            >
+              <BackArrow variant="arrow" className="h-5 w-5" />
+            </button>
+            <h1 className="text-lg font-bold">{t("bookAt")} {provider.name[lang]}</h1>
+          </div>
+        </header>
+
+        {/* ── Step indicator ── */}
+        <div className="px-5 mb-6">
+          <div className="flex gap-1.5 mb-2">
+            {[1, 2, 3].map((s) => (
+              <div
+                key={s}
+                className={cn(
+                  "h-1.5 flex-1 rounded-full transition-colors duration-300",
+                  s <= step ? "bg-accent" : "bg-border"
+                )}
+              />
+            ))}
+          </div>
+          <p className="text-xs font-semibold text-accent text-end">
+            {stepLabels[step - 1]}
+          </p>
         </div>
-      </header>
 
-      {/* ── Step indicator ── */}
-      <div className="px-5 mb-6">
-        <div className="flex gap-1.5 mb-2">
-          {[1, 2, 3].map((s) => (
-            <div
-              key={s}
-              className={cn(
-                "h-1.5 flex-1 rounded-full transition-colors duration-300",
-                s <= step ? "bg-accent" : "bg-border"
-              )}
-            />
-          ))}
-        </div>
-        <p className="text-xs font-semibold text-accent text-end">
-          {stepLabels[step - 1]}
-        </p>
-      </div>
+        <AnimatePresence mode="wait">
 
-      <AnimatePresence mode="wait">
+          {/* ── STEP 1: Select Service ── */}
+          {step === 1 && (
+            <motion.div
+              key="step1"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={SPRING}
+              className="px-5"
+            >
+              <div className="flex flex-col gap-2">
+                {provider.services.map((service, i) => {
+                  const isSelected = !!selectedServices.find((s) => s.id === service.id);
+                  const isGroup = service.service_type === 'group';
+                  const sessionCount = allSessions.filter(s => s.service_id === service.id).length;
 
-        {/* ── STEP 1: Select Service ── */}
-        {step === 1 && (
-          <motion.div
-            key="step1"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={SPRING}
-            className="px-5"
-          >
-            <div className="flex flex-col gap-2">
-              {provider.services.map((service, i) => {
-                const isSelected = !!selectedServices.find((s) => s.id === service.id);
-                const isGroup = service.service_type === 'group';
-                const sessionCount = allSessions.filter(s => s.service_id === service.id).length;
-
-                return (
-                  <motion.button
-                    key={service.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ ...SPRING, delay: i * 0.06 }}
-                    onClick={() => toggleService(service)}
-                    className={cn(
-                      "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
-                      isSelected
-                        ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
-                        : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] hover:border-accent/30"
-                    )}
-                  >
-                    <div className="text-right flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <p className="text-sm font-semibold">{service.name[lang]}</p>
-                        {isGroup && (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-semibold">
-                            <Users className="h-2.5 w-2.5" /> {t("groupClass")}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {service.duration} {t("min")}
-                        </span>
-                        {sessionCount > 0 && (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-semibold">
-                            <Calendar className="h-2.5 w-2.5" />
-                            {sessionCount} מפגשים זמינים
-                          </span>
-                        )}
-                        {isGroup && service.max_capacity && (
-                          <span className="text-[10px] text-muted-foreground">
-                            · {t("maxCapacity")}: {service.max_capacity}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 ms-3 shrink-0">
-                      <div className="text-end">
-                        <span className="text-xs text-accent">₪</span>
-                        <span className="text-base font-bold">{service.price}</span>
-                      </div>
-                      {isSelected && (
-                        <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0">
-                          <Check className="h-3 w-3 text-accent-foreground" />
-                        </div>
+                  return (
+                    <motion.button
+                      key={service.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ ...SPRING, delay: i * 0.06 }}
+                      onClick={() => toggleService(service)}
+                      className={cn(
+                        "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
+                        isSelected
+                          ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
+                          : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] hover:border-accent/30"
                       )}
-                    </div>
-                  </motion.button>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── STEP 2: Pick Session or Date+Time ── */}
-        {step === 2 && (
-          <motion.div
-            key="step2"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={SPRING}
-            className="px-5"
-          >
-
-            {hasScheduledSessions ? (
-              /* Provider has scheduled sessions → pick from list */
-              <div>
-                <SectionLabel className="mb-4">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  בחר מפגש
-                </SectionLabel>
-                <div className="flex flex-col gap-2">
-                  {serviceSessions.map(session => {
-                    const sessionDate = parseISO(session.session_date);
-                    const timeDisplay = session.session_time.slice(0, 5);
-                    const isSelected = selectedSessionId === session.id;
-                    const leadTimeCutoffMs = minLeadTimeMinutes * 60 * 1000;
-                    const isPast = new Date(session.session_date + "T" + session.session_time) < new Date(now.getTime() + leadTimeCutoffMs);
-
-                    if (isPast) return null;
-
-                    return (
-                      <button
-                        key={session.id}
-                        onClick={() => setSelectedSessionId(session.id)}
-                        disabled={isPast}
-                        className={cn(
-                          "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
-                          isSelected
-                            ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
-                            : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] hover:border-accent/30",
-                          isPast && "opacity-40 cursor-not-allowed"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "w-12 h-12 rounded-xl flex flex-col items-center justify-center text-xs font-bold shrink-0",
-                            isSelected ? "bg-accent text-accent-foreground" : "bg-secondary text-foreground"
-                          )}>
-                            <span className="text-[10px] uppercase">{format(sessionDate, "EEE", { locale: dateFnsLocale })}</span>
-                            <span className="text-lg leading-none">{format(sessionDate, "d")}</span>
-                            <span className="text-[10px]">{format(sessionDate, "MMM", { locale: dateFnsLocale })}</span>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-semibold">{format(sessionDate, "dd/MM/yyyy")}</p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {timeDisplay} · {primaryService?.duration} {t("min")}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {isGroupBooking && (
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Users className="h-3 w-3" />
-                              {groupMaxCapacity}
+                    >
+                      <div className="text-right flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <p className="text-sm font-semibold">{service.name[lang]}</p>
+                          {isGroup && (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-semibold">
+                              <Users className="h-2.5 w-2.5" /> {t("groupClass")}
                             </span>
                           )}
-                          {isSelected && (
-                            <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0">
-                              <Check className="h-3 w-3 text-accent-foreground" />
-                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            {service.duration} {t("min")}
+                          </span>
+                          {sessionCount > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-semibold">
+                              <Calendar className="h-2.5 w-2.5" />
+                              {sessionCount} מפגשים זמינים
+                            </span>
+                          )}
+                          {isGroup && service.max_capacity && (
+                            <span className="text-[10px] text-muted-foreground">
+                              · {t("maxCapacity")}: {service.max_capacity}
+                            </span>
                           )}
                         </div>
-                      </button>
-                    );
-                  })}
-                  {serviceSessions.filter(s => new Date(s.session_date + "T" + s.session_time) >= new Date(now.getTime() + minLeadTimeMinutes * 60 * 1000)).length === 0 && (
-                    <div className="glass-card-md rounded-2xl p-8 text-center">
-                      <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-                      <p className="text-sm text-muted-foreground">אין מפגשים זמינים כרגע</p>
-                    </div>
-                  )}
-                </div>
+                      </div>
+                      <div className="flex items-center gap-3 ms-3 shrink-0">
+                        <div className="text-end">
+                          <span className="text-xs text-accent">₪</span>
+                          <span className="text-base font-bold">{service.price}</span>
+                        </div>
+                        {isSelected && (
+                          <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0">
+                            <Check className="h-3 w-3 text-accent-foreground" />
+                          </div>
+                        )}
+                      </div>
+                    </motion.button>
+                  );
+                })}
               </div>
-            ) : (
-              /* No sessions → open availability: date strip + time grid */
-              <div>
-                <div className="mb-6">
-                  <SectionLabel className="mb-3">
+            </motion.div>
+          )}
+
+          {/* ── STEP 2: Pick Session or Date+Time ── */}
+          {step === 2 && (
+            <motion.div
+              key="step2"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={SPRING}
+              className="px-5"
+            >
+
+              {hasScheduledSessions ? (
+                /* Provider has scheduled sessions → pick from list */
+                <div>
+                  <SectionLabel className="mb-4">
                     <CalendarDays className="h-3.5 w-3.5" />
-                    {format(selectedDate, "MMMM yyyy", { locale: dateFnsLocale })}
+                    בחר מפגש
                   </SectionLabel>
-                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
-                    {dates.map((date) => {
-                      const isSelected = format(date, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
+                  <div className="flex flex-col gap-2">
+                    {serviceSessions.map(session => {
+                      const sessionDate = parseISO(session.session_date);
+                      const timeDisplay = session.session_time.slice(0, 5);
+                      const isSelected = selectedSessionId === session.id;
+                      const leadTimeCutoffMs = minLeadTimeMinutes * 60 * 1000;
+                      const isPast = new Date(session.session_date + "T" + session.session_time) < new Date(now.getTime() + leadTimeCutoffMs);
+
+                      if (isPast) return null;
+
                       return (
                         <button
-                          key={date.toISOString()}
-                          onClick={() => { setSelectedDate(date); setSelectedTime(""); }}
+                          key={session.id}
+                          onClick={() => setSelectedSessionId(session.id)}
+                          disabled={isPast}
                           className={cn(
-                            "flex flex-col items-center min-w-[60px] py-2.5 px-3 rounded-xl border transition-all",
+                            "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
                             isSelected
-                              ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.35)]"
-                              : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)]"
+                              ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
+                              : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] hover:border-accent/30",
+                            isPast && "opacity-40 cursor-not-allowed"
                           )}
                         >
-                          <span className="text-[10px] font-medium uppercase">{format(date, "EEE", { locale: dateFnsLocale })}</span>
-                          <span className="text-lg font-bold">{format(date, "d", { locale: dateFnsLocale })}</span>
-                          <span className="text-[10px]">{format(date, "MMM", { locale: dateFnsLocale })}</span>
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "w-12 h-12 rounded-xl flex flex-col items-center justify-center text-xs font-bold shrink-0",
+                              isSelected ? "bg-accent text-accent-foreground" : "bg-secondary text-foreground"
+                            )}>
+                              <span className="text-[10px] uppercase">{format(sessionDate, "EEE", { locale: dateFnsLocale })}</span>
+                              <span className="text-lg leading-none">{format(sessionDate, "d")}</span>
+                              <span className="text-[10px]">{format(sessionDate, "MMM", { locale: dateFnsLocale })}</span>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold">{format(sessionDate, "dd/MM/yyyy")}</p>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {timeDisplay} · {primaryService?.duration} {t("min")}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isGroupBooking && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                {groupMaxCapacity}
+                              </span>
+                            )}
+                            {isSelected && (
+                              <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0">
+                                <Check className="h-3 w-3 text-accent-foreground" />
+                              </div>
+                            )}
+                          </div>
                         </button>
                       );
                     })}
+                    {serviceSessions.filter(s => new Date(s.session_date + "T" + s.session_time) >= new Date(now.getTime() + minLeadTimeMinutes * 60 * 1000)).length === 0 && (
+                      <div className="glass-card-md rounded-2xl p-8 text-center">
+                        <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                        <p className="text-sm text-muted-foreground">אין מפגשים זמינים כרגע</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-
+              ) : (
+                /* No sessions → open availability: date strip + time grid */
                 <div>
-                  <SectionLabel className="mb-3">
-                    <Clock className="h-3.5 w-3.5" />
-                    {t("availableTimes")}
-                  </SectionLabel>
-
-                  {isGroupBooking ? (
-                    availableGroupSlots.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-2">
-                        {availableGroupSlots.map((slotInfo) => (
+                  <div className="mb-6">
+                    <SectionLabel className="mb-3">
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      {format(selectedDate, "MMMM yyyy", { locale: dateFnsLocale })}
+                    </SectionLabel>
+                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
+                      {dates.map((date) => {
+                        const isSelected = format(date, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
+                        return (
                           <button
-                            key={slotInfo.time}
-                            onClick={() => !slotInfo.isFull && setSelectedTime(slotInfo.time)}
-                            disabled={slotInfo.isFull}
+                            key={date.toISOString()}
+                            onClick={() => { setSelectedDate(date); setSelectedTime(""); }}
                             className={cn(
-                              "py-3 px-1 rounded-2xl text-sm font-semibold transition-all active:scale-95 flex flex-col items-center gap-1 border",
-                              selectedTime === slotInfo.time
-                                ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
-                                : slotInfo.isFull
-                                ? "border-transparent bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
-                                : slotInfo.spotsLeft === 1
-                                ? "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
-                                : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)] hover:bg-white/80"
+                              "flex flex-col items-center min-w-[60px] py-2.5 px-3 rounded-xl border transition-all",
+                              isSelected
+                                ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.35)]"
+                                : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)]"
                             )}
                           >
-                            <span>{slotInfo.time}</span>
-                            <span className={cn(
-                              "text-[9px] leading-none flex items-center gap-1",
-                              selectedTime === slotInfo.time ? "text-accent-foreground/80"
-                              : slotInfo.isFull ? "text-muted-foreground"
-                              : slotInfo.spotsLeft === 1 ? "text-orange-600"
-                              : "text-emerald-600"
-                            )}>
-                              {slotInfo.isFull ? (
-                                <>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />
-                                  {t("spotsFull")}
-                                </>
-                              ) : slotInfo.spotsLeft === 1 ? (
-                                <>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-                                  {t("lastSpot")}
-                                </>
-                              ) : (
-                                `${slotInfo.spotsLeft} ${t("spotsLeft")}`
-                              )}
-                            </span>
+                            <span className="text-[10px] font-medium uppercase">{format(date, "EEE", { locale: dateFnsLocale })}</span>
+                            <span className="text-lg font-bold">{format(date, "d", { locale: dateFnsLocale })}</span>
+                            <span className="text-[10px]">{format(date, "MMM", { locale: dateFnsLocale })}</span>
                           </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="glass-card-md rounded-2xl p-8 text-center">
-                        <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-                        <p className="text-sm text-muted-foreground">
-                          {allGroupSlotsPassed ? t("noSlotsToday") : t("unavailable")}
-                        </p>
-                      </div>
-                    )
-                  ) : (
-                    availableSlots.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-2">
-                        {availableSlots.map((slot) => (
-                          <button
-                            key={slot}
-                            onClick={() => setSelectedTime(slot)}
-                            className={cn(
-                              "py-3 rounded-2xl text-sm font-semibold transition-all active:scale-95 border",
-                              selectedTime === slot
-                                ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
-                                : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)] hover:bg-white/80"
-                            )}
-                          >
-                            {slot}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="glass-card-md rounded-2xl p-8 text-center">
-                        <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-                        <p className="text-sm text-muted-foreground">
-                          {allSlotsPassed ? t("noSlotsToday") : t("unavailable")}
-                        </p>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {/* ── STEP 3: Confirm ── */}
-        {step === 3 && (
-          <motion.div
-            key="step3"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={SPRING}
-            className="px-5 space-y-3"
-          >
-            {/* Zone A — Booking hero */}
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...SPRING, delay: 0.08 }}
-              className="glass-card rounded-3xl p-6 text-center"
-            >
-              <p className="text-xs font-semibold text-accent uppercase tracking-widest mb-2">
-                {format(parseISO(effectiveDate), "EEEE", { locale: dateFnsLocale })}
-              </p>
-              <p className="text-3xl font-black tracking-tight mb-1 text-balance">
-                {format(parseISO(effectiveDate), "d MMMM", { locale: dateFnsLocale })}
-              </p>
-              <p className="text-2xl font-bold text-foreground/70" dir="ltr">
-                {effectiveTime}
-              </p>
-            </motion.div>
-
-            {/* Zone B — Service + price summary */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...SPRING, delay: 0.14 }}
-              className="glass-card rounded-2xl p-5 space-y-3"
-            >
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{t("provider")}</p>
-                <p className="text-sm font-semibold">{provider.name[lang]}</p>
-              </div>
-              <div className="h-px bg-border/40" />
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">{t("services")}</p>
-                {selectedServices.map((s) => (
-                  <div key={s.id} className="flex justify-between items-center text-sm py-0.5">
-                    <span className="flex items-center gap-1.5 text-foreground/80">
-                      {s.service_type === 'group' && <Users className="h-3.5 w-3.5 text-accent" />}
-                      {s.name[lang]}
-                      <span className="text-muted-foreground text-xs">· {s.duration} {t("min")}</span>
-                    </span>
-                    <span className="font-medium">₪{s.price}</span>
+                        );
+                      })}
+                    </div>
                   </div>
-                ))}
-              </div>
-              <div className="h-px bg-border/40" />
-              <div className="flex items-baseline justify-between pt-0.5">
-                <p className="text-xs text-muted-foreground">{t("total")} · {totalDuration} {t("min")}</p>
-                <p className="text-3xl font-black text-accent">₪{total}</p>
-              </div>
-            </motion.div>
 
-            {/* Group notice */}
-            {isGroupBooking && (
+                  <div>
+                    <SectionLabel className="mb-3">
+                      <Clock className="h-3.5 w-3.5" />
+                      {t("availableTimes")}
+                    </SectionLabel>
+
+                    {isGroupBooking ? (
+                      availableGroupSlots.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          {availableGroupSlots.map((slotInfo) => (
+                            <button
+                              key={slotInfo.time}
+                              onClick={() => !slotInfo.isFull && setSelectedTime(slotInfo.time)}
+                              disabled={slotInfo.isFull}
+                              className={cn(
+                                "py-3 px-1 rounded-2xl text-sm font-semibold transition-all active:scale-95 flex flex-col items-center gap-1 border",
+                                selectedTime === slotInfo.time
+                                  ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
+                                  : slotInfo.isFull
+                                    ? "border-transparent bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
+                                    : slotInfo.spotsLeft === 1
+                                      ? "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+                                      : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)] hover:bg-white/80"
+                              )}
+                            >
+                              <span>{slotInfo.time}</span>
+                              <span className={cn(
+                                "text-[9px] leading-none flex items-center gap-1",
+                                selectedTime === slotInfo.time ? "text-accent-foreground/80"
+                                  : slotInfo.isFull ? "text-muted-foreground"
+                                    : slotInfo.spotsLeft === 1 ? "text-orange-600"
+                                      : "text-emerald-600"
+                              )}>
+                                {slotInfo.isFull ? (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />
+                                    {t("spotsFull")}
+                                  </>
+                                ) : slotInfo.spotsLeft === 1 ? (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+                                    {t("lastSpot")}
+                                  </>
+                                ) : (
+                                  `${slotInfo.spotsLeft} ${t("spotsLeft")}`
+                                )}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="glass-card-md rounded-2xl p-8 text-center">
+                          <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                          <p className="text-sm text-muted-foreground">
+                            {allGroupSlotsPassed ? t("noSlotsToday") : t("unavailable")}
+                          </p>
+                        </div>
+                      )
+                    ) : (
+                      availableSlots.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          {availableSlots.map((slot) => (
+                            <button
+                              key={slot}
+                              onClick={() => setSelectedTime(slot)}
+                              className={cn(
+                                "py-3 rounded-2xl text-sm font-semibold transition-all active:scale-95 border",
+                                selectedTime === slot
+                                  ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
+                                  : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)] hover:bg-white/80"
+                              )}
+                            >
+                              {slot}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="glass-card-md rounded-2xl p-8 text-center">
+                          <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                          <p className="text-sm text-muted-foreground">
+                            {allSlotsPassed ? t("noSlotsToday") : t("unavailable")}
+                          </p>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ── STEP 3: Confirm ── */}
+          {step === 3 && (
+            <motion.div
+              key="step3"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={SPRING}
+              className="px-5 space-y-3"
+            >
+              {/* Zone A — Booking hero */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...SPRING, delay: 0.08 }}
+                className="glass-card rounded-3xl p-6 text-center"
+              >
+                <p className="text-xs font-semibold text-accent uppercase tracking-widest mb-2">
+                  {format(parseISO(effectiveDate), "EEEE", { locale: dateFnsLocale })}
+                </p>
+                <p className="text-3xl font-black tracking-tight mb-1 text-balance">
+                  {format(parseISO(effectiveDate), "d MMMM", { locale: dateFnsLocale })}
+                </p>
+                <p className="text-2xl font-bold text-foreground/70" dir="ltr">
+                  {effectiveTime}
+                </p>
+              </motion.div>
+
+              {/* Zone B — Service + price summary */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ ...SPRING, delay: 0.14 }}
+                className="glass-card rounded-2xl p-5 space-y-3"
+              >
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{t("provider")}</p>
+                  <p className="text-sm font-semibold">{provider.name[lang]}</p>
+                </div>
+                <div className="h-px bg-border/40" />
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">{t("services")}</p>
+                  {selectedServices.map((s) => (
+                    <div key={s.id} className="flex justify-between items-center text-sm py-0.5">
+                      <span className="flex items-center gap-1.5 text-foreground/80">
+                        {s.service_type === 'group' && <Users className="h-3.5 w-3.5 text-accent" />}
+                        {s.name[lang]}
+                        <span className="text-muted-foreground text-xs">· {s.duration} {t("min")}</span>
+                      </span>
+                      <span className="font-medium">₪{s.price}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="h-px bg-border/40" />
+                <div className="flex items-baseline justify-between pt-0.5">
+                  <p className="text-xs text-muted-foreground">{t("total")} · {totalDuration} {t("min")}</p>
+                  <p className="text-3xl font-black text-accent">₪{total}</p>
+                </div>
+              </motion.div>
+
+              {/* Group notice */}
+              {isGroupBooking && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ ...SPRING, delay: 0.18 }}
+                  className="surface-soft p-3 rounded-xl flex items-center gap-2 text-sm text-foreground/70"
+                >
+                  <Users className="h-4 w-4 text-accent shrink-0" />
+                  <span>{t("groupClass")} · {t("maxCapacity")}: {groupMaxCapacity}</span>
+                </motion.div>
+              )}
+
+              {/* Pay at venue */}
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ ...SPRING, delay: 0.18 }}
-                className="surface-soft p-3 rounded-xl flex items-center gap-2 text-sm text-foreground/70"
+                transition={{ ...SPRING, delay: isGroupBooking ? 0.22 : 0.18 }}
+                className="p-4 rounded-xl bg-accent/[0.1] border border-accent/20 backdrop-blur-md text-sm text-foreground/70"
               >
-                <Users className="h-4 w-4 text-accent shrink-0" />
-                <span>{t("groupClass")} · {t("maxCapacity")}: {groupMaxCapacity}</span>
+                {t("payAtVenue")}
               </motion.div>
-            )}
-
-            {/* Pay at venue */}
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...SPRING, delay: isGroupBooking ? 0.22 : 0.18 }}
-              className="p-4 rounded-xl bg-accent/[0.1] border border-accent/20 backdrop-blur-md text-sm text-foreground/70"
-            >
-              {t("payAtVenue")}
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      {/* ── Bottom bar ── */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/70 backdrop-blur-xl border-t border-white/40">
-        {step === 3 ? (
-          /* Step 3: price + provider name on top, full-width confirm below */
-          <div>
-            <div className="flex items-baseline justify-between mb-3">
-              <p className="text-xs text-muted-foreground">{provider.name[lang]}</p>
-              <p className="text-lg font-bold">₪{total}</p>
-            </div>
-            <button
-              onClick={handleConfirm}
-              disabled={loading}
-              className="w-full rounded-2xl bg-accent text-accent-foreground py-4 text-base font-semibold shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)] transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <span className="w-4 h-4 rounded-full border-2 border-accent-foreground/30 border-t-accent-foreground animate-spin" />
-              ) : t("confirmBooking")}
-            </button>
-          </div>
-        ) : (
-          /* Steps 1–2: price left, continue right */
-          <div className="flex items-center justify-between">
+        {/* ── Bottom bar ── */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/70 backdrop-blur-xl border-t border-white/40">
+          {step === 3 ? (
+            /* Step 3: price + provider name on top, full-width confirm below */
             <div>
-              <p className="text-xs text-muted-foreground">
-                {selectedServices.length} {selectedServices.length !== 1 ? t("serviceCount") : t("service")}
-              </p>
-              <p className="text-lg font-bold">₪{total}</p>
+              <div className="flex items-baseline justify-between mb-3">
+                <p className="text-xs text-muted-foreground">{provider.name[lang]}</p>
+                <p className="text-lg font-bold">₪{total}</p>
+              </div>
+              <button
+                onClick={handleConfirm}
+                disabled={loading}
+                className="w-full rounded-2xl bg-accent text-accent-foreground py-4 text-base font-semibold shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)] transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <span className="w-4 h-4 rounded-full border-2 border-accent-foreground/30 border-t-accent-foreground animate-spin" />
+                ) : t("confirmBooking")}
+              </button>
             </div>
-            <button
-              disabled={!canProceed}
-              onClick={handleNext}
-              className={cn(
-                "px-8 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.97] bg-accent text-accent-foreground shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)]",
-                !canProceed && "opacity-40 pointer-events-none shadow-none"
-              )}
-            >
-              {t("continue")}
-            </button>
-          </div>
-        )}
-      </div>
+          ) : (
+            /* Steps 1–2: price left, continue right */
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  {selectedServices.length} {selectedServices.length !== 1 ? t("serviceCount") : t("service")}
+                </p>
+                <p className="text-lg font-bold">₪{total}</p>
+              </div>
+              <button
+                disabled={!canProceed}
+                onClick={handleNext}
+                className={cn(
+                  "px-8 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.97] bg-accent text-accent-foreground shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)]",
+                  !canProceed && "opacity-40 pointer-events-none shadow-none"
+                )}
+              >
+                {t("continue")}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
