@@ -261,6 +261,7 @@ export type Database = {
           longitude: number | null
           min_lead_time_minutes: number
           phone: string | null
+          requires_booking_approval: boolean
           social_links: {
             whatsapp?: string
             instagram?: string
@@ -286,6 +287,7 @@ export type Database = {
           longitude?: number | null
           min_lead_time_minutes?: number
           phone?: string | null
+          requires_booking_approval?: boolean
           social_links?: {
             phone?: string
             whatsapp?: string
@@ -312,6 +314,7 @@ export type Database = {
           longitude?: number | null
           min_lead_time_minutes?: number
           phone?: string | null
+          requires_booking_approval?: boolean
           social_links?: {
             phone?: string
             whatsapp?: string

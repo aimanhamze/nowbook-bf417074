@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { MapPin, Loader2 } from "lucide-react";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { useForm, useWatch } from "react-hook-form";
@@ -9,10 +10,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { usePendingCount } from "@/components/dashboard/PendingTab";
 import { categories, categoryNames } from "@/lib/mock-data";
 import { buildSocialLinks } from "@/lib/socialLinks";
 import { toast } from "sonner";
@@ -46,10 +59,29 @@ type FormValues = z.infer<typeof profileSchema>;
 
 export function BusinessProfileTab() {
   const { t, lang } = useLang();
-  const { profile, upsertProfile, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
+  const navigate = useNavigate();
+  const { profile, upsertProfile, updateBookingApproval, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
+  const pendingCount = usePendingCount();
 
   const [accordionValue, setAccordionValue] = useState("");
   const [locationAccordionValue, setLocationAccordionValue] = useState("");
+  const [pendingGuardOpen, setPendingGuardOpen] = useState(false);
+
+  const requiresApproval = profile?.requires_booking_approval ?? false;
+
+  const handleApprovalToggle = async (next: boolean) => {
+    if (!next && pendingCount > 0) {
+      // Block turn-off until the provider resolves pending bookings.
+      setPendingGuardOpen(true);
+      return;
+    }
+    try {
+      await updateBookingApproval.mutateAsync(next);
+      toast.success(t("profileSaved"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error");
+    }
+  };
 
   const {
     position: detectedPosition,
@@ -195,6 +227,42 @@ export function BusinessProfileTab() {
       className="space-y-4"
     >
       <h2 className="text-lg font-semibold">{t("businessProfile")}</h2>
+
+      {/* Booking Settings — saves immediately on toggle, distinct from the form below */}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        <h3 className="text-sm font-semibold">{t("bookingSettingsTitle")}</h3>
+        <div className="flex items-start gap-3">
+          <Switch
+            checked={requiresApproval}
+            onCheckedChange={handleApprovalToggle}
+            disabled={updateBookingApproval.isPending}
+          />
+          <div className="flex-1">
+            <Label className="text-sm font-medium">{t("requireApprovalLabel")}</Label>
+            <p className="text-xs text-muted-foreground mt-1">{t("requireApprovalHelp")}</p>
+          </div>
+        </div>
+      </div>
+
+      <AlertDialog open={pendingGuardOpen} onOpenChange={setPendingGuardOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("cannotDisableApprovalTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("cannotDisableApprovalBody").replace("{count}", String(pendingCount))}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => navigate("/calendar", { state: { tab: "pending" } })}
+            >
+              {t("goToPendingTab")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
         {/* Avatar */}

@@ -19,6 +19,8 @@ export interface DbProvider {
   average_rating: number | null;
   min_lead_time_minutes: number;
   social_links: SocialLinks | null;
+  // Optional until supabase gen types is run after the 20260525 migration.
+  requires_booking_approval?: boolean;
 }
 
 export interface DbService {
@@ -59,6 +61,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[]): Provider 
     about,
     minLeadTimeMinutes: dbp.min_lead_time_minutes ?? 15,
     socialLinks: dbp.social_links ?? null,
+    requiresBookingApproval: dbp.requires_booking_approval ?? false,
     services: services.filter(s => s.is_active).map(s => ({
       id: s.id,
       name: { he: s.name, ar: s.name, en: s.name },
