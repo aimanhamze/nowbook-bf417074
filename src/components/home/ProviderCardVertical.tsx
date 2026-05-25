@@ -68,9 +68,11 @@ export function ProviderCardVertical({
         )}
       </div>
 
-      <h3 className="text-base font-bold text-foreground text-center leading-tight truncate w-full">
-        {provider.name[lang]}
-      </h3>
+      <div className="min-h-[2.5rem] flex items-center justify-center w-full">
+        <h3 className="text-base font-bold text-foreground text-center leading-tight line-clamp-2 w-full">
+          {provider.name[lang]}
+        </h3>
+      </div>
       <p className="text-xs text-muted-foreground text-center truncate w-full mt-0.5">
         {categoryNames[provider.category]?.[lang]}
       </p>
