@@ -32,7 +32,7 @@ const getGreeting = (t: (key: string) => string): string => {
 };
 
 const Index = () => {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { isProvider, isAdmin, user } = useAuth();
   const navigate = useNavigate();
   const { providers } = useAllProviders();
@@ -143,8 +143,8 @@ const Index = () => {
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                   </div>
-                  <span className="text-[11px] font-medium text-foreground/75 text-center w-16 truncate leading-tight">
-                    {p.name["he"]}
+                  <span dir="auto" className="text-[11px] font-medium text-foreground/75 text-center w-16 truncate leading-tight">
+                    {p.name[lang]}
                   </span>
                 </motion.button>
               ))}

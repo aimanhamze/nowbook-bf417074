@@ -49,6 +49,21 @@ export function useProviderProfile() {
     },
   });
 
+  const updateBookingApproval = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ requires_booking_approval: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+    },
+  });
+
   const uploadCoverImage = useMutation({
     mutationFn: async (file: File) => {
       if (!user) throw new Error("Not authenticated");
@@ -112,6 +127,7 @@ export function useProviderProfile() {
     isLoading: profileQuery.isLoading,
     error: profileQuery.error,
     upsertProfile,
+    updateBookingApproval,
     uploadCoverImage,
     uploadAvatarImage,
   };

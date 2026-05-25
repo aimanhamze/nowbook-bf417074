@@ -24,6 +24,7 @@ export interface Provider {
   services: Service[];
   minLeadTimeMinutes: number;
   socialLinks?: SocialLinks | null;
+  requiresBookingApproval: boolean;
 }
 
 export const categories = [

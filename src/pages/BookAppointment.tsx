@@ -182,6 +182,18 @@ const BookAppointment = () => {
       toast.error(validation.error.errors[0].message);
       return;
     }
+    // Provider's approval preference. The DB trigger enforce_booking_approval_status
+    // re-checks this server-side, so a stale client cache can't auto-confirm a
+    // booking for a provider who now requires approval.
+    const requiresApproval = provider.requiresBookingApproval;
+    const insertedStatus: "pending" | "confirmed" = requiresApproval ? "pending" : "confirmed";
+
+    // DEBUG (temporary): pending-toggle investigation
+    console.log("DEBUG: provider.requiresBookingApproval =", provider.requiresBookingApproval);
+    console.log("DEBUG: typeof =", typeof provider.requiresBookingApproval);
+    console.log("DEBUG: full provider object =", provider);
+    console.log("DEBUG: computed insertedStatus =", insertedStatus);
+
     if (user) {
       setLoading(true);
       const { error } = await supabase.from("bookings").insert({
@@ -191,7 +203,7 @@ const BookAppointment = () => {
         booking_date: effectiveDate,
         booking_time: effectiveTime,
         total_price: total,
-        status: "pending",
+        status: insertedStatus,
       });
       setLoading(false);
       if (error) {
@@ -220,21 +232,34 @@ const BookAppointment = () => {
       const serviceName = selectedServices[0]?.name[lang] || "";
       const dateStr = format(parseISO(effectiveDate), "dd/MM");
 
+      const customerNotif = requiresApproval
+        ? {
+            user_id: user.id,
+            title: "בקשת תור נשלחה ⏳",
+            body: `הבקשה ל-${provider.name[lang]} ב-${dateStr} בשעה ${effectiveTime} ממתינה לאישור`,
+            url: "/bookings",
+            type: "booking_pending",
+          }
+        : {
+            user_id: user.id,
+            title: "התור שלך אושר! 📅",
+            body: `התור ב-${provider.name[lang]} ב-${dateStr} בשעה ${effectiveTime} אושר`,
+            url: "/bookings",
+            type: "booking_confirmed",
+          };
+
+      const providerNotifTitle = requiresApproval ? t("newBookingRequest") : "תור חדש 📅";
+      const providerNotifBody = requiresApproval
+        ? `${customerName} ביקש תור ל-${serviceName} בתאריך ${dateStr} בשעה ${effectiveTime}`
+        : `${customerName} קבע תור ל-${serviceName} בתאריך ${dateStr} בשעה ${effectiveTime}`;
+
       await Promise.all([
-        // Notify customer — booking is pending
-        supabase.from("notifications").insert({
-          user_id: user.id,
-          title: "בקשת תור נשלחה ⏳",
-          body: `הבקשה ל-${provider.name[lang]} ב-${dateStr} בשעה ${effectiveTime} ממתינה לאישור`,
-          url: "/bookings",
-          type: "booking_pending",
-        }),
-        // Notify provider in DB
+        supabase.from("notifications").insert(customerNotif),
         providerProfile?.user_id
           ? supabase.from("notifications").insert({
               user_id: providerProfile.user_id,
-              title: t("newBookingRequest"),
-              body: `${customerName} ביקש תור ל-${serviceName} בתאריך ${dateStr} בשעה ${effectiveTime}`,
+              title: providerNotifTitle,
+              body: providerNotifBody,
               url: "/calendar",
               type: "booking_new",
             })
@@ -247,8 +272,8 @@ const BookAppointment = () => {
       await supabase.functions.invoke("send-push", {
         body: {
           provider_id: provider.id,
-          title: t("newBookingRequest"),
-          body: `${customerName} ביקש תור ל-${serviceName} ב-${dateStr} בשעה ${effectiveTime}`,
+          title: providerNotifTitle,
+          body: providerNotifBody,
           url: "/calendar",
           type: "booking_new",
         },
@@ -264,6 +289,7 @@ const BookAppointment = () => {
         total,
         isGroup: isGroupBooking,
         participantCount: 1,
+        status: insertedStatus,
       },
     });
   };
