@@ -101,8 +101,38 @@ Deno.serve(async (req) => {
       .single();
     if (providerError) throw providerError;
 
+    // Seed the full weekly availability so the provider always has exactly 7
+    // rows (day_of_week 0–6). provider_availability is the single source of
+    // truth — every reader expects a row per day, with no fabricated defaults.
+    // Defaults match the 20260529 backfill migration 1:1:
+    //   dow 0–4 (Sun–Thu) → open  09:00–17:00
+    //   dow 5–6 (Fri–Sat) → closed 09:00–17:00
+    const availabilityRows = Array.from({ length: 7 }, (_, dow) => ({
+      provider_id: providerProfile.id,
+      day_of_week: dow,
+      start_time: "09:00",
+      end_time: "17:00",
+      is_available: dow >= 0 && dow <= 4,
+    }));
+
+    // Log-and-continue: the auth user, role and profile are already committed,
+    // so a failed seed must not fail the whole creation (that would orphan the
+    // account). A provider with a profile but no hours is recoverable — the
+    // idempotent backfill migration re-seeds any missing rows. We surface the
+    // failure in the response so the caller can warn if it wants to.
+    const { error: availabilityError } = await adminClient
+      .from("provider_availability")
+      .insert(availabilityRows);
+    if (availabilityError) {
+      console.error("create-provider: availability seed failed:", availabilityError.message);
+    }
+
     return new Response(
-      JSON.stringify({ provider: providerProfile, user_id: userId }),
+      JSON.stringify({
+        provider: providerProfile,
+        user_id: userId,
+        availability_seeded: !availabilityError,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

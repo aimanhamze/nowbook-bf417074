@@ -73,7 +73,9 @@ export function AvailabilityTab() {
         <h3 className="text-sm font-medium">{t("workingHoursLabel")}</h3>
         {DAY_KEYS.map((dayKey, dow) => {
           const slot = getSlot(dow);
-          const isAvail = slot?.is_available ?? (dow >= 0 && dow <= 4);
+          // Reads the real row (every provider has all 7 post-backfill). If a
+          // row were ever missing, honest behavior is closed — not a default.
+          const isAvail = slot?.is_available ?? false;
           return (
             <motion.div
               key={dayKey}

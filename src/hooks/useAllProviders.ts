@@ -290,9 +290,10 @@ export function useRealAvailability(providerId: string | undefined) {
 
     if ((blockedDatesQuery.data || []).includes(dateStr)) return [];
 
+    // provider_availability is the single source of truth: every provider has a
+    // row per day. No row, or is_available=false → the day is closed.
     const slot = (availabilityQuery.data || []).find(a => a.day_of_week === dow);
-    const isAvailable = slot ? slot.is_available : (dow >= 0 && dow <= 4);
-    if (!isAvailable) return [];
+    if (!slot || !slot.is_available) return [];
 
     const services = servicesQuery.data || [];
 
@@ -310,8 +311,8 @@ export function useRealAvailability(providerId: string | undefined) {
       });
 
     const SLOT_STEP = 15;
-    const start = parseTime(slot?.start_time ?? "09:00");
-    const end = parseTime(slot?.end_time ?? "17:00");
+    const start = parseTime(slot.start_time);
+    const end = parseTime(slot.end_time);
     const neededDuration = requestedDuration || SLOT_STEP;
 
     const slots: string[] = [];
@@ -337,13 +338,13 @@ export function useRealAvailability(providerId: string | undefined) {
 
     if ((blockedDatesQuery.data || []).includes(dateStr)) return [];
 
+    // Single source of truth: no row, or is_available=false → the day is closed.
     const slot = (availabilityQuery.data || []).find(a => a.day_of_week === dow);
-    const isAvailable = slot ? slot.is_available : (dow >= 0 && dow <= 4);
-    if (!isAvailable) return [];
+    if (!slot || !slot.is_available) return [];
 
     const SLOT_STEP = 15;
-    const start = parseTime(slot?.start_time ?? "09:00");
-    const end = parseTime(slot?.end_time ?? "17:00");
+    const start = parseTime(slot.start_time);
+    const end = parseTime(slot.end_time);
 
     const bookingsForDate = (bookingsQuery.data || []).filter(b => b.booking_date === dateStr);
 
