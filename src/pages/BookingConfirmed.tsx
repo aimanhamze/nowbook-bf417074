@@ -131,7 +131,7 @@ const BookingConfirmed = () => {
           <div className="h-px bg-border/40" />
           <div className="flex items-baseline justify-between">
             <p className="text-xs text-muted-foreground">{t("total")}</p>
-            <p className="text-3xl font-black text-accent">₪{state.total}</p>
+            {state.total > 0 ? <p className="text-3xl font-black text-accent">₪{state.total}</p> : null}
           </div>
         </div>
 
