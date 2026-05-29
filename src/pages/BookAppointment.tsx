@@ -406,10 +406,12 @@ const BookAppointment = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-3 ms-3 shrink-0">
-                      <div className="text-end">
-                        <span className="text-xs text-accent">₪</span>
-                        <span className="text-base font-bold">{service.price}</span>
-                      </div>
+                      {service.price > 0 && (
+                        <div className="text-end">
+                          <span className="text-xs text-accent">₪</span>
+                          <span className="text-base font-bold">{service.price}</span>
+                        </div>
+                      )}
                       {isSelected && (
                         <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0">
                           <Check className="h-3 w-3 text-accent-foreground" />
@@ -676,14 +678,14 @@ const BookAppointment = () => {
                       {s.name[lang]}
                       <span className="text-muted-foreground text-xs">· {s.duration} {t("min")}</span>
                     </span>
-                    <span className="font-medium">₪{s.price}</span>
+                    {s.price > 0 ? <span className="font-medium">₪{s.price}</span> : null}
                   </div>
                 ))}
               </div>
               <div className="h-px bg-border/40" />
               <div className="flex items-baseline justify-between pt-0.5">
                 <p className="text-xs text-muted-foreground">{t("total")} · {totalDuration} {t("min")}</p>
-                <p className="text-3xl font-black text-accent">₪{total}</p>
+                {total > 0 ? <p className="text-3xl font-black text-accent">₪{total}</p> : null}
               </div>
             </motion.div>
 
@@ -720,7 +722,7 @@ const BookAppointment = () => {
           <div>
             <div className="flex items-baseline justify-between mb-3">
               <p className="text-xs text-muted-foreground">{provider.name[lang]}</p>
-              <p className="text-lg font-bold">₪{total}</p>
+              {total > 0 ? <p className="text-lg font-bold">₪{total}</p> : null}
             </div>
             <button
               onClick={handleConfirm}
@@ -739,7 +741,7 @@ const BookAppointment = () => {
               <p className="text-xs text-muted-foreground">
                 {selectedServices.length} {selectedServices.length !== 1 ? t("serviceCount") : t("service")}
               </p>
-              <p className="text-lg font-bold">₪{total}</p>
+              {total > 0 ? <p className="text-lg font-bold">₪{total}</p> : null}
             </div>
             <button
               disabled={!canProceed}

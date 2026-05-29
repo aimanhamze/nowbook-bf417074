@@ -317,7 +317,7 @@ export function ServicesTab() {
                     </div>
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                       <Clock className="h-3 w-3" />
-                      {svc.duration} {t("min")} · ₪{svc.price}
+                      {svc.duration} {t("min")}{svc.price > 0 ? ` · ₪${svc.price}` : null}
                       {svcSessions.length > 0 && (
                         <span className="ms-1 text-accent font-medium">· {svcSessions.length} מפגשים</span>
                       )}

@@ -430,10 +430,12 @@ const ProviderDetail = () => {
                     {service.duration} {t("min")}
                   </span>
                 </div>
-                <div className="flex shrink-0 items-baseline gap-0.5 text-end">
-                  <span className="text-sm text-muted-foreground">₪</span>
-                  <span className="text-lg font-semibold tracking-tight">{service.price}</span>
-                </div>
+                {service.price > 0 && (
+                  <div className="flex shrink-0 items-baseline gap-0.5 text-end">
+                    <span className="text-sm text-muted-foreground">₪</span>
+                    <span className="text-lg font-semibold tracking-tight">{service.price}</span>
+                  </div>
+                )}
               </motion.div>
             ))}
           </div>

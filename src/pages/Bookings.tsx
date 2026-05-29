@@ -273,7 +273,7 @@ function BookingCard({ booking, index, getProviderName, getServiceNames, provide
               </div>
             )}
           </div>
-          <span className="text-sm font-bold">₪{booking.total_price}</span>
+          {booking.total_price > 0 ? <span className="text-sm font-bold">₪{booking.total_price}</span> : null}
         </div>
       </div>
 
