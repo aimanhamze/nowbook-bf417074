@@ -99,11 +99,11 @@ FOR UPDATE
 TO authenticated
 USING (
   provider_id IN (
-    SELECT id::text FROM public.provider_profiles WHERE user_id = auth.uid()
+    SELECT id FROM public.provider_profiles WHERE user_id = auth.uid()
   )
 )
 WITH CHECK (
   provider_id IN (
-    SELECT id::text FROM public.provider_profiles WHERE user_id = auth.uid()
+    SELECT id FROM public.provider_profiles WHERE user_id = auth.uid()
   )
 );
