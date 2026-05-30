@@ -291,6 +291,11 @@ export const translations = {
     bookingApproved: "התור אושר!",
     bookingRejected: "התור נדחה",
     awaitingApproval: "הבקשה נשלחה לאישור",
+    treatmentNotes: "רשומות טיפול",
+    treatmentNotesPlaceholder: "רשום מה בוצע בטיפול...",
+    treatmentNotesEnabled: "אפשר רשומות טיפול",
+    saveNote: "שמור הערה",
+    noteSaved: "הערה נשמרה ✅",
   },
   ar: {
     appName: "Dori",
@@ -582,6 +587,11 @@ export const translations = {
     bookingApproved: "تمت الموافقة على الموعد!",
     bookingRejected: "تم رفض الموعد",
     awaitingApproval: "تم إرسال الطلب للموافقة",
+    treatmentNotes: "ملاحظات العلاج",
+    treatmentNotesPlaceholder: "اكتب ما تم في العلاج...",
+    treatmentNotesEnabled: "تفعيل ملاحظات العلاج",
+    saveNote: "حفظ الملاحظة",
+    noteSaved: "تم حفظ الملاحظة ✅",
   },
   en: {
     appName: "Dori",
@@ -873,6 +883,11 @@ export const translations = {
     bookingApproved: "Booking Approved!",
     bookingRejected: "Booking Rejected",
     awaitingApproval: "Request sent for approval",
+    treatmentNotes: "Treatment Notes",
+    treatmentNotesPlaceholder: "Write what was done...",
+    treatmentNotesEnabled: "Enable Treatment Notes",
+    saveNote: "Save Note",
+    noteSaved: "Note saved ✅",
   },
 } as const;
 

@@ -11,6 +11,7 @@ export interface EnrichedBooking {
   booking_time: string;
   total_price: number;
   status: string;
+  treatment_notes: string | null;
   created_at: string;
   updated_at: string;
   customer_name: string | null;
@@ -61,6 +62,7 @@ export function useProviderBookings() {
         const primaryService = serviceMap.get(b.service_ids?.[0]);
         return {
           ...b,
+          treatment_notes: b.treatment_notes ?? null,
           customer_name: customer?.display_name || null,
           customer_phone: customer?.phone || null,
           customer_avatar: customer?.avatar_url || null,
@@ -244,6 +246,22 @@ export function useRejectBooking() {
           type: "booking_cancelled",
         });
       }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
+    },
+  });
+}
+
+export function useSaveTreatmentNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ bookingId, note }: { bookingId: string; note: string }) => {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ treatment_notes: note })
+        .eq("id", bookingId);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });

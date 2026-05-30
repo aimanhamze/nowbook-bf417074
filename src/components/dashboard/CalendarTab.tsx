@@ -1,11 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday } from "date-fns";
 import { he } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, User, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2 } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/contexts/LangContext";
-import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, useSaveTreatmentNote, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,57 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: "ממתין", className: "bg-amber-500/15 text-amber-700 border-amber-200" },
   cancelled: { label: "בוטל", className: "bg-red-500/15 text-red-700 border-red-200" },
 };
+
+function TreatmentNoteBox({ booking }: { booking: EnrichedBooking }) {
+  const { t } = useLang();
+  const { mutate: saveNote, isPending } = useSaveTreatmentNote();
+  const [note, setNote] = useState(booking.treatment_notes || "");
+  const [showSaved, setShowSaved] = useState(false);
+  const savedNote = useRef(booking.treatment_notes || "");
+
+  const doSave = (value: string) => {
+    saveNote({ bookingId: booking.id, note: value }, {
+      onSuccess: () => {
+        savedNote.current = value;
+        setShowSaved(true);
+        setTimeout(() => setShowSaved(false), 2000);
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : "שגיאה בשמירה"),
+    });
+  };
+
+  useEffect(() => {
+    if (note === savedNote.current) return;
+    const timer = setTimeout(() => doSave(note), 2000);
+    return () => clearTimeout(timer);
+  }, [note]);
+
+  return (
+    <div className="space-y-1.5 pt-2 border-t border-border/50">
+      <textarea
+        className="w-full text-xs rounded-lg border border-gray-200 bg-gray-50/80 p-2 resize-none text-foreground focus:outline-none focus:border-gray-300 placeholder:text-muted-foreground/40"
+        rows={2}
+        placeholder={t("treatmentNotesPlaceholder")}
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-emerald-600">
+          {showSaved ? t("noteSaved") : ""}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-[11px] h-7 px-2 text-muted-foreground hover:text-foreground"
+          onClick={() => doSave(note)}
+          disabled={isPending || note === savedNote.current}
+        >
+          {isPending ? "..." : t("saveNote")}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function BookingCard({ booking, index }: { booking: EnrichedBooking; index: number }) {
   const cancelBooking = useCancelBooking();
@@ -169,6 +220,11 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
           <MessageCircle className="h-3.5 w-3.5" />
           שלח תזכורת 🔔
         </a>
+      )}
+
+      {/* Treatment notes — confirmed bookings, only when feature is enabled */}
+      {isConfirmed && profile?.treatment_notes_enabled && (
+        <TreatmentNoteBox booking={booking} />
       )}
     </motion.div>
   );
