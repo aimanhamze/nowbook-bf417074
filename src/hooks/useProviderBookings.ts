@@ -183,7 +183,10 @@ export function useApproveBooking() {
         .from("bookings")
         .update({ status: "confirmed" })
         .eq("id", bookingId);
-      if (error) throw error;
+      if (error) {
+        console.error("Approve booking error:", error);
+        throw error;
+      }
 
       if (booking) {
         const { data: provider } = await supabase
@@ -221,7 +224,10 @@ export function useRejectBooking() {
         .from("bookings")
         .update({ status: "cancelled" })
         .eq("id", bookingId);
-      if (error) throw error;
+      if (error) {
+        console.error("Reject booking error:", error);
+        throw error;
+      }
 
       if (booking) {
         const { data: provider } = await supabase
