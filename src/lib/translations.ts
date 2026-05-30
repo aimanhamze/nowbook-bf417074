@@ -296,6 +296,12 @@ export const translations = {
     treatmentNotesEnabled: "אפשר רשומות טיפול",
     saveNote: "שמור הערה",
     noteSaved: "הערה נשמרה ✅",
+    providerHidden: "מוסתר",
+    providerVisible: "פעיל",
+    hideProvider: "הסתר ספק",
+    showProvider: "הצג ספק",
+    providerNotAvailable: "הספק אינו זמין כרגע",
+    confirmHideProvider: "האם אתה בטוח שברצונך להסתיר את הספק? הלקוחות לא יוכלו לראות אותו.",
   },
   ar: {
     appName: "Dori",
@@ -592,6 +598,12 @@ export const translations = {
     treatmentNotesEnabled: "تفعيل ملاحظات العلاج",
     saveNote: "حفظ الملاحظة",
     noteSaved: "تم حفظ الملاحظة ✅",
+    providerHidden: "مخفي",
+    providerVisible: "نشط",
+    hideProvider: "إخفاء المزود",
+    showProvider: "إظهار المزود",
+    providerNotAvailable: "المزود غير متاح حالياً",
+    confirmHideProvider: "هل أنت متأكد من إخفاء المزود? لن يتمكن العملاء من رؤيته.",
   },
   en: {
     appName: "Dori",
@@ -888,6 +900,12 @@ export const translations = {
     treatmentNotesEnabled: "Enable Treatment Notes",
     saveNote: "Save Note",
     noteSaved: "Note saved ✅",
+    providerHidden: "Hidden",
+    providerVisible: "Active",
+    hideProvider: "Hide Provider",
+    showProvider: "Show Provider",
+    providerNotAvailable: "Provider not available",
+    confirmHideProvider: "Are you sure you want to hide this provider? Customers will not be able to see them.",
   },
 } as const;
 

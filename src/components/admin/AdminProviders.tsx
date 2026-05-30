@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { categoryNames } from "@/lib/mock-data";
-import { Store, MapPin, Pencil, Trash2 } from "lucide-react";
+import { Store, MapPin, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { CreateProviderDialog } from "./CreateProviderDialog";
 import { EditProviderDialog } from "./EditProviderDialog";
@@ -23,7 +23,25 @@ export function AdminProviders() {
   const navigate = useNavigate();
   const [editingProvider, setEditingProvider] = useState<Tables<"provider_profiles"> | null>(null);
   const [deletingProvider, setDeletingProvider] = useState<Tables<"provider_profiles"> | null>(null);
+  const [hidingProvider, setHidingProvider] = useState<Tables<"provider_profiles"> | null>(null);
   const queryClient = useQueryClient();
+
+  const toggleVisibility = useMutation({
+    mutationFn: async ({ id, is_visible }: { id: string; is_visible: boolean }) => {
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ is_visible })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "שגיאה בעדכון הספק");
+    },
+  });
 
   const deleteProvider = useMutation({
     mutationFn: async (provider: Tables<"provider_profiles">) => {
@@ -108,7 +126,27 @@ export function AdminProviders() {
             <span className="text-xs text-muted-foreground">
               {new Date(p.created_at).toLocaleDateString("he-IL")}
             </span>
-            <div className="flex gap-1">
+            <div className="flex gap-1 items-center">
+              {/* Visibility badge */}
+              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${p.is_visible !== false ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
+                {p.is_visible !== false ? "פעיל 👁" : "מוסתר 🚫"}
+              </span>
+              {/* Toggle visibility */}
+              <button
+                onClick={() => {
+                  if (p.is_visible !== false) {
+                    setHidingProvider(p);
+                  } else {
+                    toggleVisibility.mutate({ id: p.id, is_visible: true });
+                    toast.success("הספק הוצג מחדש");
+                  }
+                }}
+                className={`p-1.5 rounded-lg bg-secondary transition-colors ${p.is_visible !== false ? "hover:bg-amber-100 text-muted-foreground hover:text-amber-600" : "hover:bg-emerald-100 text-muted-foreground hover:text-emerald-600"}`}
+                title={p.is_visible !== false ? "הסתר ספק" : "הצג ספק"}
+                disabled={toggleVisibility.isPending}
+              >
+                {p.is_visible !== false ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
               <button
                 onClick={() => setEditingProvider(p)}
                 className="p-1.5 rounded-lg bg-secondary hover:bg-accent/10 text-muted-foreground hover:text-accent transition-colors"
@@ -133,6 +171,37 @@ export function AdminProviders() {
         open={!!editingProvider}
         onOpenChange={(open) => { if (!open) setEditingProvider(null); }}
       />
+
+      {/* Hide confirmation */}
+      <AlertDialog open={!!hidingProvider} onOpenChange={(open) => { if (!open) setHidingProvider(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>הסתרת ספק</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם אתה בטוח שברצונך להסתיר את "{hidingProvider?.business_name}"? הלקוחות לא יוכלו לראות אותו.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-500 text-white hover:bg-amber-600"
+              onClick={() => {
+                if (hidingProvider) {
+                  toggleVisibility.mutate({ id: hidingProvider.id, is_visible: false }, {
+                    onSuccess: () => {
+                      toast.success("הספק הוסתר");
+                      setHidingProvider(null);
+                    },
+                  });
+                }
+              }}
+              disabled={toggleVisibility.isPending}
+            >
+              {toggleVisibility.isPending ? "מסתיר..." : "הסתר"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!deletingProvider} onOpenChange={(open) => { if (!open) setDeletingProvider(null); }}>
         <AlertDialogContent dir="rtl">
