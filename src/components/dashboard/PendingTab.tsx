@@ -96,7 +96,7 @@ function PendingCard({ booking, index }: { booking: EnrichedBooking; index: numb
           className="flex-1 text-xs h-9 text-emerald-700 border-emerald-300 bg-white hover:bg-emerald-50"
           onClick={() => approveBooking.mutate(booking.id, {
             onSuccess: () => toast.success("התור אושר בהצלחה ✅"),
-            onError: () => toast.error("שגיאה באישור התור"),
+            onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "שגיאה באישור התור"),
           })}
           disabled={approveBooking.isPending || rejectBooking.isPending}
         >
@@ -109,7 +109,7 @@ function PendingCard({ booking, index }: { booking: EnrichedBooking; index: numb
           className="flex-1 text-xs h-9 text-red-600 border-red-200 bg-white hover:bg-red-50"
           onClick={() => rejectBooking.mutate(booking.id, {
             onSuccess: () => toast.success("התור נדחה"),
-            onError: () => toast.error("שגיאה בדחיית התור"),
+            onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "שגיאה בדחיית התור"),
           })}
           disabled={approveBooking.isPending || rejectBooking.isPending}
         >
