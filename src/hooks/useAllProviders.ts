@@ -19,8 +19,8 @@ export interface DbProvider {
   average_rating: number | null;
   min_lead_time_minutes: number;
   social_links: SocialLinks | null;
-  // Optional until supabase gen types is run after the 20260525 migration.
   requires_booking_approval?: boolean;
+  is_visible?: boolean;
 }
 
 export interface DbService {
@@ -81,7 +81,8 @@ export function useAllProviders() {
     queryFn: async () => {
       const { data: profiles, error: pErr } = await supabase
         .from("provider_profiles")
-        .select("*");
+        .select("*")
+        .eq("is_visible", true);
       if (pErr) throw pErr;
 
       const { data: services, error: sErr } = await supabase

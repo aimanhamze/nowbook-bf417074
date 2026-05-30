@@ -274,6 +274,7 @@ export type Database = {
             website?: string
           } | null
           treatment_notes_enabled: boolean
+          is_visible: boolean
           updated_at: string
           user_id: string
         }
@@ -302,6 +303,7 @@ export type Database = {
             website?: string
           } | null
           treatment_notes_enabled?: boolean
+          is_visible?: boolean
           updated_at?: string
           user_id: string
         }
@@ -330,6 +332,7 @@ export type Database = {
             website?: string
           } | null
           treatment_notes_enabled?: boolean
+          is_visible?: boolean
           updated_at?: string
           user_id?: string
         }
