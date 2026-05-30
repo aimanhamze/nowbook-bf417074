@@ -64,6 +64,20 @@ export function useProviderProfile() {
     },
   });
 
+  const updateTreatmentNotesEnabled = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ treatment_notes_enabled: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+    },
+  });
+
   const uploadCoverImage = useMutation({
     mutationFn: async (file: File) => {
       if (!user) throw new Error("Not authenticated");
@@ -128,6 +142,7 @@ export function useProviderProfile() {
     error: profileQuery.error,
     upsertProfile,
     updateBookingApproval,
+    updateTreatmentNotesEnabled,
     uploadCoverImage,
     uploadAvatarImage,
   };

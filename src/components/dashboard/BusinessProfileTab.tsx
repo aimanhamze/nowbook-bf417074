@@ -60,7 +60,7 @@ type FormValues = z.infer<typeof profileSchema>;
 export function BusinessProfileTab() {
   const { t, lang } = useLang();
   const navigate = useNavigate();
-  const { profile, upsertProfile, updateBookingApproval, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
+  const { profile, upsertProfile, updateBookingApproval, updateTreatmentNotesEnabled, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
   const pendingCount = usePendingCount();
 
   const [accordionValue, setAccordionValue] = useState("");
@@ -68,6 +68,7 @@ export function BusinessProfileTab() {
   const [pendingGuardOpen, setPendingGuardOpen] = useState(false);
 
   const requiresApproval = profile?.requires_booking_approval ?? false;
+  const treatmentNotesEnabled = profile?.treatment_notes_enabled ?? false;
 
   const handleApprovalToggle = async (next: boolean) => {
     if (!next && pendingCount > 0) {
@@ -240,6 +241,24 @@ export function BusinessProfileTab() {
           <div className="flex-1">
             <Label className="text-sm font-medium">{t("requireApprovalLabel")}</Label>
             <p className="text-xs text-muted-foreground mt-1">{t("requireApprovalHelp")}</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 pt-1 border-t border-border">
+          <Switch
+            checked={treatmentNotesEnabled}
+            onCheckedChange={async (next) => {
+              try {
+                await updateTreatmentNotesEnabled.mutateAsync(next);
+                toast.success(t("profileSaved"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Error");
+              }
+            }}
+            disabled={updateTreatmentNotesEnabled.isPending}
+          />
+          <div className="flex-1">
+            <Label className="text-sm font-medium">{t("treatmentNotesEnabled")}</Label>
+            <p className="text-xs text-muted-foreground mt-1">{t("treatmentNotes")}</p>
           </div>
         </div>
       </div>

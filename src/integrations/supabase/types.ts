@@ -50,6 +50,7 @@ export type Database = {
           service_ids: string[]
           status: string
           total_price: number
+          treatment_notes: string | null
           updated_at: string
           user_id: string
         }
@@ -62,6 +63,7 @@ export type Database = {
           service_ids: string[]
           status?: string
           total_price: number
+          treatment_notes?: string | null
           updated_at?: string
           user_id: string
         }
@@ -74,6 +76,7 @@ export type Database = {
           service_ids?: string[]
           status?: string
           total_price?: number
+          treatment_notes?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -270,6 +273,7 @@ export type Database = {
             waze?: string
             website?: string
           } | null
+          treatment_notes_enabled: boolean
           updated_at: string
           user_id: string
         }
@@ -297,6 +301,7 @@ export type Database = {
             waze?: string
             website?: string
           } | null
+          treatment_notes_enabled?: boolean
           updated_at?: string
           user_id: string
         }
@@ -324,6 +329,7 @@ export type Database = {
             waze?: string
             website?: string
           } | null
+          treatment_notes_enabled?: boolean
           updated_at?: string
           user_id?: string
         }
