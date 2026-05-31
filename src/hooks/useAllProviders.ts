@@ -223,7 +223,20 @@ export function useAllProviderSchedules() {
 }
 
 /** Fetch real availability for a provider */
+// The availability window the client fetches busy slots for. Must be >= the
+// booking date strip shown in the UI (currently 14 days in both BookAppointment
+// and NewBookingSheet) so every bookable day's conflicts are covered.
+const AVAILABILITY_WINDOW_DAYS = 60;
+
 export function useRealAvailability(providerId: string | undefined) {
+  // Local date window [today, today + AVAILABILITY_WINDOW_DAYS]. Use LOCAL date
+  // strings (toLocalDateStr, NOT toISOString) so the window matches how
+  // booking_date is stored/compared and the queryKey stays stable within a day.
+  const windowEnd = new Date();
+  windowEnd.setDate(windowEnd.getDate() + AVAILABILITY_WINDOW_DAYS);
+  const fromStr = toLocalDateStr(new Date());
+  const toStr = toLocalDateStr(windowEnd);
+
   const availabilityQuery = useQuery({
     queryKey: ["provider-availability-public", providerId],
     queryFn: async () => {
@@ -254,14 +267,19 @@ export function useRealAvailability(providerId: string | undefined) {
   });
 
   const bookingsQuery = useQuery({
-    queryKey: ["provider-bookings-public", providerId],
+    queryKey: ["provider-bookings-public", providerId, fromStr, toStr],
     queryFn: async () => {
       if (!providerId) return [];
-      const { data, error } = await supabase
-        .from("bookings")
-        .select("booking_date, booking_time, service_ids")
-        .eq("provider_id", providerId)
-        .in("status", ["confirmed", "pending"]);
+      // RPC (SECURITY DEFINER) instead of a direct select: RLS hides other
+      // customers' and walk-in (user_id NULL) bookings from a customer, so a
+      // direct select returned an incomplete set and offered taken slots. The
+      // RPC returns only non-PII timing columns (booking_date, booking_time,
+      // service_ids) for the provider's active bookings in the window.
+      const { data, error } = await supabase.rpc("get_provider_busy_slots", {
+        p_provider_id: providerId,
+        p_from_date: fromStr,
+        p_to_date: toStr,
+      });
       if (error) throw error;
       return data || [];
     },
