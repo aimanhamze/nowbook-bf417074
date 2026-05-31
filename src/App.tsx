@@ -19,6 +19,7 @@ const BookingConfirmed = lazy(() => import("./pages/BookingConfirmed"));
 const Bookings = lazy(() => import("./pages/Bookings"));
 const Favorites = lazy(() => import("./pages/Favorites"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Settings = lazy(() => import("./pages/Settings"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Install = lazy(() => import("./pages/Install"));
@@ -51,6 +52,7 @@ function PageTitleUpdater() {
       "/bookings": `Dori — ${t("myBookings")}`,
       "/favorites": `Dori — ${t("favorites")}`,
       "/profile": `Dori — ${t("profile")}`,
+      "/settings": `Dori — ${t("settings")}`,
       "/auth": `Dori — ${t("signIn")}`,
       "/notifications": `Dori — ${t("notificationsLabel")}`,
       "/dashboard": `Dori — ${t("dashboard")}`,
@@ -89,6 +91,7 @@ const App = () => (
                   <Route path="/bookings" element={<ProtectedRoute><ErrorBoundary><Bookings /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/favorites" element={<ProtectedRoute><ErrorBoundary><Favorites /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/profile" element={<ProtectedRoute><ErrorBoundary><Profile /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute><ErrorBoundary><Settings /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   <Route path="/reset-password" element={<ErrorBoundary><ResetPassword /></ErrorBoundary>} />
                   <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Dashboard /></ErrorBoundary></ProtectedRoute>} />
