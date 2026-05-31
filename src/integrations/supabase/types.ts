@@ -528,6 +528,14 @@ export type Database = {
     Functions: {
       booking_time_to_minutes: { Args: { _time: string }; Returns: number }
       get_display_name: { Args: { _user_id: string }; Returns: string }
+      get_provider_busy_slots: {
+        Args: { p_from_date: string; p_provider_id: string; p_to_date: string }
+        Returns: {
+          booking_date: string
+          booking_time: string
+          service_ids: string[]
+        }[]
+      }
       get_slot_capacity: {
         Args: {
           p_date: string
