@@ -40,7 +40,7 @@ const Profile = () => {
       action: handlePushToggle,
       loading: pushLoading,
     }] : []),
-    { icon: Settings, label: t("settings") },
+    ...(user && isProvider ? [{ icon: Settings, label: t("settings"), action: () => navigate("/settings") }] : []),
     { icon: HelpCircle, label: t("helpSupport") },
   ];
 

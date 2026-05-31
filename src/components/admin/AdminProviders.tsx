@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { categoryNames } from "@/lib/mock-data";
-import { Store, MapPin, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
+import { Store, MapPin, Pencil, Trash2, Eye, EyeOff, KeyRound } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { CreateProviderDialog } from "./CreateProviderDialog";
 import { EditProviderDialog } from "./EditProviderDialog";
+import { ResetPasswordDialog } from "./ResetPasswordDialog";
+import { useLang } from "@/contexts/LangContext";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -21,9 +23,11 @@ import type { Tables } from "@/integrations/supabase/types";
 
 export function AdminProviders() {
   const navigate = useNavigate();
+  const { t } = useLang();
   const [editingProvider, setEditingProvider] = useState<Tables<"provider_profiles"> | null>(null);
   const [deletingProvider, setDeletingProvider] = useState<Tables<"provider_profiles"> | null>(null);
   const [hidingProvider, setHidingProvider] = useState<Tables<"provider_profiles"> | null>(null);
+  const [resettingProvider, setResettingProvider] = useState<Tables<"provider_profiles"> | null>(null);
   const queryClient = useQueryClient();
 
   const toggleVisibility = useMutation({
@@ -155,6 +159,13 @@ export function AdminProviders() {
                 <Pencil className="h-3.5 w-3.5" />
               </button>
               <button
+                onClick={() => setResettingProvider(p)}
+                className="p-1.5 rounded-lg bg-secondary hover:bg-accent/10 text-muted-foreground hover:text-accent transition-colors"
+                title={t("resetPassword")}
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+              </button>
+              <button
                 onClick={() => setDeletingProvider(p)}
                 className="p-1.5 rounded-lg bg-secondary hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                 title="מחק ספק"
@@ -170,6 +181,12 @@ export function AdminProviders() {
         provider={editingProvider}
         open={!!editingProvider}
         onOpenChange={(open) => { if (!open) setEditingProvider(null); }}
+      />
+
+      <ResetPasswordDialog
+        provider={resettingProvider}
+        open={!!resettingProvider}
+        onOpenChange={(open) => { if (!open) setResettingProvider(null); }}
       />
 
       {/* Hide confirmation */}
