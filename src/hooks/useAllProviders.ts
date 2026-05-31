@@ -287,7 +287,7 @@ export function useRealAvailability(providerId: string | undefined) {
     if (!providerId) return [];
 
     const dow = date.getDay();
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = toLocalDateStr(date);
 
     if ((blockedDatesQuery.data || []).includes(dateStr)) return [];
 
@@ -335,7 +335,7 @@ export function useRealAvailability(providerId: string | undefined) {
     if (!providerId) return [];
 
     const dow = date.getDay();
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = toLocalDateStr(date);
 
     if ((blockedDatesQuery.data || []).includes(dateStr)) return [];
 
@@ -367,4 +367,15 @@ export function useRealAvailability(providerId: string | undefined) {
 function parseTime(timeStr: string): number {
   const [h, m] = timeStr.split(":").map(Number);
   return h * 60 + (m || 0);
+}
+
+// Local calendar date as "YYYY-MM-DD". Must stay consistent with date.getDay()
+// (also local) and with how booking_date is written everywhere (local
+// format(date, "yyyy-MM-dd")). Using toISOString() here would yield the UTC
+// date, which rolls back a day for local-midnight inputs in Israel's timezone.
+function toLocalDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }

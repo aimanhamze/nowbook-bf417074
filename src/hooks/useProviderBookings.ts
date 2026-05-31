@@ -4,7 +4,7 @@ import { useProviderProfile } from "./useProviderProfile";
 
 export interface EnrichedBooking {
   id: string;
-  user_id: string;
+  user_id: string | null;
   provider_id: string;
   service_ids: string[];
   booking_date: string;
@@ -39,7 +39,8 @@ export function useProviderBookings() {
       if (error) throw error;
       if (!bookings || bookings.length === 0) return [];
 
-      const userIds = [...new Set(bookings.map((b) => b.user_id))];
+      // Walk-in bookings have user_id IS NULL — exclude those from the profiles lookup.
+      const userIds = [...new Set(bookings.map((b) => b.user_id).filter(Boolean))];
       const { data: profiles } = await supabase
         .from("profiles")
         .select("user_id, display_name, phone, avatar_url")
@@ -58,13 +59,16 @@ export function useProviderBookings() {
       );
 
       return bookings.map((b): EnrichedBooking => {
-        const customer = profileMap.get(b.user_id);
+        // Walk-in: user_id is null → profileMap lookup is skipped (no account).
+        const customer = b.user_id ? profileMap.get(b.user_id) : undefined;
         const primaryService = serviceMap.get(b.service_ids?.[0]);
+        // Walk-in bookings store the customer's details on the row; app bookings
+        // leave these NULL and resolve via the profiles join above.
         return {
           ...b,
           treatment_notes: b.treatment_notes ?? null,
-          customer_name: customer?.display_name || null,
-          customer_phone: customer?.phone || null,
+          customer_name: b.customer_name || customer?.display_name || null,
+          customer_phone: b.customer_phone || customer?.phone || null,
           customer_avatar: customer?.avatar_url || null,
           service_names: (b.service_ids || []).map((id) => serviceMap.get(id)?.name || id),
           is_group_service: primaryService?.service_type === 'group',

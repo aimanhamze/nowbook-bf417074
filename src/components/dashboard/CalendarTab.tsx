@@ -7,6 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, useSaveTreatmentNote, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { NewBookingSheet } from "@/components/dashboard/NewBookingSheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -458,13 +459,16 @@ export function CalendarTab() {
 
       {/* Bookings for selected date */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <h3 className="text-sm font-semibold min-w-0 truncate">
             {isSelectedToday ? "📅 תורים להיום" : format(selectedDate, "EEEE, d בMMMM", { locale: he })}
           </h3>
-          <span className="text-xs text-muted-foreground">
-            {calendarItems.length} {calendarItems.length === 1 ? "תור" : "תורים"}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-muted-foreground">
+              {calendarItems.length} {calendarItems.length === 1 ? "תור" : "תורים"}
+            </span>
+            <NewBookingSheet selectedDate={selectedDate} />
+          </div>
         </div>
 
         {isLoading ? (

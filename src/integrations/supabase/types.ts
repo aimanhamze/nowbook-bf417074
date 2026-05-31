@@ -1,4 +1,3 @@
-Initialising login role...
 export type Json =
   | string
   | number
@@ -13,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       bookings: {
@@ -45,6 +19,9 @@ export type Database = {
           booking_date: string
           booking_time: string
           created_at: string
+          customer_name: string | null
+          customer_phone: string | null
+          guest_notes: string | null
           id: string
           provider_id: string
           service_ids: string[]
@@ -52,12 +29,15 @@ export type Database = {
           total_price: number
           treatment_notes: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           booking_date: string
           booking_time: string
           created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          guest_notes?: string | null
           id?: string
           provider_id: string
           service_ids: string[]
@@ -65,12 +45,15 @@ export type Database = {
           total_price: number
           treatment_notes?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           booking_date?: string
           booking_time?: string
           created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          guest_notes?: string | null
           id?: string
           provider_id?: string
           service_ids?: string[]
@@ -78,7 +61,7 @@ export type Database = {
           total_price?: number
           treatment_notes?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -249,6 +232,41 @@ export type Database = {
           },
         ]
       }
+      provider_photos: {
+        Row: {
+          caption: string | null
+          created_at: string | null
+          id: string
+          provider_id: string
+          sort_order: number | null
+          url: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string | null
+          id?: string
+          provider_id: string
+          sort_order?: number | null
+          url: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string | null
+          id?: string
+          provider_id?: string
+          sort_order?: number | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_photos_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       provider_profiles: {
         Row: {
           about: string | null
@@ -260,21 +278,14 @@ export type Database = {
           cover_image: string | null
           created_at: string
           id: string
+          is_visible: boolean
           latitude: number | null
           longitude: number | null
           min_lead_time_minutes: number
           phone: string | null
           requires_booking_approval: boolean
-          social_links: {
-            whatsapp?: string
-            instagram?: string
-            tiktok?: string
-            facebook?: string
-            waze?: string
-            website?: string
-          } | null
+          social_links: Json | null
           treatment_notes_enabled: boolean
-          is_visible: boolean
           updated_at: string
           user_id: string
         }
@@ -288,22 +299,14 @@ export type Database = {
           cover_image?: string | null
           created_at?: string
           id?: string
+          is_visible?: boolean
           latitude?: number | null
           longitude?: number | null
           min_lead_time_minutes?: number
           phone?: string | null
           requires_booking_approval?: boolean
-          social_links?: {
-            phone?: string
-            whatsapp?: string
-            instagram?: string
-            tiktok?: string
-            facebook?: string
-            waze?: string
-            website?: string
-          } | null
+          social_links?: Json | null
           treatment_notes_enabled?: boolean
-          is_visible?: boolean
           updated_at?: string
           user_id: string
         }
@@ -317,22 +320,14 @@ export type Database = {
           cover_image?: string | null
           created_at?: string
           id?: string
+          is_visible?: boolean
           latitude?: number | null
           longitude?: number | null
           min_lead_time_minutes?: number
           phone?: string | null
           requires_booking_approval?: boolean
-          social_links?: {
-            phone?: string
-            whatsapp?: string
-            instagram?: string
-            tiktok?: string
-            facebook?: string
-            waze?: string
-            website?: string
-          } | null
+          social_links?: Json | null
           treatment_notes_enabled?: boolean
-          is_visible?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -682,9 +677,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["admin", "provider", "user"],
