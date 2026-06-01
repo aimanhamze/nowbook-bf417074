@@ -5,7 +5,7 @@ import { lovable } from "@/integrations/lovable";
 import { useLang } from "@/contexts/LangContext";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { BackArrow } from "@/components/ui/directional-icon";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, Mail, Phone, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -39,24 +39,34 @@ function isValidIsraeliPhone(display: string): boolean {
   return /^0[5-9]\d{8}$/.test(digits);
 }
 
-// ── Presentational primitives (visual only) ──────────────────────────────────
+// ── Page-scoped design tokens (sampled from the reference mockup) ─────────────
+// Hardcoded here on purpose so the /auth restyle never touches the global theme.
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
-/** Shared input styling: refined border, accent focus glow, RTL-safe. */
+/** Input: light #F7F7F9 fill, orange focus border + glow. RTL-safe. */
 const FIELD =
-  "w-full rounded-2xl border border-border bg-white/70 px-4 py-3 text-sm text-foreground " +
-  "placeholder:text-muted-foreground/60 transition-all duration-200 focus:outline-none " +
-  "focus:border-accent focus:bg-white focus:ring-4 focus:ring-accent/15";
+  "w-full rounded-2xl border border-transparent bg-[#F7F7F9] px-4 py-3 text-sm text-[#102038] " +
+  "placeholder:text-[#606068]/60 transition-all duration-200 focus:outline-none " +
+  "focus:border-[#E76C29] focus:bg-white focus:ring-4 focus:ring-[#E76C29]/15";
 
-/** Solid accent CTA with glow + press feedback. */
+/** Primary CTA: solid #E76C29 with orange glow + hover/press feedback. */
 const PRIMARY_BTN =
-  "relative flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-sm " +
-  "font-semibold text-accent-foreground shadow-[0_8px_22px_-10px_hsl(24_80%_55%/0.7)] " +
-  "transition-all duration-200 hover:brightness-[1.05] hover:shadow-[0_12px_28px_-10px_hsl(24_80%_55%/0.8)] " +
-  "active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none";
+  "relative flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E76C29] py-3.5 text-sm " +
+  "font-bold text-white shadow-[0_10px_28px_rgba(231,108,41,0.35)] transition-all duration-200 " +
+  "hover:bg-[#D75F1E] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 " +
+  "focus-visible:ring-[#E76C29]/30 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none";
 
-const LABEL = "mb-1.5 block text-xs font-medium text-muted-foreground";
+const LABEL = "mb-1.5 block text-sm font-medium text-[#102038]";
+
+/** Leading (RTL-right) field icon — decorative. */
+function LeadingIcon({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="pointer-events-none absolute inset-y-0 right-0 flex w-11 items-center justify-center text-[#606068]">
+      {children}
+    </span>
+  );
+}
 
 function Spinner() {
   return <Loader2 className="h-4 w-4 animate-spin" aria-hidden />;
@@ -73,16 +83,36 @@ function GoogleLogo() {
   );
 }
 
-/** Soft, light background atmosphere — gentle warm→lavender wash + blurred blobs. */
+/** DORAK wordmark — dark ink with a small orange accent on the "A". */
+function Wordmark({ onTap }: { onTap: () => void }) {
+  return (
+    <span
+      onClick={onTap}
+      className="inline-block select-none text-lg font-extrabold tracking-[0.22em] text-[#102038]"
+    >
+      DOR<span className="text-[#E76C29]">A</span>K
+    </span>
+  );
+}
+
+/** Warm peach atmosphere: cream top-left, peach top-right, fading to near-white. */
 function AuthBackground() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute inset-0 overflow-hidden bg-gradient-to-b from-[hsl(24_70%_97%)] via-background to-[hsl(265_40%_97%)]"
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+      style={{ background: "linear-gradient(180deg, #FFE7CE 0%, #FFF2E4 30%, #FEFEFE 70%)" }}
     >
-      <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-accent/15 blur-3xl" />
-      <div className="absolute -left-24 top-1/3 h-72 w-72 rounded-full bg-[hsl(265_50%_80%)]/30 blur-3xl" />
-      <div className="absolute -bottom-10 right-1/4 h-64 w-64 rounded-full bg-[hsl(24_90%_85%)]/30 blur-3xl" />
+      {/* cream glow — top-left */}
+      <div
+        className="absolute -left-24 -top-28 h-80 w-80 rounded-full blur-3xl"
+        style={{ background: "radial-gradient(circle, rgba(254,235,218,0.9), transparent 70%)" }}
+      />
+      {/* peach glow — top-right */}
+      <div
+        className="absolute -right-24 -top-28 h-80 w-80 rounded-full blur-3xl"
+        style={{ background: "radial-gradient(circle, rgba(255,207,158,0.8), transparent 70%)" }}
+      />
     </div>
   );
 }
@@ -302,12 +332,12 @@ const Auth = () => {
   const cardEntrance = reduceMotion
     ? { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.2 } }
     : {
-        initial: { opacity: 0, y: 22, scale: 0.985 },
-        animate: { opacity: 1, y: 0, scale: 1 },
+        initial: { opacity: 0, y: 18 },
+        animate: { opacity: 1, y: 0 },
         transition: { duration: 0.5, ease: EASE },
       };
 
-  const slideX = reduceMotion ? 0 : 12;
+  const slideX = reduceMotion ? 0 : 10;
 
   // ── Welcome screen ─────────────────────────────────────────────────────────
 
@@ -316,14 +346,14 @@ const Auth = () => {
       <div className="relative flex min-h-screen flex-col items-center justify-center px-6">
         <AuthBackground />
         <motion.div
-          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.985 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: reduceMotion ? 0.2 : 0.5, ease: EASE }}
-          className="relative w-full max-w-sm space-y-6 rounded-3xl border border-white/60 bg-white/80 p-7 text-center shadow-[0_1px_2px_rgba(40,20,10,0.04),0_24px_60px_-28px_rgba(120,70,30,0.28)] backdrop-blur-xl"
+          className="relative w-full max-w-[420px] space-y-6 rounded-[28px] bg-white p-7 text-center shadow-[0_20px_50px_-20px_rgba(16,32,56,0.18),0_4px_12px_rgba(16,32,56,0.05)]"
         >
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold">ברוך הבא לדורק! 👋</h1>
-            <p className="text-sm text-muted-foreground">איך קוראים לך?</p>
+            <h1 className="text-2xl font-bold text-[#102038]">ברוך הבא לדורק! 👋</h1>
+            <p className="text-sm text-[#606068]">איך קוראים לך?</p>
           </div>
           <input
             type="text"
@@ -349,30 +379,30 @@ const Auth = () => {
 
   // ── Main auth page ─────────────────────────────────────────────────────────
 
+  const tabs = [
+    { mode: "email" as const, label: "אימייל", Icon: Mail, onClick: () => { setLoginMode("email"); setShowForgot(false); resetPhoneFlow(); } },
+    { mode: "phone" as const, label: t("phoneNumber"), Icon: Phone, onClick: () => { setLoginMode("phone"); setShowForgot(false); } },
+  ];
+
   return (
     <div className="relative flex min-h-screen flex-col">
       <AuthBackground />
 
-      <header className="relative px-5 pb-2 pt-12">
-        <div className="mx-auto flex max-w-sm items-center gap-3">
-          <button
-            onClick={() => navigate(-1)}
-            aria-label="חזרה"
-            className="rounded-xl p-1.5 text-foreground/80 transition-all hover:bg-white/60 hover:text-foreground active:scale-95"
-          >
-            <BackArrow className="h-5 w-5" />
-          </button>
-          <h1 className="select-none text-xl font-bold tracking-tight" onClick={handleLogoTap}>
-            {t("signIn")}
-          </h1>
-        </div>
-      </header>
+      {/* Back control — floats in the start corner, keeps the layout centered */}
+      <button
+        onClick={() => navigate(-1)}
+        aria-label="חזרה"
+        className="absolute start-4 top-4 z-10 rounded-xl p-2 text-[#102038]/70 transition-all hover:bg-white/70 hover:text-[#102038] active:scale-95"
+      >
+        <BackArrow className="h-5 w-5" />
+      </button>
 
-      <main className="relative flex flex-1 items-start justify-center px-5 pb-10 pt-3">
-        <motion.div {...cardEntrance} className="w-full max-w-sm">
+      <main className="relative flex flex-1 flex-col items-center justify-start px-5 pb-12 pt-14">
+        <motion.div {...cardEntrance} className="w-full max-w-[420px]">
+
           {/* Dev login panel */}
           {showDevLogin && (
-            <div className="mb-4 space-y-3 rounded-2xl border border-dashed border-yellow-400/60 bg-yellow-50/40 p-4 backdrop-blur-sm">
+            <div className="mb-4 space-y-3 rounded-2xl border border-dashed border-yellow-400/60 bg-yellow-50/60 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-yellow-600">Dev Login</p>
               <input type="email" dir="ltr" placeholder="email@example.com" value={devEmail}
                 onChange={(e) => setDevEmail(e.target.value)}
@@ -388,31 +418,37 @@ const Auth = () => {
             </div>
           )}
 
-          {/* Refined form card */}
-          <div className="rounded-3xl border border-white/60 bg-white/80 p-6 shadow-[0_1px_2px_rgba(40,20,10,0.04),0_24px_60px_-28px_rgba(120,70,30,0.28)] backdrop-blur-xl sm:p-7">
+          {/* Wordmark + heading + subtitle */}
+          <div className="mb-6 text-center">
+            <Wordmark onTap={handleLogoTap} />
+            <h1 className="mt-4 text-[30px] font-bold leading-tight text-[#102038]">{t("signIn")}</h1>
+            <p className="mt-1.5 text-sm text-[#606068]">שמחים לראות אותך שוב</p>
+            <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-[#E76C29]" />
+          </div>
+
+          {/* Form card */}
+          <div className="rounded-[28px] bg-white p-6 shadow-[0_20px_50px_-20px_rgba(16,32,56,0.18),0_4px_12px_rgba(16,32,56,0.05)] sm:p-7">
             <div className="space-y-5">
 
-              {/* ── Mode tabs (sliding indicator) ── */}
-              <div className="relative grid grid-cols-2 gap-1 rounded-2xl border border-border/70 bg-secondary/60 p-1">
-                {([
-                  { mode: "phone" as const, label: t("phoneNumber"), onClick: () => { setLoginMode("phone"); setShowForgot(false); } },
-                  { mode: "email" as const, label: "אימייל", onClick: () => { setLoginMode("email"); setShowForgot(false); resetPhoneFlow(); } },
-                ]).map((tab) => {
+              {/* ── Mode tabs (sliding pill) ── */}
+              <div className="relative grid grid-cols-2 gap-1 rounded-2xl bg-[#F2F2F5] p-1">
+                {tabs.map((tab) => {
                   const active = loginMode === tab.mode;
                   return (
                     <button
                       key={tab.mode}
                       onClick={tab.onClick}
                       aria-pressed={active}
-                      className={`relative z-10 rounded-xl py-2.5 text-sm font-medium transition-colors duration-200 ${active ? "font-semibold text-accent" : "text-muted-foreground hover:text-foreground"}`}
+                      className={`relative z-10 flex items-center justify-center gap-2 rounded-[14px] py-2.5 text-sm font-medium transition-colors duration-200 focus-visible:outline-none ${active ? "text-[#E76C29]" : "text-[#606068] hover:text-[#102038]"}`}
                     >
                       {active && (
                         <motion.span
                           layoutId="authTabIndicator"
                           transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 32 }}
-                          className="absolute inset-0 -z-10 rounded-xl border border-accent/20 bg-accent/10 shadow-[0_1px_2px_rgba(40,20,10,0.06),0_6px_16px_-10px_rgba(120,70,30,0.25)]"
+                          className="absolute inset-0 -z-10 rounded-[14px] bg-white shadow-[0_2px_8px_rgba(16,32,56,0.10)]"
                         />
                       )}
+                      <tab.Icon className="h-4 w-4" aria-hidden />
                       {tab.label}
                     </button>
                   );
@@ -432,11 +468,11 @@ const Auth = () => {
                   >
                     {phoneStep === "input" ? (
                       <>
-                        {/* Phone input with +972 prefix */}
+                        {/* Phone input with +972 prefix (chip on the left) */}
                         <div>
                           <label htmlFor="auth-phone" className={LABEL}>{t("phoneNumber")}</label>
-                          <div dir="ltr" className="flex items-stretch overflow-hidden rounded-2xl border border-border bg-white/70 transition-all duration-200 focus-within:border-accent focus-within:bg-white focus-within:ring-4 focus-within:ring-accent/15">
-                            <span className="flex select-none items-center gap-1 border-e border-border bg-secondary/70 px-3 text-sm font-semibold text-foreground/80">
+                          <div dir="ltr" className="flex items-stretch overflow-hidden rounded-2xl border border-transparent bg-[#F7F7F9] transition-all duration-200 focus-within:border-[#E76C29] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#E76C29]/15">
+                            <span className="flex select-none items-center gap-1 border-e border-[#E6E6EA] px-3 text-sm font-semibold text-[#102038]">
                               🇮🇱 +972
                             </span>
                             <input
@@ -448,7 +484,7 @@ const Auth = () => {
                               value={phone}
                               onChange={handlePhoneInput}
                               onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                              className="flex-1 bg-transparent px-3 py-3 text-sm placeholder:text-muted-foreground/60 focus:outline-none"
+                              className="flex-1 bg-transparent px-3 py-3 text-sm text-[#102038] placeholder:text-[#606068]/60 focus:outline-none"
                             />
                           </div>
                         </div>
@@ -460,8 +496,8 @@ const Auth = () => {
                       <>
                         {/* OTP step */}
                         <div className="space-y-1 text-center">
-                          <p className="text-sm text-muted-foreground">{t("enterOtp")}</p>
-                          <p className="text-xs font-medium text-foreground" dir="ltr">+972 {phone}</p>
+                          <p className="text-sm text-[#606068]">{t("enterOtp")}</p>
+                          <p className="text-xs font-medium text-[#102038]" dir="ltr">+972 {phone}</p>
                         </div>
 
                         {/* 6-digit OTP input */}
@@ -476,7 +512,7 @@ const Auth = () => {
                           onKeyDown={(e) => e.key === "Enter" && handleVerifyOtp()}
                           autoFocus
                           aria-invalid={!!otpError}
-                          className={`w-full rounded-2xl border bg-white/70 px-4 py-3 text-center font-mono text-lg tracking-[0.4em] transition-all duration-200 focus:outline-none focus:bg-white focus:ring-4 ${otpError ? "border-destructive focus:border-destructive focus:ring-destructive/15" : "border-border focus:border-accent focus:ring-accent/15"}`}
+                          className={`w-full rounded-2xl border bg-[#F7F7F9] px-4 py-3 text-center font-mono text-lg tracking-[0.4em] text-[#102038] transition-all duration-200 focus:outline-none focus:bg-white focus:ring-4 ${otpError ? "border-destructive focus:border-destructive focus:ring-destructive/15" : "border-transparent focus:border-[#E76C29] focus:ring-[#E76C29]/15"}`}
                         />
                         {otpError && (
                           <p className="text-center text-xs text-destructive">{otpError}</p>
@@ -489,14 +525,14 @@ const Auth = () => {
                         {/* Countdown / resend */}
                         <div className="flex items-center justify-center gap-2 text-xs">
                           {countdown > 0 ? (
-                            <span className="text-muted-foreground">
+                            <span className="text-[#606068]">
                               שלח שוב בעוד <span className="font-semibold tabular-nums">{countdown}</span> שניות
                             </span>
                           ) : (
                             <button
                               onClick={handleResendOtp}
                               disabled={loading}
-                              className="font-medium text-accent transition-colors hover:text-accent/80 hover:underline disabled:opacity-50"
+                              className="font-medium text-[#E76C29] transition-colors hover:text-[#D75F1E] hover:underline disabled:opacity-50"
                             >
                               שלח קוד מחדש
                             </button>
@@ -506,7 +542,7 @@ const Auth = () => {
                         {/* Back to phone input */}
                         <button
                           onClick={resetPhoneFlow}
-                          className="w-full py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                          className="w-full py-2 text-xs text-[#606068] transition-colors hover:text-[#102038]"
                         >
                           ← שנה מספר טלפון
                         </button>
@@ -529,24 +565,28 @@ const Auth = () => {
                       <>
                         <div>
                           <label htmlFor="auth-email" className={LABEL}>אימייל</label>
-                          <input id="auth-email" type="email" dir="ltr" placeholder="email@example.com" value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className={FIELD} />
+                          <div className="relative">
+                            <input id="auth-email" type="email" dir="ltr" placeholder="email@example.com" value={email}
+                              onChange={(e) => setEmail(e.target.value)}
+                              className={`${FIELD} pr-11`} />
+                            <LeadingIcon><Mail className="h-[18px] w-[18px]" /></LeadingIcon>
+                          </div>
                         </div>
                         <div>
                           <label htmlFor="auth-password" className={LABEL}>סיסמה</label>
                           <div className="relative">
-                            <input id="auth-password" type={showPassword ? "text" : "password"} dir="ltr" placeholder={t("signIn")} value={password}
+                            <input id="auth-password" type={showPassword ? "text" : "password"} dir="ltr" placeholder="הכנס סיסמה" value={password}
                               onChange={(e) => setPassword(e.target.value)}
                               onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
-                              className={`${FIELD} pr-11`} />
+                              className={`${FIELD} pl-11 pr-11`} />
+                            <LeadingIcon><Lock className="h-[18px] w-[18px]" /></LeadingIcon>
                             <button
                               type="button"
                               onClick={() => setShowPassword((v) => !v)}
                               aria-label={showPassword ? "הסתר סיסמה" : "הצג סיסמה"}
                               aria-pressed={showPassword}
                               tabIndex={-1}
-                              className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-2xl text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:text-accent"
+                              className="absolute inset-y-0 left-0 flex w-11 items-center justify-center rounded-l-2xl text-[#606068] transition-colors hover:text-[#102038] focus-visible:text-[#E76C29] focus-visible:outline-none"
                             >
                               {showPassword ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
                             </button>
@@ -556,24 +596,27 @@ const Auth = () => {
                           {loading ? <Spinner /> : t("signIn")}
                         </button>
                         <button onClick={() => setShowForgot(true)}
-                          className="w-full py-1 text-xs font-medium text-accent transition-colors hover:text-accent/80 hover:underline">
+                          className="mx-auto block py-1 text-sm font-medium text-[#E76C29] transition-colors hover:text-[#D75F1E] hover:underline">
                           {t("signIn") === "Sign In" ? "Forgot password?" : "שכחתי סיסמה"}
                         </button>
                       </>
                     ) : (
                       <>
-                        <p className="text-sm text-muted-foreground">הכנס את כתובת האימייל שלך לאיפוס הסיסמה</p>
+                        <p className="text-sm text-[#606068]">הכנס את כתובת האימייל שלך לאיפוס הסיסמה</p>
                         <div>
                           <label htmlFor="auth-reset-email" className={LABEL}>אימייל</label>
-                          <input id="auth-reset-email" type="email" dir="ltr" placeholder="email@example.com" value={resetEmail}
-                            onChange={(e) => setResetEmail(e.target.value)}
-                            className={FIELD} />
+                          <div className="relative">
+                            <input id="auth-reset-email" type="email" dir="ltr" placeholder="email@example.com" value={resetEmail}
+                              onChange={(e) => setResetEmail(e.target.value)}
+                              className={`${FIELD} pr-11`} />
+                            <LeadingIcon><Mail className="h-[18px] w-[18px]" /></LeadingIcon>
+                          </div>
                         </div>
                         <button onClick={handleForgot} disabled={loading} aria-busy={loading} className={PRIMARY_BTN}>
                           {loading ? <Spinner /> : "שלח קישור איפוס"}
                         </button>
                         <button onClick={() => setShowForgot(false)}
-                          className="w-full py-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                          className="w-full py-2 text-sm text-[#606068] transition-colors hover:text-[#102038]">
                           ← {t("signIn")}
                         </button>
                       </>
@@ -592,13 +635,13 @@ const Auth = () => {
                   className="space-y-4"
                 >
                   <div className="flex items-center gap-3 py-1">
-                    <div className="h-px flex-1 bg-border" />
-                    <span className="text-xs text-muted-foreground">{t("orSignInWith")}</span>
-                    <div className="h-px flex-1 bg-border" />
+                    <div className="h-px flex-1 bg-[#E6E6EA]" />
+                    <span className="text-xs text-[#606068]">{t("orSignInWith")}</span>
+                    <div className="h-px flex-1 bg-[#E6E6EA]" />
                   </div>
 
                   <button onClick={handleGoogleSignIn} disabled={loading} aria-busy={loading}
-                    className="group flex w-full items-center justify-center gap-2.5 rounded-2xl border border-border bg-white/70 py-3.5 text-sm font-medium text-foreground transition-all duration-200 hover:border-border hover:bg-white hover:shadow-md active:scale-[0.98] disabled:opacity-60">
+                    className="group flex w-full items-center justify-center gap-2.5 rounded-2xl border border-[#E6E6EA] bg-white py-3.5 text-sm font-medium text-[#102038] transition-all duration-200 hover:bg-[#F7F7F9] hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#E76C29]/15 disabled:opacity-60">
                     <span className="transition-transform duration-200 group-hover:scale-110">
                       <GoogleLogo />
                     </span>
