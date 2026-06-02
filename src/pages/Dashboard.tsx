@@ -84,16 +84,32 @@ export default function Dashboard() {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
-              <button
+              <motion.button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 active:scale-[0.97] ${
-                  isActive ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
+                whileTap={{ scale: 0.92 }}
+                className={`relative flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium transition-colors duration-200 ${
+                  isActive ? "text-accent" : "text-muted-foreground"
                 }`}
               >
-                <Icon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t(TAB_LABELS[tab.id] as any)}</span>
-              </button>
+                {isActive && (
+                  <motion.div
+                    layoutId="dashboardTabPill"
+                    className="absolute inset-0 rounded-xl bg-card shadow-sm"
+                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                  />
+                )}
+                <span className="relative flex items-center gap-1.5">
+                  <motion.span
+                    animate={{ scale: isActive ? 1.1 : 1 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                    className="inline-flex"
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </motion.span>
+                  <span className="hidden sm:inline">{t(TAB_LABELS[tab.id] as any)}</span>
+                </span>
+              </motion.button>
             );
           })}
         </div>

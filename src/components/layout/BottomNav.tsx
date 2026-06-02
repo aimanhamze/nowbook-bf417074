@@ -1,4 +1,5 @@
 import { Home, Search, Calendar, Heart, User, LayoutDashboard, Bell } from "lucide-react";
+import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
@@ -31,7 +32,7 @@ export function BottomNav() {
 
   const navItems = isProvider
     ? [
-        { icon: LayoutDashboard, label: t("providerDashboard"), path: "/dashboard" },
+        { icon: LayoutDashboard, label: t("dashboard"), path: "/dashboard" },
         { icon: Calendar, label: t("calendar"), path: "/calendar" },
         { icon: Bell, label: t("notificationsLabel"), path: "/notifications", badge: unreadCount },
         { icon: User, label: t("profile"), path: "/profile" },
@@ -55,17 +56,29 @@ export function BottomNav() {
         {navItems.map(({ icon: Icon, label, path, badge }) => {
           const isActive = location.pathname === path;
           return (
-            <button
+            <motion.button
               key={path}
               onClick={() => navigate(path)}
+              whileTap={{ scale: 0.92 }}
               className={cn(
                 "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors duration-200 relative",
-                "active:scale-95",
                 isActive ? "text-accent" : "text-muted-foreground hover:text-foreground"
               )}
             >
+              {isActive && (
+                <motion.div
+                  layoutId="navPill"
+                  className="absolute inset-0 rounded-xl bg-accent/10"
+                  transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                />
+              )}
               <div className="relative">
-                <Icon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.5} />
+                <motion.div
+                  animate={{ scale: isActive ? 1.1 : 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                >
+                  <Icon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.5} />
+                </motion.div>
                 {badge && badge > 0 ? (
                   <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">
                     {badge > 9 ? "9+" : badge}
@@ -73,7 +86,7 @@ export function BottomNav() {
                 ) : null}
               </div>
               <span className="text-[10px] font-medium">{label}</span>
-            </button>
+            </motion.button>
           );
         })}
       </div>
