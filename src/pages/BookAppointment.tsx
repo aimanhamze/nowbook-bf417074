@@ -253,23 +253,16 @@ const BookAppointment = () => {
         ? `${customerName} ביקש תור ל-${serviceName} בתאריך ${dateStr} בשעה ${effectiveTime}`
         : `${customerName} קבע תור ל-${serviceName} בתאריך ${dateStr} בשעה ${effectiveTime}`;
 
-      await Promise.all([
-        supabase.from("notifications").insert(customerNotif),
-        providerProfile?.user_id
-          ? supabase.from("notifications").insert({
-              user_id: providerProfile.user_id,
-              title: providerNotifTitle,
-              body: providerNotifBody,
-              url: "/calendar",
-              type: "booking_new",
-            })
-          : Promise.resolve(),
-      ]);
+      // Only the customer notification is inserted here. The provider
+      // notification is owned by the send-push function below (it inserts the
+      // DB row AND pushes), so inserting it here too would create a duplicate.
+      await supabase.from("notifications").insert(customerNotif);
       queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
 
-      // Push notification to provider
-      await supabase.functions.invoke("send-push", {
+      // Push notification to provider. send-push is the single source of truth
+      // for the provider notification: it inserts the DB row, then pushes.
+      const { error: pushError } = await supabase.functions.invoke("send-push", {
         body: {
           provider_id: provider.id,
           title: providerNotifTitle,
@@ -278,6 +271,18 @@ const BookAppointment = () => {
           type: "booking_new",
         },
       });
+
+      // Fallback: if send-push failed, it may not have inserted the provider's
+      // notification — insert it directly so the provider isn't left with zero.
+      if (pushError && providerProfile?.user_id) {
+        await supabase.from("notifications").insert({
+          user_id: providerProfile.user_id,
+          title: providerNotifTitle,
+          body: providerNotifBody,
+          url: "/calendar",
+          type: "booking_new",
+        });
+      }
     }
 
     navigate("/booking-confirmed", {
