@@ -27,15 +27,17 @@ export function useProviderAvailability() {
       start_time: string;
       end_time: string;
       is_available: boolean;
+      break_start?: string | null;
+      break_end?: string | null;
     }) => {
       if (!profile) throw new Error("No provider profile");
 
-      const { start_time, end_time, is_available } = slot;
+      const { start_time, end_time, is_available, break_start, break_end } = slot;
 
       // Attempt UPDATE on the existing row
       const { data: updated, error: updateError } = await supabase
         .from("provider_availability")
-        .update({ start_time, end_time, is_available })
+        .update({ start_time, end_time, is_available, break_start: break_start ?? null, break_end: break_end ?? null })
         .eq("provider_id", profile.id)
         .eq("day_of_week", slot.day_of_week)
         .select("id");

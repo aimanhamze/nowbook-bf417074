@@ -334,12 +334,17 @@ export function useRealAvailability(providerId: string | undefined) {
     const end = parseTime(slot.end_time);
     const neededDuration = requestedDuration || SLOT_STEP;
 
+    const breakStart = slot.break_start ? parseTime(slot.break_start) : null;
+    const breakEnd = slot.break_end ? parseTime(slot.break_end) : null;
+
     const slots: string[] = [];
     for (let t = start; t + neededDuration <= end; t += SLOT_STEP) {
       const overlaps = bookedIntervals.some(
         bi => t < bi.end && bi.start < t + neededDuration
       );
-      if (!overlaps) {
+      const inBreak = breakStart !== null && breakEnd !== null
+        && t >= breakStart && t < breakEnd;
+      if (!overlaps && !inBreak) {
         const h = Math.floor(t / 60);
         const m = t % 60;
         slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
@@ -365,10 +370,16 @@ export function useRealAvailability(providerId: string | undefined) {
     const start = parseTime(slot.start_time);
     const end = parseTime(slot.end_time);
 
+    const breakStart = slot.break_start ? parseTime(slot.break_start) : null;
+    const breakEnd = slot.break_end ? parseTime(slot.break_end) : null;
+
     const bookingsForDate = (bookingsQuery.data || []).filter(b => b.booking_date === dateStr);
 
     const result: SlotCapacity[] = [];
     for (let t = start; t + 30 <= end; t += SLOT_STEP) {
+      const inBreak = breakStart !== null && breakEnd !== null
+        && t >= breakStart && t < breakEnd;
+      if (inBreak) continue;
       const h = Math.floor(t / 60);
       const m = t % 60;
       const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
