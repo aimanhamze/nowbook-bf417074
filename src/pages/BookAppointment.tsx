@@ -152,7 +152,7 @@ const BookAppointment = () => {
   const allSlotsPassed = isToday && allSlotsRaw.length > 0 && availableSlots.length === 0;
   const allGroupSlotsPassed = isToday && groupSlotsRaw.length > 0 && availableGroupSlots.length === 0;
 
-  const dates = Array.from({ length: 14 }, (_, i) => addDays(new Date(), i));
+  const dates = Array.from({ length: provider.bookingWindowDays ?? 14 }, (_, i) => addDays(new Date(), i));
 
   // Effective booking date/time
   const effectiveDate = selectedSession

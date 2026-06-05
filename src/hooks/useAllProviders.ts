@@ -18,6 +18,7 @@ export interface DbProvider {
   avatar_image: string | null;
   average_rating: number | null;
   min_lead_time_minutes: number;
+  booking_window_days?: number;
   social_links: SocialLinks | null;
   requires_booking_approval?: boolean;
   is_visible?: boolean;
@@ -60,6 +61,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[]): Provider 
     address,
     about,
     minLeadTimeMinutes: dbp.min_lead_time_minutes ?? 15,
+    bookingWindowDays: dbp.booking_window_days ?? 14,
     socialLinks: dbp.social_links ?? null,
     requiresBookingApproval: dbp.requires_booking_approval ?? false,
     services: services.filter(s => s.is_active).map(s => ({
