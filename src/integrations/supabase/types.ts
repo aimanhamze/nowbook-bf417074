@@ -187,6 +187,8 @@ export type Database = {
       }
       provider_availability: {
         Row: {
+          break_end: string | null
+          break_start: string | null
           day_of_week: number
           end_time: string
           id: string
@@ -195,6 +197,8 @@ export type Database = {
           start_time: string
         }
         Insert: {
+          break_end?: string | null
+          break_start?: string | null
           day_of_week: number
           end_time?: string
           id?: string
@@ -203,6 +207,8 @@ export type Database = {
           start_time?: string
         }
         Update: {
+          break_end?: string | null
+          break_start?: string | null
           day_of_week?: number
           end_time?: string
           id?: string

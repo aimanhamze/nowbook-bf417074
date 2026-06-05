@@ -302,6 +302,11 @@ export const translations = {
     showProvider: "הצג ספק",
     providerNotAvailable: "הספק אינו זמין כרגע",
     confirmHideProvider: "האם אתה בטוח שברצונך להסתיר את הספק? הלקוחות לא יוכלו לראות אותו.",
+    breakTime: "הפסקה",
+    breakStart: "התחלת הפסקה",
+    breakEnd: "סיום הפסקה",
+    addBreak: "הוסף הפסקה",
+    noBreak: "ללא הפסקה",
   },
   ar: {
     appName: "Dori",
@@ -604,6 +609,11 @@ export const translations = {
     showProvider: "إظهار المزود",
     providerNotAvailable: "المزود غير متاح حالياً",
     confirmHideProvider: "هل أنت متأكد من إخفاء المزود? لن يتمكن العملاء من رؤيته.",
+    breakTime: "استراحة",
+    breakStart: "بداية الاستراحة",
+    breakEnd: "نهاية الاستراحة",
+    addBreak: "أضف استراحة",
+    noBreak: "بدون استراحة",
   },
   en: {
     appName: "Dori",
@@ -906,6 +916,11 @@ export const translations = {
     showProvider: "Show Provider",
     providerNotAvailable: "Provider not available",
     confirmHideProvider: "Are you sure you want to hide this provider? Customers will not be able to see them.",
+    breakTime: "Break Time",
+    breakStart: "Break Start",
+    breakEnd: "Break End",
+    addBreak: "Add Break",
+    noBreak: "No Break",
   },
 } as const;
 

@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { CalendarOff, X } from "lucide-react";
+import { CalendarOff, X, Coffee } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -30,6 +29,8 @@ export function AvailabilityTab() {
         start_time: existing?.start_time || "09:00",
         end_time: existing?.end_time || "17:00",
         is_available: checked,
+        break_start: existing?.break_start ?? null,
+        break_end: existing?.break_end ?? null,
       });
       toast.success(t("availabilitySaved"));
     } catch (err: any) {
@@ -45,6 +46,42 @@ export function AvailabilityTab() {
         start_time: field === "start_time" ? value : (existing?.start_time || "09:00"),
         end_time: field === "end_time" ? value : (existing?.end_time || "17:00"),
         is_available: existing?.is_available ?? true,
+        break_start: existing?.break_start ?? null,
+        break_end: existing?.break_end ?? null,
+      });
+      toast.success(t("availabilitySaved"));
+    } catch (err: any) {
+      toast.error(err?.message || "Error saving availability");
+    }
+  };
+
+  const handleBreakToggle = async (dow: number, enabled: boolean) => {
+    const existing = getSlot(dow);
+    try {
+      await upsertAvailability.mutateAsync({
+        day_of_week: dow,
+        start_time: existing?.start_time || "09:00",
+        end_time: existing?.end_time || "17:00",
+        is_available: existing?.is_available ?? true,
+        break_start: enabled ? "13:00" : null,
+        break_end: enabled ? "14:00" : null,
+      });
+      toast.success(t("availabilitySaved"));
+    } catch (err: any) {
+      toast.error(err?.message || "Error saving availability");
+    }
+  };
+
+  const handleBreakTimeChange = async (dow: number, field: "break_start" | "break_end", value: string) => {
+    const existing = getSlot(dow);
+    try {
+      await upsertAvailability.mutateAsync({
+        day_of_week: dow,
+        start_time: existing?.start_time || "09:00",
+        end_time: existing?.end_time || "17:00",
+        is_available: existing?.is_available ?? true,
+        break_start: field === "break_start" ? value : (existing?.break_start ?? null),
+        break_end: field === "break_end" ? value : (existing?.break_end ?? null),
       });
       toast.success(t("availabilitySaved"));
     } catch (err: any) {
@@ -69,43 +106,87 @@ export function AvailabilityTab() {
       <h2 className="text-lg font-semibold">{t("availability")}</h2>
 
       {/* Weekly schedule */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
         <h3 className="text-sm font-medium">{t("workingHoursLabel")}</h3>
         {DAY_KEYS.map((dayKey, dow) => {
           const slot = getSlot(dow);
-          // Reads the real row (every provider has all 7 post-backfill). If a
-          // row were ever missing, honest behavior is closed — not a default.
           const isAvail = slot?.is_available ?? false;
+          const hasBreak = !!(slot?.break_start && slot?.break_end);
+
           return (
             <motion.div
               key={dayKey}
               initial={{ opacity: 0, x: 8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: dow * 0.04 }}
-              className="flex items-center gap-3"
+              className="space-y-2"
             >
-              <Switch checked={isAvail} onCheckedChange={c => handleToggle(dow, c)} />
-              <span className="text-sm font-medium w-16">{t(dayKey)}</span>
-              {isAvail ? (
-                <div className="flex items-center gap-1.5 flex-1">
-                  <Input
-                    key={`${dow}-start-${slot?.start_time ?? "09:00"}`}
-                    type="time"
-                    className="h-8 text-xs flex-1"
-                    defaultValue={slot?.start_time?.slice(0, 5) || "09:00"}
-                    onBlur={e => handleTimeChange(dow, "start_time", e.target.value)}
-                  />
-                  <span className="text-xs text-muted-foreground">–</span>
-                  <Input
-                    key={`${dow}-end-${slot?.end_time ?? "17:00"}`}
-                    type="time"
-                    className="h-8 text-xs flex-1"
-                    defaultValue={slot?.end_time?.slice(0, 5) || "17:00"}
-                    onBlur={e => handleTimeChange(dow, "end_time", e.target.value)}
-                  />
+              {/* Working hours row */}
+              <div className="flex items-center gap-3">
+                <Switch checked={isAvail} onCheckedChange={c => handleToggle(dow, c)} />
+                <span className="text-sm font-medium w-16">{t(dayKey)}</span>
+                {isAvail ? (
+                  <div className="flex items-center gap-1.5 flex-1">
+                    <Input
+                      key={`${dow}-start-${slot?.start_time ?? "09:00"}`}
+                      type="time"
+                      className="h-8 text-xs flex-1"
+                      defaultValue={slot?.start_time?.slice(0, 5) || "09:00"}
+                      onBlur={e => handleTimeChange(dow, "start_time", e.target.value)}
+                    />
+                    <span className="text-xs text-muted-foreground">–</span>
+                    <Input
+                      key={`${dow}-end-${slot?.end_time ?? "17:00"}`}
+                      type="time"
+                      className="h-8 text-xs flex-1"
+                      defaultValue={slot?.end_time?.slice(0, 5) || "17:00"}
+                      onBlur={e => handleTimeChange(dow, "end_time", e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">{t("unavailable")}</span>
+                )}
+              </div>
+
+              {/* Break time row — only shown when day is active */}
+              {isAvail && (
+                <div className="flex items-start gap-3 ps-[calc(2.25rem+4rem+0.75rem)]">
+                  <div className="flex flex-col gap-2 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Coffee className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="text-xs text-muted-foreground">{t("breakTime")}</span>
+                      <Switch
+                        checked={hasBreak}
+                        onCheckedChange={c => handleBreakToggle(dow, c)}
+                        className="scale-75 origin-left"
+                      />
+                      {hasBreak && (
+                        <span className="text-xs text-muted-foreground ms-1">
+                          {slot?.break_start?.slice(0, 5)} — {slot?.break_end?.slice(0, 5)}
+                        </span>
+                      )}
+                    </div>
+                    {hasBreak && (
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          key={`${dow}-break-start-${slot?.break_start}`}
+                          type="time"
+                          className="h-7 text-xs flex-1"
+                          defaultValue={slot?.break_start?.slice(0, 5) || "13:00"}
+                          onBlur={e => handleBreakTimeChange(dow, "break_start", e.target.value)}
+                        />
+                        <span className="text-xs text-muted-foreground">–</span>
+                        <Input
+                          key={`${dow}-break-end-${slot?.break_end}`}
+                          type="time"
+                          className="h-7 text-xs flex-1"
+                          defaultValue={slot?.break_end?.slice(0, 5) || "14:00"}
+                          onBlur={e => handleBreakTimeChange(dow, "break_end", e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <span className="text-xs text-muted-foreground">{t("unavailable")}</span>
               )}
             </motion.div>
           );
