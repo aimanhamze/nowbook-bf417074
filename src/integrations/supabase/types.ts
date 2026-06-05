@@ -279,6 +279,7 @@ export type Database = {
           address: string | null
           avatar_image: string | null
           average_rating: number | null
+          booking_window_days: number
           business_name: string
           category: string
           cover_image: string | null
@@ -300,6 +301,7 @@ export type Database = {
           address?: string | null
           avatar_image?: string | null
           average_rating?: number | null
+          booking_window_days?: number
           business_name?: string
           category?: string
           cover_image?: string | null
@@ -321,6 +323,7 @@ export type Database = {
           address?: string | null
           avatar_image?: string | null
           average_rating?: number | null
+          booking_window_days?: number
           business_name?: string
           category?: string
           cover_image?: string | null

@@ -31,6 +31,7 @@ export function useProviderProfile() {
       about: string;
       phone: string;
       min_lead_time_minutes: number;
+      booking_window_days: number;
       social_links: SocialLinks | null;
       latitude?: number | null;
       longitude?: number | null;

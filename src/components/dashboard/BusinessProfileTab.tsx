@@ -31,6 +31,7 @@ import { buildSocialLinks } from "@/lib/socialLinks";
 import { toast } from "sonner";
 
 const LEAD_TIME_OPTIONS = [15, 30, 60, 120, 240, 1440] as const;
+const BOOKING_WINDOW_OPTIONS = [3, 7, 14, 30, 60, 90] as const;
 
 function roundCoord(v: number): number {
   return Math.round(v * 1e6) / 1e6;
@@ -45,6 +46,7 @@ const profileSchema = z.object({
   about: z.string().max(1000).optional().default(""),
   phone: z.string().regex(/^[+\d\s\-()]*$/, "מספר טלפון לא תקין").max(20).optional().default(""),
   min_lead_time_minutes: z.number().int().min(0).max(1440),
+  booking_window_days: z.number().int().min(1).max(365),
   social_whatsapp: z.string().optional().default(""),
   social_instagram: z.string().optional().default(""),
   social_tiktok: z.string().optional().default(""),
@@ -96,6 +98,7 @@ export function BusinessProfileTab() {
     defaultValues: {
       business_name: "", category: "barber", address: "", about: "", phone: "",
       min_lead_time_minutes: 15,
+      booking_window_days: 14,
       social_whatsapp: "", social_instagram: "",
       social_tiktok: "", social_facebook: "", social_waze: "", social_website: "",
       latitude: null, longitude: null,
@@ -112,6 +115,7 @@ export function BusinessProfileTab() {
         about: profile.about || "",
         phone: profile.phone || "",
         min_lead_time_minutes: profile.min_lead_time_minutes ?? 15,
+        booking_window_days: (profile as { booking_window_days?: number }).booking_window_days ?? 14,
         social_whatsapp: sl?.whatsapp || profile.phone || "",
         social_instagram: sl?.instagram || "",
         social_tiktok: sl?.tiktok || "",
@@ -178,6 +182,7 @@ export function BusinessProfileTab() {
         about: values.about ?? "",
         phone: values.phone ?? "",
         min_lead_time_minutes: values.min_lead_time_minutes,
+        booking_window_days: values.booking_window_days,
         social_links,
         latitude: values.latitude ?? null,
         longitude: values.longitude ?? null,
@@ -475,6 +480,23 @@ export function BusinessProfileTab() {
               {LEAD_TIME_OPTIONS.map(minutes => (
                 <SelectItem key={minutes} value={String(minutes)}>
                   {t(`leadTime${minutes}` as Parameters<typeof t>[0])}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>{t("bookingWindowLabel")}</Label>
+          <Select
+            value={String(watch("booking_window_days"))}
+            onValueChange={v => setValue("booking_window_days", Number(v))}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {BOOKING_WINDOW_OPTIONS.map(days => (
+                <SelectItem key={days} value={String(days)}>
+                  {t(`bookingWindow${days}` as Parameters<typeof t>[0])}
                 </SelectItem>
               ))}
             </SelectContent>

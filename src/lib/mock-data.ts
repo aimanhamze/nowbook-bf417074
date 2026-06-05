@@ -23,6 +23,7 @@ export interface Provider {
   about: Record<Lang, string>;
   services: Service[];
   minLeadTimeMinutes: number;
+  bookingWindowDays: number;
   socialLinks?: SocialLinks | null;
   requiresBookingApproval: boolean;
 }
