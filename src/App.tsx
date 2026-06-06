@@ -46,25 +46,25 @@ function PageTitleUpdater() {
 
   useEffect(() => {
     const routeTitles: Record<string, string> = {
-      "/": `Dori — ${t("home")}`,
-      "/explore": `Dori — ${t("explore")}`,
-      "/nearby": `Dori — ${t("nearbyTitle")}`,
-      "/bookings": `Dori — ${t("myBookings")}`,
-      "/favorites": `Dori — ${t("favorites")}`,
-      "/profile": `Dori — ${t("profile")}`,
-      "/settings": `Dori — ${t("settings")}`,
-      "/auth": `Dori — ${t("signIn")}`,
-      "/notifications": `Dori — ${t("notificationsLabel")}`,
-      "/dashboard": `Dori — ${t("dashboard")}`,
-      "/calendar": `Dori — ${t("bookingsCalendar")}`,
-      "/admin": `Dori — Admin`,
-      "/booking-confirmed": `Dori — ${t("bookingConfirmed")}`,
+      "/": `Dorak — ${t("home")}`,
+      "/explore": `Dorak — ${t("explore")}`,
+      "/nearby": `Dorak — ${t("nearbyTitle")}`,
+      "/bookings": `Dorak — ${t("myBookings")}`,
+      "/favorites": `Dorak — ${t("favorites")}`,
+      "/profile": `Dorak — ${t("profile")}`,
+      "/settings": `Dorak — ${t("settings")}`,
+      "/auth": `Dorak — ${t("signIn")}`,
+      "/notifications": `Dorak — ${t("notificationsLabel")}`,
+      "/dashboard": `Dorak — ${t("dashboard")}`,
+      "/calendar": `Dorak — ${t("bookingsCalendar")}`,
+      "/admin": `Dorak — Admin`,
+      "/booking-confirmed": `Dorak — ${t("bookingConfirmed")}`,
     };
 
     const base = location.pathname.split("/").slice(0, 2).join("/");
     document.title = routeTitles[location.pathname]
       || routeTitles[base]
-      || "Dori — הזמנת תורים";
+      || "Dorak — הזמנת תורים";
   }, [location.pathname, t]);
 
   return null;
