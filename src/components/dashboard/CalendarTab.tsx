@@ -1,12 +1,15 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday } from "date-fns";
 import { he } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2 } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, useSaveTreatmentNote, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { useProviderServices } from "@/hooks/useProviderServices";
+import { ForwardArrow } from "@/components/ui/directional-icon";
 import { NewBookingSheet } from "@/components/dashboard/NewBookingSheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -368,7 +371,14 @@ type CalendarItem =
 
 export function CalendarTab() {
   const { t } = useLang();
+  const navigate = useNavigate();
   const { data: bookings = [], isLoading } = useProviderBookings();
+  const { services, isLoading: servicesLoading } = useProviderServices();
+  // A provider with no services yet can never have bookings. Once services are
+  // confirmed empty (not merely still loading), show a getting-started card
+  // instead of the bare "no bookings" empty state. Gating on the resolved load
+  // avoids flashing the setup card at established providers mid-fetch.
+  const noServices = !servicesLoading && services.length === 0;
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const bookingsForDate = useMemo(() => {
@@ -467,7 +477,10 @@ export function CalendarTab() {
             <span className="text-xs text-muted-foreground">
               {calendarItems.length} {calendarItems.length === 1 ? "תור" : "תורים"}
             </span>
-            <NewBookingSheet selectedDate={selectedDate} />
+            {/* Hide the walk-in trigger until the provider has at least one
+                service — otherwise the sheet dead-ends on an empty step 1. The
+                getting-started card below is the single CTA in that state. */}
+            {!noServices && <NewBookingSheet selectedDate={selectedDate} />}
           </div>
         </div>
 
@@ -476,6 +489,20 @@ export function CalendarTab() {
             {[1, 2].map((i) => (
               <div key={i} className="h-28 rounded-2xl bg-secondary animate-pulse" />
             ))}
+          </div>
+        ) : noServices ? (
+          <div className="text-center py-10 px-5 rounded-2xl border border-accent/30 bg-accent/5">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10">
+              <Sparkles className="h-6 w-6 text-accent" />
+            </div>
+            <p className="text-sm font-medium text-foreground">{t("setupToTakeBookings")}</p>
+            <Button
+              className="mt-4 gap-1.5"
+              onClick={() => navigate("/dashboard", { state: { tab: "services" } })}
+            >
+              {t("setupAddServicesCta")}
+              <ForwardArrow className="h-4 w-4" />
+            </Button>
           </div>
         ) : calendarItems.length === 0 ? (
           <div className="text-center py-12 rounded-2xl border border-dashed border-border">

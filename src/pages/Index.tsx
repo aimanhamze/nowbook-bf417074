@@ -50,7 +50,7 @@ const Index = () => {
   }
 
   if (isProvider) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/calendar" replace />;
   }
 
   const favoriteProviders = providers
