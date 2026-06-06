@@ -6,6 +6,7 @@ import { CalendarTab } from "@/components/dashboard/CalendarTab";
 import { PendingTab, usePendingCount } from "@/components/dashboard/PendingTab";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { BackArrow } from "@/components/ui/directional-icon";
+import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 
 type TabId = "calendar" | "pending";
@@ -15,7 +16,7 @@ export default function ProviderCalendar() {
   const { user, isProvider } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile } = useProviderProfile();
+  const { profile, isLoading } = useProviderProfile();
   const pendingCount = usePendingCount();
   const requiresApproval = profile?.requires_booking_approval ?? false;
   const showPendingTab = requiresApproval || pendingCount > 0;
@@ -39,6 +40,18 @@ export default function ProviderCalendar() {
   }, [user, isProvider, navigate]);
 
   if (!user || !isProvider) return null;
+
+  // If no profile yet, provider was not set up by admin. Mirrors Dashboard's
+  // guard so the new /calendar landing degrades gracefully for the no-profile
+  // edge case (manually-granted role, or a failed create-provider insert).
+  if (!isLoading && !profile) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-5 gap-4">
+        <p className="text-muted-foreground text-center">{t("profileNotSetup")}</p>
+        <Button onClick={() => navigate("/")}>{t("home")}</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-24">

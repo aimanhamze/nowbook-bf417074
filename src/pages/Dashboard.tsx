@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Briefcase, User, Clock, Bell, BellOff, Images } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -34,7 +34,15 @@ export default function Dashboard() {
   const { user, isProvider } = useAuth();
   const { profile, isLoading } = useProviderProfile();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const location = useLocation();
+  // Allow deep-linking to a specific tab via navigation state, e.g.
+  // navigate("/dashboard", { state: { tab: "services" } }). Falls back to the
+  // default "profile" tab for a plain visit or an unrecognized id.
+  const requestedTab = (location.state as { tab?: string } | null)?.tab;
+  const initialTab: TabId = tabs.some(tab => tab.id === requestedTab)
+    ? (requestedTab as TabId)
+    : "profile";
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
 
   if (!user || !isProvider) {
