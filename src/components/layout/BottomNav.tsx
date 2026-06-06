@@ -1,4 +1,4 @@
-import { Home, Search, Calendar, Heart, User, LayoutDashboard, Bell } from "lucide-react";
+import { Home, Search, Calendar, Heart, User, LayoutDashboard, Bell, BarChart3 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,7 @@ export function BottomNav() {
   const navItems = isProvider
     ? [
         { icon: LayoutDashboard, label: t("dashboard"), path: "/dashboard" },
+        { icon: BarChart3, label: t("statisticsTitle"), path: "/statistics" },
         { icon: Calendar, label: t("calendar"), path: "/calendar", badge: pendingCount },
         { icon: Bell, label: t("notificationsLabel"), path: "/notifications", badge: unreadCount },
         { icon: User, label: t("profile"), path: "/profile" },
@@ -66,7 +67,7 @@ export function BottomNav() {
               onClick={() => navigate(path)}
               whileTap={{ scale: 0.92 }}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors duration-200 relative",
+                "flex flex-1 min-w-0 flex-col items-center gap-0.5 px-1 py-1.5 rounded-xl transition-colors duration-200 relative",
                 isActive ? "text-accent" : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -90,7 +91,7 @@ export function BottomNav() {
                   </span>
                 ) : null}
               </div>
-              <span className="text-[10px] font-medium">{label}</span>
+              <span className="max-w-full truncate text-[10px] font-medium">{label}</span>
             </motion.button>
           );
         })}
