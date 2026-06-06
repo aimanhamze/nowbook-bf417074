@@ -1,8 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
 import { MapPin, Loader2 } from "lucide-react";
 import { useUserLocation } from "@/hooks/useUserLocation";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
@@ -10,28 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
-import { usePendingCount } from "@/components/dashboard/PendingTab";
 import { categories, categoryNames } from "@/lib/mock-data";
 import { buildSocialLinks } from "@/lib/socialLinks";
 import { toast } from "sonner";
-
-const LEAD_TIME_OPTIONS = [15, 30, 60, 120, 240, 1440] as const;
-const BOOKING_WINDOW_OPTIONS = [3, 7, 14, 30, 60, 90] as const;
 
 function roundCoord(v: number): number {
   return Math.round(v * 1e6) / 1e6;
@@ -45,8 +29,6 @@ const profileSchema = z.object({
   address: z.string().max(200).optional().default(""),
   about: z.string().max(1000).optional().default(""),
   phone: z.string().regex(/^[+\d\s\-()]*$/, "מספר טלפון לא תקין").max(20).optional().default(""),
-  min_lead_time_minutes: z.number().int().min(0).max(1440),
-  booking_window_days: z.number().int().min(1).max(365),
   social_whatsapp: z.string().optional().default(""),
   social_instagram: z.string().optional().default(""),
   social_tiktok: z.string().optional().default(""),
@@ -61,30 +43,10 @@ type FormValues = z.infer<typeof profileSchema>;
 
 export function BusinessProfileTab() {
   const { t, lang } = useLang();
-  const navigate = useNavigate();
-  const { profile, upsertProfile, updateBookingApproval, updateTreatmentNotesEnabled, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
-  const pendingCount = usePendingCount();
+  const { profile, upsertProfile, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
 
   const [accordionValue, setAccordionValue] = useState("");
   const [locationAccordionValue, setLocationAccordionValue] = useState("");
-  const [pendingGuardOpen, setPendingGuardOpen] = useState(false);
-
-  const requiresApproval = profile?.requires_booking_approval ?? false;
-  const treatmentNotesEnabled = profile?.treatment_notes_enabled ?? false;
-
-  const handleApprovalToggle = async (next: boolean) => {
-    if (!next && pendingCount > 0) {
-      // Block turn-off until the provider resolves pending bookings.
-      setPendingGuardOpen(true);
-      return;
-    }
-    try {
-      await updateBookingApproval.mutateAsync(next);
-      toast.success(t("profileSaved"));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
-    }
-  };
 
   const {
     position: detectedPosition,
@@ -93,12 +55,10 @@ export function BusinessProfileTab() {
     locate,
   } = useUserLocation();
 
-  const { register, handleSubmit, setValue, watch, reset, control, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, setValue, watch, reset, control, formState: { errors, isDirty } } = useForm<FormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       business_name: "", category: "barber", address: "", about: "", phone: "",
-      min_lead_time_minutes: 15,
-      booking_window_days: 14,
       social_whatsapp: "", social_instagram: "",
       social_tiktok: "", social_facebook: "", social_waze: "", social_website: "",
       latitude: null, longitude: null,
@@ -114,8 +74,6 @@ export function BusinessProfileTab() {
         address: profile.address || "",
         about: profile.about || "",
         phone: profile.phone || "",
-        min_lead_time_minutes: profile.min_lead_time_minutes ?? 15,
-        booking_window_days: (profile as { booking_window_days?: number }).booking_window_days ?? 14,
         social_whatsapp: sl?.whatsapp || profile.phone || "",
         social_instagram: sl?.instagram || "",
         social_tiktok: sl?.tiktok || "",
@@ -181,8 +139,6 @@ export function BusinessProfileTab() {
         address: values.address ?? "",
         about: values.about ?? "",
         phone: values.phone ?? "",
-        min_lead_time_minutes: values.min_lead_time_minutes,
-        booking_window_days: values.booking_window_days,
         social_links,
         latitude: values.latitude ?? null,
         longitude: values.longitude ?? null,
@@ -230,65 +186,14 @@ export function BusinessProfileTab() {
       onSubmit={handleSubmit(onSubmit)}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
+      className="space-y-4 pb-16"
     >
       <h2 className="text-lg font-semibold">{t("businessProfile")}</h2>
 
-      {/* Booking Settings — saves immediately on toggle, distinct from the form below */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-        <h3 className="text-sm font-semibold">{t("bookingSettingsTitle")}</h3>
-        <div className="flex items-start gap-3">
-          <Switch
-            checked={requiresApproval}
-            onCheckedChange={handleApprovalToggle}
-            disabled={updateBookingApproval.isPending}
-          />
-          <div className="flex-1">
-            <Label className="text-sm font-medium">{t("requireApprovalLabel")}</Label>
-            <p className="text-xs text-muted-foreground mt-1">{t("requireApprovalHelp")}</p>
-          </div>
-        </div>
-        <div className="flex items-start gap-3 pt-1 border-t border-border">
-          <Switch
-            checked={treatmentNotesEnabled}
-            onCheckedChange={async (next) => {
-              try {
-                await updateTreatmentNotesEnabled.mutateAsync(next);
-                toast.success(t("profileSaved"));
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Error");
-              }
-            }}
-            disabled={updateTreatmentNotesEnabled.isPending}
-          />
-          <div className="flex-1">
-            <Label className="text-sm font-medium">{t("treatmentNotesEnabled")}</Label>
-            <p className="text-xs text-muted-foreground mt-1">{t("treatmentNotes")}</p>
-          </div>
-        </div>
-      </div>
-
-      <AlertDialog open={pendingGuardOpen} onOpenChange={setPendingGuardOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("cannotDisableApprovalTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("cannotDisableApprovalBody").replace("{count}", String(pendingCount))}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel type="button">{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              onClick={() => navigate("/calendar", { state: { tab: "pending" } })}
-            >
-              {t("goToPendingTab")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+      {/* Branding — avatar + cover */}
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+        <h3 className="text-sm font-semibold">{t("sectionBranding")}</h3>
+
         {/* Avatar */}
         <div>
           <Label htmlFor="avatar-upload">{t("avatarImage") || "תמונת פרופיל"}</Label>
@@ -334,6 +239,11 @@ export function BusinessProfileTab() {
             />
           </div>
         </div>
+      </div>
+
+      {/* Details — name, category, about */}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+        <h3 className="text-sm font-semibold">{t("sectionDetails")}</h3>
 
         <div>
           <Label>{t("businessName")}</Label>
@@ -343,20 +253,31 @@ export function BusinessProfileTab() {
 
         <div>
           <Label>{t("category")}</Label>
-          <Select value={watch("category")} onValueChange={v => setValue("category", v)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {categories.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.icon} {categoryNames[c.id]?.[lang]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Controller
+            name="category"
+            control={control}
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {categories.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.icon} {categoryNames[c.id]?.[lang]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
         </div>
 
         <div>
-          <Label>{t("address")}</Label>
-          <Input {...register("address")} />
+          <Label>{t("aboutBusiness")}</Label>
+          <Textarea {...register("about")} rows={3} />
         </div>
+      </div>
+
+      {/* Contact & Social — phone + social links */}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+        <h3 className="text-sm font-semibold">{t("sectionContact")}</h3>
 
         <div>
           <Label>{t("phone")}</Label>
@@ -410,6 +331,16 @@ export function BusinessProfileTab() {
             </AccordionContent>
           </AccordionItem>
         </Accordion>
+      </div>
+
+      {/* Location — address + map */}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+        <h3 className="text-sm font-semibold">{t("sectionLocation")}</h3>
+
+        <div>
+          <Label>{t("address")}</Label>
+          <Input {...register("address")} />
+        </div>
 
         {/* Location on Map */}
         <Accordion type="single" collapsible value={locationAccordionValue} onValueChange={setLocationAccordionValue} className="border-t border-border -mx-4 px-4">
@@ -468,47 +399,21 @@ export function BusinessProfileTab() {
             </AccordionContent>
           </AccordionItem>
         </Accordion>
+      </div>
 
-        <div>
-          <Label>{t("minLeadTimeLabel")}</Label>
-          <Select
-            value={String(watch("min_lead_time_minutes"))}
-            onValueChange={v => setValue("min_lead_time_minutes", Number(v))}
-          >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {LEAD_TIME_OPTIONS.map(minutes => (
-                <SelectItem key={minutes} value={String(minutes)}>
-                  {t(`leadTime${minutes}` as Parameters<typeof t>[0])}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <Label>{t("bookingWindowLabel")}</Label>
-          <Select
-            value={String(watch("booking_window_days"))}
-            onValueChange={v => setValue("booking_window_days", Number(v))}
-          >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {BOOKING_WINDOW_OPTIONS.map(days => (
-                <SelectItem key={days} value={String(days)}>
-                  {t(`bookingWindow${days}` as Parameters<typeof t>[0])}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <Label>{t("aboutBusiness")}</Label>
-          <Textarea {...register("about")} rows={3} />
-        </div>
-
-        <Button type="submit" className="w-full" disabled={upsertProfile.isPending || uploadCoverImage.isPending || uploadAvatarImage.isPending}>
+      {/* Fixed action bar — pinned just above the BottomNav (~4rem tall) and
+          fully opaque, so scrolling form content never shows through or peeks
+          beneath it. The form's matching `pb-16` (plus the page's pb-24)
+          reserves space so the last field always scrolls clear of this bar.
+          A fixed bar (not sticky) is required: the reserved padding would push
+          a sticky last-child bar upward, away from the nav. RTL-safe via
+          inset-x-0 + symmetric px. Enabled only when the form is dirty. */}
+      <div className="fixed inset-x-0 bottom-16 z-30 border-t border-border/60 bg-background/95 px-5 pb-3 pt-3 backdrop-blur-md">
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={!isDirty || upsertProfile.isPending || uploadCoverImage.isPending || uploadAvatarImage.isPending}
+        >
           {t("saveProfile")}
         </Button>
       </div>

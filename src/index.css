@@ -55,6 +55,18 @@
         hsl(40 30% 96%) 60%,
         hsl(265 45% 93%) 100%
       );
+
+    /* Softer, lighter variant used on provider pages (Dashboard, Calendar,
+       Notifications). Gentler saturation + higher lightness than the customer
+       atmosphere above; kept separate so the customer view is unaffected. */
+    --bg-atmosphere-soft:
+      linear-gradient(
+        180deg,
+        hsl(26 68% 95%) 0%,
+        hsl(38 30% 96.5%) 40%,
+        hsl(38 28% 96.5%) 68%,
+        hsl(265 42% 95%) 100%
+      );
   }
 }
 

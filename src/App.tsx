@@ -29,6 +29,7 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Nearby = lazy(() => import("./pages/Nearby"));
 const ProviderCalendar = lazy(() => import("./pages/ProviderCalendar"));
+const Reviews = lazy(() => import("./pages/Reviews"));
 
 const queryClient = new QueryClient();
 
@@ -96,6 +97,7 @@ const App = () => (
                   <Route path="/reset-password" element={<ErrorBoundary><ResetPassword /></ErrorBoundary>} />
                   <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Dashboard /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/calendar" element={<ProtectedRoute><ErrorBoundary><ProviderCalendar /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/reviews" element={<ProtectedRoute><ErrorBoundary><Reviews /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/notifications" element={<ProtectedRoute><ErrorBoundary><Notifications /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/admin" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
                   <Route path="/install" element={<ErrorBoundary><Install /></ErrorBoundary>} />

@@ -1,4 +1,4 @@
-import { User, Settings, LogIn, LogOut, Bell, BellOff, HelpCircle, Globe, Briefcase, Loader2 } from "lucide-react";
+import { User, Settings, LogIn, LogOut, Bell, BellOff, HelpCircle, Globe, Star, Loader2 } from "lucide-react";
 import { ForwardArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
@@ -36,8 +36,7 @@ const Profile = () => {
 
   const menuItems = [
     { icon: user ? LogOut : LogIn, label: user ? t("signOut") : t("signInUp"), action: handleSignInOut, danger: !!user },
-    ...(user && isProvider ? [{ icon: Briefcase, label: t("providerDashboard"), action: () => navigate("/dashboard") }] : []),
-    ...(user ? [{ icon: Bell, label: t("notificationsLabel"), action: () => navigate("/notifications") }] : []),
+    ...(user && isProvider ? [{ icon: Star, label: t("myReviews"), action: () => navigate("/reviews") }] : []),
     ...(user && isSupported ? [{
       icon: isSubscribed ? Bell : BellOff,
       label: isSubscribed ? t("pushNotificationsOn") : t("enablePushNotifications"),

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Briefcase, User, Clock, Bell, BellOff, Images, Star } from "lucide-react";
+import { Briefcase, User, Clock, Bell, BellOff, Images, SlidersHorizontal } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -8,18 +8,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { ServicesTab } from "@/components/dashboard/ServicesTab";
 import { BusinessProfileTab } from "@/components/dashboard/BusinessProfileTab";
+import { BookingSettingsTab } from "@/components/dashboard/BookingSettingsTab";
 import { AvailabilityTab } from "@/components/dashboard/AvailabilityTab";
 import { PhotosTab } from "@/components/dashboard/PhotosTab";
-import { ReviewsTab } from "@/components/dashboard/ReviewsTab";
 import { Button } from "@/components/ui/button";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 const tabs = [
   { id: "profile", icon: User },
+  { id: "booking", icon: SlidersHorizontal },
   { id: "availability", icon: Clock },
   { id: "services", icon: Briefcase },
   { id: "gallery", icon: Images },
-  { id: "reviews", icon: Star },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -27,9 +27,9 @@ type TabId = typeof tabs[number]["id"];
 const TAB_LABELS: Record<TabId, string> = {
   services: "manageServices",
   profile: "businessProfile",
+  booking: "bookingSettingsTitle",
   availability: "availability",
   gallery: "gallery",
-  reviews: "reviews",
 };
 
 export default function Dashboard() {
@@ -68,77 +68,106 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen pb-24">
-      <header className="px-5 pt-12 pb-2">
-        <div className="flex items-center gap-3 mb-4">
-          <button onClick={() => navigate(-1)} className="active:scale-95">
-            <BackArrow className="h-5 w-5" />
-          </button>
-          <h1 className="text-xl font-bold flex-1">{t("providerDashboard")}</h1>
-          {isSupported && (
+    // Dashboard-only background: a softer, lighter take on the customer
+    // atmosphere — gentler saturation, higher lightness, fading to near white.
+    // Inline so the shared --bg-atmosphere (customer view) stays untouched.
+    <div
+      className="relative min-h-screen overflow-x-clip pb-24"
+      style={{ background: "var(--bg-atmosphere-soft)" }}
+    >
+      {/* Subtle accent glow — softened/lightened for the dashboard so the page
+          reads calmer. Anchored via a logical inset to stay RTL/LTR-correct. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[-4rem] [inset-inline-end:-5rem] h-[22rem] w-[22rem] rounded-full blur-3xl opacity-45"
+        style={{ background: "radial-gradient(circle, hsl(24 95% 80% / 0.34) 0%, transparent 65%)" }}
+      />
+
+      <div className="relative">
+        <header className="px-5 pt-12 pb-3">
+          <div className="mb-5 flex items-center gap-3">
             <button
-              onClick={isSubscribed ? unsubscribe : subscribe}
-              disabled={pushLoading}
-              className={`p-2 rounded-xl transition-colors active:scale-95 ${
-                isSubscribed ? "bg-accent/10 text-accent" : "bg-secondary text-muted-foreground"
-              }`}
-              title={isSubscribed ? t("notificationsActive") : t("enableNotifications")}
+              onClick={() => navigate(-1)}
+              className="-ms-1.5 rounded-xl p-1.5 transition-colors hover:bg-secondary/60 active:scale-95"
+              aria-label={t("back")}
             >
-              {isSubscribed ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
+              <BackArrow className="h-5 w-5" />
             </button>
-          )}
-        </div>
-
-        {/* Tab bar */}
-        <div className="flex gap-1 bg-secondary rounded-2xl p-1">
-          {tabs.map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <motion.button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                whileTap={{ scale: 0.92 }}
-                className={`relative flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-medium transition-colors duration-200 ${
-                  isActive ? "text-accent" : "text-muted-foreground"
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-2xl font-extrabold leading-tight">{t("providerDashboard")}</h1>
+              {profile?.business_name && (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile.business_name}</p>
+              )}
+            </div>
+            {isSupported && (
+              <button
+                onClick={isSubscribed ? unsubscribe : subscribe}
+                disabled={pushLoading}
+                className={`shrink-0 rounded-xl p-2.5 transition-colors active:scale-95 ${
+                  isSubscribed ? "bg-accent/10 text-accent" : "bg-secondary text-muted-foreground hover:text-foreground"
                 }`}
+                title={isSubscribed ? t("notificationsActive") : t("enableNotifications")}
+                aria-label={isSubscribed ? t("notificationsActive") : t("enableNotifications")}
               >
-                {isActive && (
-                  <motion.div
-                    layoutId="dashboardTabPill"
-                    className="absolute inset-0 rounded-xl bg-card shadow-sm"
-                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                  />
-                )}
-                <span className="relative flex items-center gap-1.5">
-                  <motion.span
-                    animate={{ scale: isActive ? 1.1 : 1 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                    className="inline-flex"
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                  </motion.span>
-                  <span className="hidden sm:inline">{t(TAB_LABELS[tab.id] as any)}</span>
-                </span>
-              </motion.button>
-            );
-          })}
-        </div>
-      </header>
+                {isSubscribed ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
+              </button>
+            )}
+          </div>
 
-      <motion.div
-        key={activeTab}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-        className="px-5 pt-4"
-      >
-        {activeTab === "profile" && <BusinessProfileTab />}
-        {activeTab === "availability" && <AvailabilityTab />}
-        {activeTab === "services" && <ServicesTab />}
-        {activeTab === "gallery" && <PhotosTab />}
-        {activeTab === "reviews" && <ReviewsTab />}
-      </motion.div>
+          {/* Tab bar — segmented control */}
+          <div className="flex gap-1 rounded-2xl border border-border/40 bg-secondary/80 p-1 backdrop-blur-sm">
+            {tabs.map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              const label = t(TAB_LABELS[tab.id] as any);
+              return (
+                <motion.button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  whileTap={{ scale: 0.92 }}
+                  aria-label={label}
+                  aria-pressed={isActive}
+                  className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition-colors duration-200 ${
+                    isActive ? "text-accent" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="dashboardTabPill"
+                      className="absolute inset-0 rounded-xl bg-card shadow-[0_2px_8px_-2px_hsl(var(--accent)/0.25)] ring-1 ring-border/50"
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    />
+                  )}
+                  <span className="relative flex items-center gap-1.5">
+                    <motion.span
+                      animate={{ scale: isActive ? 1.1 : 1 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                      className="inline-flex"
+                    >
+                      <Icon className="h-4 w-4" />
+                    </motion.span>
+                    <span className="hidden sm:inline">{label}</span>
+                  </span>
+                </motion.button>
+              );
+            })}
+          </div>
+        </header>
+
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="px-5 pt-5"
+        >
+          {activeTab === "profile" && <BusinessProfileTab />}
+          {activeTab === "booking" && <BookingSettingsTab />}
+          {activeTab === "availability" && <AvailabilityTab />}
+          {activeTab === "services" && <ServicesTab />}
+          {activeTab === "gallery" && <PhotosTab />}
+        </motion.div>
+      </div>
     </div>
   );
 }
