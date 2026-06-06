@@ -77,7 +77,13 @@ export function useProviderBookings() {
       });
     },
     enabled: !!profile,
+    refetchInterval: 30000,
   });
+}
+
+export function usePendingCount() {
+  const { data: bookings = [] } = useProviderBookings();
+  return bookings.filter((b) => b.status === "pending").length;
 }
 
 export function useCancelBooking() {

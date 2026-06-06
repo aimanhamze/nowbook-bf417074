@@ -6,7 +6,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
-import { useProviderBookings, useApproveBooking, useRejectBooking, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import { useProviderBookings, useApproveBooking, useRejectBooking, usePendingCount, type EnrichedBooking } from "@/hooks/useProviderBookings";
+
+// Re-exported from the hooks module (relocated so BottomNav can consume the
+// count without pulling this component's import graph). Kept here for existing
+// importers of usePendingCount from "@/components/dashboard/PendingTab".
+export { usePendingCount };
 
 function toWhatsAppUrl(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -172,9 +177,4 @@ export function PendingTab() {
       </div>
     </AnimatePresence>
   );
-}
-
-export function usePendingCount() {
-  const { data: bookings = [] } = useProviderBookings();
-  return bookings.filter((b) => b.status === "pending").length;
 }
