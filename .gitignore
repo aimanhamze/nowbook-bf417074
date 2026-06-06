@@ -32,3 +32,6 @@ dist-ssr
 *.sln
 *.sw?
 supabase/.temp/
+
+# Screenshots (Instagram exports)
+screenshots/
