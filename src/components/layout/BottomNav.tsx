@@ -6,12 +6,17 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { usePendingCount } from "@/hooks/useProviderBookings";
 
 export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useLang();
   const { isProvider, user } = useAuth();
+
+  // Provider-only: count of bookings awaiting approval. Returns 0 (no fetch)
+  // for customers/logged-out, so it's safe to call unconditionally here.
+  const pendingCount = usePendingCount();
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ["unread-notifications", user?.id],
@@ -33,7 +38,7 @@ export function BottomNav() {
   const navItems = isProvider
     ? [
         { icon: LayoutDashboard, label: t("dashboard"), path: "/dashboard" },
-        { icon: Calendar, label: t("calendar"), path: "/calendar" },
+        { icon: Calendar, label: t("calendar"), path: "/calendar", badge: pendingCount },
         { icon: Bell, label: t("notificationsLabel"), path: "/notifications", badge: unreadCount },
         { icon: User, label: t("profile"), path: "/profile" },
       ]
