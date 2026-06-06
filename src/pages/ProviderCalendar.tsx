@@ -54,7 +54,19 @@ export default function ProviderCalendar() {
   }
 
   return (
-    <div className="min-h-screen pb-24">
+    <div
+      className="relative min-h-screen overflow-x-clip pb-24"
+      style={{ background: "var(--bg-atmosphere-soft)" }}
+    >
+      {/* Soft atmosphere — same look as the Dashboard. Logical inset keeps the
+          glow on the same visual side in RTL and LTR. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[-4rem] [inset-inline-end:-5rem] h-[22rem] w-[22rem] rounded-full blur-3xl opacity-45"
+        style={{ background: "radial-gradient(circle, hsl(24 95% 80% / 0.34) 0%, transparent 65%)" }}
+      />
+
+      <div className="relative">
       <header className="px-5 pt-12 pb-4">
         <div className="flex items-center gap-3 mb-4">
           <button onClick={() => navigate(-1)} className="active:scale-95">
@@ -100,6 +112,7 @@ export default function ProviderCalendar() {
       >
         {activeTab === "calendar" ? <CalendarTab /> : <PendingTab />}
       </motion.div>
+      </div>
     </div>
   );
 }

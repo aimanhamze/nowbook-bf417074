@@ -30,8 +30,6 @@ export function useProviderProfile() {
       address: string;
       about: string;
       phone: string;
-      min_lead_time_minutes: number;
-      booking_window_days: number;
       social_links: SocialLinks | null;
       latitude?: number | null;
       longitude?: number | null;
@@ -71,6 +69,34 @@ export function useProviderProfile() {
       const { error } = await supabase
         .from("provider_profiles")
         .update({ treatment_notes_enabled: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+    },
+  });
+
+  const updateMinLeadTime = useMutation({
+    mutationFn: async (value: number) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ min_lead_time_minutes: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+    },
+  });
+
+  const updateBookingWindow = useMutation({
+    mutationFn: async (value: number) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ booking_window_days: value })
         .eq("user_id", user.id);
       if (error) throw error;
     },
@@ -144,6 +170,8 @@ export function useProviderProfile() {
     upsertProfile,
     updateBookingApproval,
     updateTreatmentNotesEnabled,
+    updateMinLeadTime,
+    updateBookingWindow,
     uploadCoverImage,
     uploadAvatarImage,
   };
