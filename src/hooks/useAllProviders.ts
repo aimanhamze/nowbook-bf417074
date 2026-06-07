@@ -21,6 +21,7 @@ export interface DbProvider {
   booking_window_days?: number;
   social_links: SocialLinks | null;
   requires_booking_approval?: boolean;
+  show_prices?: boolean;
   is_visible?: boolean;
 }
 
@@ -64,6 +65,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[]): Provider 
     bookingWindowDays: dbp.booking_window_days ?? 14,
     socialLinks: dbp.social_links ?? null,
     requiresBookingApproval: dbp.requires_booking_approval ?? false,
+    showPrices: dbp.show_prices ?? true,
     services: services.filter(s => s.is_active).map(s => ({
       id: s.id,
       name: { he: s.name, ar: s.name, en: s.name },

@@ -292,6 +292,7 @@ const BookAppointment = () => {
         date: format(parseISO(effectiveDate), "EEE, MMM d", { locale: dateFnsLocale }),
         time: effectiveTime,
         total,
+        showPrices: provider.showPrices,
         isGroup: isGroupBooking,
         participantCount: 1,
         status: insertedStatus,
@@ -411,7 +412,7 @@ const BookAppointment = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-3 ms-3 shrink-0">
-                      {service.price > 0 && (
+                      {provider.showPrices && service.price > 0 && (
                         <div className="text-end">
                           <span className="text-xs text-accent">₪</span>
                           <span className="text-base font-bold">{service.price}</span>
@@ -683,14 +684,14 @@ const BookAppointment = () => {
                       {s.name[lang]}
                       <span className="text-muted-foreground text-xs">· {s.duration} {t("min")}</span>
                     </span>
-                    {s.price > 0 ? <span className="font-medium">₪{s.price}</span> : null}
+                    {provider.showPrices && s.price > 0 ? <span className="font-medium">₪{s.price}</span> : null}
                   </div>
                 ))}
               </div>
               <div className="h-px bg-border/40" />
               <div className="flex items-baseline justify-between pt-0.5">
                 <p className="text-xs text-muted-foreground">{t("total")} · {totalDuration} {t("min")}</p>
-                {total > 0 ? <p className="text-3xl font-black text-accent">₪{total}</p> : null}
+                {provider.showPrices && total > 0 ? <p className="text-3xl font-black text-accent">₪{total}</p> : null}
               </div>
             </motion.div>
 
@@ -727,7 +728,7 @@ const BookAppointment = () => {
           <div>
             <div className="flex items-baseline justify-between mb-3">
               <p className="text-xs text-muted-foreground">{provider.name[lang]}</p>
-              {total > 0 ? <p className="text-lg font-bold">₪{total}</p> : null}
+              {provider.showPrices && total > 0 ? <p className="text-lg font-bold">₪{total}</p> : null}
             </div>
             <button
               onClick={handleConfirm}
@@ -746,7 +747,7 @@ const BookAppointment = () => {
               <p className="text-xs text-muted-foreground">
                 {selectedServices.length} {selectedServices.length !== 1 ? t("serviceCount") : t("service")}
               </p>
-              {total > 0 ? <p className="text-lg font-bold">₪{total}</p> : null}
+              {provider.showPrices && total > 0 ? <p className="text-lg font-bold">₪{total}</p> : null}
             </div>
             <button
               disabled={!canProceed}

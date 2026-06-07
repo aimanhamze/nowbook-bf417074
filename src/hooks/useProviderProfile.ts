@@ -77,6 +77,21 @@ export function useProviderProfile() {
     },
   });
 
+  const updateShowPrices = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ show_prices: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+    },
+  });
+
   const updateMinLeadTime = useMutation({
     mutationFn: async (value: number) => {
       if (!user) throw new Error("Not authenticated");
@@ -170,6 +185,7 @@ export function useProviderProfile() {
     upsertProfile,
     updateBookingApproval,
     updateTreatmentNotesEnabled,
+    updateShowPrices,
     updateMinLeadTime,
     updateBookingWindow,
     uploadCoverImage,

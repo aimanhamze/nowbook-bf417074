@@ -31,6 +31,7 @@ export function BookingSettingsTab() {
     profile,
     updateBookingApproval,
     updateTreatmentNotesEnabled,
+    updateShowPrices,
     updateMinLeadTime,
     updateBookingWindow,
   } = useProviderProfile();
@@ -39,6 +40,7 @@ export function BookingSettingsTab() {
 
   const requiresApproval = profile?.requires_booking_approval ?? false;
   const treatmentNotesEnabled = profile?.treatment_notes_enabled ?? false;
+  const showPrices = profile?.show_prices ?? true;
   const minLeadTime = profile?.min_lead_time_minutes ?? 15;
   const bookingWindow = (profile as { booking_window_days?: number } | null)?.booking_window_days ?? 14;
 
@@ -93,6 +95,24 @@ export function BookingSettingsTab() {
           <div className="flex-1">
             <Label className="text-sm font-medium">{t("treatmentNotesEnabled")}</Label>
             <p className="text-xs text-muted-foreground mt-1">{t("treatmentNotes")}</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 pt-3 border-t border-border">
+          <Switch
+            checked={showPrices}
+            onCheckedChange={async (next) => {
+              try {
+                await updateShowPrices.mutateAsync(next);
+                toast.success(t("profileSaved"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Error");
+              }
+            }}
+            disabled={updateShowPrices.isPending}
+          />
+          <div className="flex-1">
+            <Label className="text-sm font-medium">{t("showPricesLabel")}</Label>
+            <p className="text-xs text-muted-foreground mt-1">{t("showPricesHelp")}</p>
           </div>
         </div>
       </div>
