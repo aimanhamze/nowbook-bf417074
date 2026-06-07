@@ -50,11 +50,8 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // 14-day strip starting today (matches the customer flow's horizon). No
-  // same-day lead-time filter here: providers are exempt by the DB trigger, so
-  // a walk-in may take any available slot, including imminent ones today.
   const startToday = startOfDay(new Date());
-  const dates = Array.from({ length: 14 }, (_, i) => addDays(startToday, i));
+  const dates = Array.from({ length: profile?.booking_window_days ?? 14 }, (_, i) => addDays(startToday, i));
 
   // Reset the form each time the sheet opens; seed the date from the calendar's
   // selection, clamped into the visible strip.
