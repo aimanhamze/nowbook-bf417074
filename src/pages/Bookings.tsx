@@ -98,6 +98,7 @@ const Bookings = () => {
             getProviderName={getProviderName}
             getServiceNames={getServiceNames}
             providerPhone={allProviders.find((p) => p.id === booking.provider_id)?.phone ?? null}
+            showPrices={allProviders.find((p) => p.id === booking.provider_id)?.showPrices ?? true}
           />
           ))}
           <div className="flex justify-between items-center pt-2 pb-4">
@@ -125,12 +126,13 @@ const Bookings = () => {
   );
 };
 
-function BookingCard({ booking, index, getProviderName, getServiceNames, providerPhone }: {
+function BookingCard({ booking, index, getProviderName, getServiceNames, providerPhone, showPrices }: {
   booking: Tables<"bookings">;
   index: number;
   getProviderName: (id: string) => string;
   getServiceNames: (ids: string[]) => string;
   providerPhone: string | null;
+  showPrices: boolean;
 }) {
   const { t } = useLang();
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -273,7 +275,7 @@ function BookingCard({ booking, index, getProviderName, getServiceNames, provide
               </div>
             )}
           </div>
-          {booking.total_price > 0 ? <span className="text-sm font-bold">₪{booking.total_price}</span> : null}
+          {showPrices && booking.total_price > 0 ? <span className="text-sm font-bold">₪{booking.total_price}</span> : null}
         </div>
       </div>
 

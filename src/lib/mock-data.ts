@@ -26,6 +26,7 @@ export interface Provider {
   bookingWindowDays: number;
   socialLinks?: SocialLinks | null;
   requiresBookingApproval: boolean;
+  showPrices: boolean;
 }
 
 export const categories = [
