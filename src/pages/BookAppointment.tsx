@@ -128,7 +128,7 @@ const BookAppointment = () => {
   const leadTimeCutoff = now.getHours() * 60 + now.getMinutes() + minLeadTimeMinutes;
 
   const allSlotsRaw = !hasScheduledSessions && !isGroupBooking
-    ? getAvailableSlots(selectedDate, totalDuration || 15)
+    ? getAvailableSlots(selectedDate, totalDuration || 15, primaryService?.max_capacity ?? 1, primaryService?.id)
     : [];
 
   const availableSlots = isToday
@@ -217,6 +217,8 @@ const BookAppointment = () => {
         } else if (error.message === "GROUP_CAPACITY_EXCEEDED") {
           toast.error(t("bookingCapacityFullError"));
           queryClient.invalidateQueries({ queryKey: ["provider-bookings-public", provider.id] });
+        } else if (error.message === "DUPLICATE_USER_BOOKING") {
+          toast.error(t("duplicateUserBookingError"));
         } else {
           toast.error(error.message);
         }

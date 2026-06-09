@@ -59,11 +59,23 @@ export function ServicesTab() {
       toast.error(result.error.errors[0].message);
       return;
     }
+
+    // Private services may carry a per-slot capacity (>= 1) — "how many
+    // customers can book the same time" for an ordinary service. Group keeps
+    // its >= 2 rule validated by serviceSchema above. No group framing here.
+    if (
+      editing.service_type === 'private' &&
+      (!Number.isInteger(editing.max_capacity) || editing.max_capacity < 1 || editing.max_capacity > 100)
+    ) {
+      toast.error(t("capacityInvalid"));
+      return;
+    }
+
     try {
       await upsertService.mutateAsync({
         ...editing,
         name: editing.name.trim(),
-        max_capacity: editing.service_type === 'group' ? editing.max_capacity : 1,
+        max_capacity: editing.max_capacity,
       });
       toast.success(t("serviceSaved"));
       setEditing(null);
@@ -109,7 +121,7 @@ export function ServicesTab() {
     }
   };
 
-  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 10 });
+  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 1 });
 
   const openEdit = (svc: typeof services[number]) => setEditing({
     id: svc.id,
@@ -117,7 +129,7 @@ export function ServicesTab() {
     duration: svc.duration,
     price: svc.price,
     service_type: (svc.service_type as 'private' | 'group') || 'private',
-    max_capacity: svc.max_capacity || 10,
+    max_capacity: svc.max_capacity ?? 1,
   });
 
   const openAddSession = (svc: typeof services[number]) => {
@@ -217,6 +229,32 @@ export function ServicesTab() {
                   onFocus={e => e.target.select()}
                 />
               </motion.div>
+            )}
+
+            {/* Per-slot capacity for ordinary (private) services — available to
+                every provider, NOT gated to fitness and NOT group framing.
+                1 = normal single-customer service. */}
+            {editing.service_type === 'private' && (
+              <div>
+                <Label>{t("maxCustomersPerSlot")}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={editing.max_capacity}
+                  // Don't clamp per-keystroke: Math.max(1, …) snapped the value
+                  // back to 1 whenever the field was briefly empty/0 mid-typing
+                  // (Number("") = 0 → Math.max(1,0) = 1), making it uneditable.
+                  // Store the raw number while editing; clamp to [1,100] on blur.
+                  // handleSave also validates the 1-100 range as a backstop.
+                  onChange={e => setEditing({ ...editing, max_capacity: Number(e.target.value) })}
+                  onBlur={() => setEditing(prev =>
+                    prev ? { ...prev, max_capacity: Math.min(100, Math.max(1, prev.max_capacity || 1)) } : prev
+                  )}
+                  onFocus={e => e.target.select()}
+                />
+                <p className="text-xs text-muted-foreground mt-1">{t("maxCustomersPerSlotHelp")}</p>
+              </div>
             )}
 
             <div className="flex gap-2">

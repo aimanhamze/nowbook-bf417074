@@ -304,8 +304,30 @@ export function useRealAvailability(providerId: string | undefined) {
     enabled: !!providerId,
   });
 
-  /** Returns available time slots for private services (existing behavior) */
-  const getAvailableSlots = (date: Date, requestedDuration?: number): string[] => {
+  /**
+   * Returns available time slots for private services.
+   *
+   * Capacity model — "same-service pool, cross-service exclusive" — applied
+   * identically here and in the prevent_booking_conflicts trigger's private
+   * branch. For an incoming booking of service `primaryServiceId` with capacity
+   * `capacity` over a candidate interval, among the bookings that overlap it:
+   *   CLAUSE 1 (cross-service = exclusive): if ANY overlap is for a DIFFERENT
+   *     primary service, hide the slot (provider is otherwise occupied).
+   *   CLAUSE 2 (same-service pool): if same-service overlaps >= capacity, hide.
+   *   else show.
+   * `primaryServiceId` is the incoming service id; each existing booking's
+   * primary service is service_ids[0] (= the trigger's service_ids[1]).
+   *
+   * With capacity 1 this reduces to "any overlap blocks" — a different-service
+   * overlap trips clause 1, a same-service overlap trips clause 2 (count >= 1) —
+   * exactly the pre-capacity behavior, so normal services are unaffected.
+   *
+   * The overlap test (t < bi.end && bi.start < t + neededDuration) is the same
+   * half-open interval intersection the trigger uses
+   * (new_start < b.end && b.start < new_start + new_duration), so the client
+   * never offers a slot the trigger would reject, nor hides one it would allow.
+   */
+  const getAvailableSlots = (date: Date, requestedDuration?: number, capacity = 1, primaryServiceId?: string): string[] => {
     if (!providerId) return [];
 
     const dow = date.getDay();
@@ -320,8 +342,10 @@ export function useRealAvailability(providerId: string | undefined) {
 
     const services = servicesQuery.data || [];
 
-    // Build list of booked intervals [start, end) in minutes
-    const bookedIntervals: { start: number; end: number }[] = [];
+    // Build list of booked intervals [start, end) in minutes, keeping each
+    // booking's primary service id (service_ids[0], = the trigger's
+    // service_ids[1]) so the same-service / cross-service rule can be applied.
+    const bookedIntervals: { start: number; end: number; serviceId: string | undefined }[] = [];
     (bookingsQuery.data || [])
       .filter(b => b.booking_date === dateStr)
       .forEach(b => {
@@ -330,7 +354,11 @@ export function useRealAvailability(providerId: string | undefined) {
           const svc = services.find(s => s.id === sid);
           return sum + (svc?.duration || 30);
         }, 0);
-        bookedIntervals.push({ start: bookingStart, end: bookingStart + totalDuration });
+        bookedIntervals.push({
+          start: bookingStart,
+          end: bookingStart + totalDuration,
+          serviceId: (b.service_ids || [])[0],
+        });
       });
 
     const SLOT_STEP = 15;
@@ -341,14 +369,21 @@ export function useRealAvailability(providerId: string | undefined) {
     const breakStart = slot.break_start ? parseTime(slot.break_start) : null;
     const breakEnd = slot.break_end ? parseTime(slot.break_end) : null;
 
+    const slotCapacity = capacity > 0 ? capacity : 1;
     const slots: string[] = [];
     for (let t = start; t + neededDuration <= end; t += SLOT_STEP) {
-      const overlaps = bookedIntervals.some(
+      const overlapping = bookedIntervals.filter(
         bi => t < bi.end && bi.start < t + neededDuration
       );
+      // CLAUSE 1 (cross-service exclusive): any overlap for a DIFFERENT primary
+      // service blocks the slot. CLAUSE 2 (same-service pool): same-service
+      // overlaps may share up to slotCapacity. Mirrors the trigger's two
+      // clauses exactly; with capacity 1 this is "any overlap blocks".
+      const hasDifferentService = overlapping.some(bi => bi.serviceId !== primaryServiceId);
+      const sameServiceCount = overlapping.filter(bi => bi.serviceId === primaryServiceId).length;
       const inBreak = breakStart !== null && breakEnd !== null
         && t >= breakStart && t < breakEnd;
-      if (!overlaps && !inBreak) {
+      if (!hasDifferentService && sameServiceCount < slotCapacity && !inBreak) {
         const h = Math.floor(t / 60);
         const m = t % 60;
         slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
