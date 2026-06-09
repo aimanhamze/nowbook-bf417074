@@ -79,7 +79,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const isGroup = service?.service_type === "group";
   const duration = service?.duration || 15;
 
-  const privateSlots = service && !isGroup ? getAvailableSlots(date, duration) : [];
+  const privateSlots = service && !isGroup ? getAvailableSlots(date, duration, service.max_capacity ?? 1, service.id) : [];
   const groupSlots = service && isGroup
     ? getGroupSlotsWithCapacity(date, service.max_capacity ?? 1)
     : [];
