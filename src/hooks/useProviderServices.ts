@@ -2,6 +2,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
 
+// Local YYYY-MM-DD — mirrors toLocalDateStr in useAllProviders. Kept local to
+// avoid a cross-module import; booking_date comparisons must use local dates.
+function toLocalDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function useProviderServices() {
   const { profile } = useProviderProfile();
   const queryClient = useQueryClient();
@@ -29,6 +38,7 @@ export function useProviderServices() {
         .from("provider_services")
         .select("*")
         .eq("provider_id", profile.id)
+        .eq("is_active", true)
         .order("sort_order");
       if (error) throw error;
       return data || [];
@@ -79,9 +89,32 @@ export function useProviderServices() {
     onSuccess: invalidateServiceCaches,
   });
 
+  // Soft-delete: never hard DELETE a service that may be referenced by past
+  // bookings (orphans their service_names). First refuse the delete if any
+  // FUTURE booking still references it; otherwise flip is_active=false so the
+  // row survives for name resolution (useProviderBookings reads all services,
+  // unfiltered) but disappears from every bookable list.
   const deleteService = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("provider_services").delete().eq("id", id);
+      if (!profile) throw new Error("No provider profile");
+      // Local YYYY-MM-DD, NOT toISOString — booking_date is stored as a local
+      // calendar date and a UTC shift would mis-bucket the boundary day.
+      const todayStr = toLocalDateStr(new Date());
+      const { data: future, error: checkErr } = await supabase
+        .from("bookings")
+        .select("id")
+        .eq("provider_id", profile.id)
+        .contains("service_ids", [id])
+        .gte("booking_date", todayStr)
+        .in("status", ["confirmed", "pending"])
+        .limit(1);
+      if (checkErr) throw checkErr;
+      if (future && future.length > 0) throw new Error("HAS_FUTURE_BOOKINGS");
+
+      const { error } = await supabase
+        .from("provider_services")
+        .update({ is_active: false })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: invalidateServiceCaches,
