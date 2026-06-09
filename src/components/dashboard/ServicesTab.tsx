@@ -4,6 +4,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -45,6 +55,7 @@ export function ServicesTab() {
   const [editing, setEditing] = useState<EditState | null>(null);
   const [addingSession, setAddingSession] = useState<AddSessionState | null>(null);
   const [expandedService, setExpandedService] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const handleSave = async () => {
     if (!editing) return;
@@ -88,8 +99,14 @@ export function ServicesTab() {
     try {
       await deleteService.mutateAsync(id);
       toast.success(t("serviceDeleted"));
-    } catch {
-      toast.error("Error deleting service");
+    } catch (err) {
+      if (err instanceof Error && err.message === "HAS_FUTURE_BOOKINGS") {
+        toast.error(t("serviceHasBookings"));
+      } else {
+        toast.error("Error deleting service");
+      }
+    } finally {
+      setPendingDeleteId(null);
     }
   };
 
@@ -377,7 +394,7 @@ export function ServicesTab() {
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(svc)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => handleDelete(svc.id)}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => setPendingDeleteId(svc.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -414,6 +431,28 @@ export function ServicesTab() {
           })}
         </div>
       )}
+
+      <AlertDialog open={!!pendingDeleteId} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("deleteServiceConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("deleteServiceConfirmBody")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteService.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (pendingDeleteId) handleDelete(pendingDeleteId);
+              }}
+            >
+              {t("deleteService")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
