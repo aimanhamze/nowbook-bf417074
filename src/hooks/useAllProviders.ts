@@ -46,7 +46,7 @@ export interface SlotCapacity {
   isFull: boolean;
 }
 
-function dbProviderToProvider(dbp: DbProvider, services: DbService[]): Provider {
+function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCount = 0): Provider {
   const name = { he: dbp.business_name, ar: dbp.business_name, en: dbp.business_name };
   const address = { he: dbp.address, ar: dbp.address, en: dbp.address };
   const about = { he: dbp.about, ar: dbp.about, en: dbp.about };
@@ -56,7 +56,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[]): Provider 
     name,
     category: dbp.category || "barber",
     rating: dbp.average_rating ?? 0,
-    reviewCount: 0,
+    reviewCount,
     image: dbp.avatar_image ?? "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=400&h=400&fit=crop",
     coverImage: dbp.cover_image ?? "",
     address,
@@ -96,9 +96,22 @@ export function useAllProviders() {
         .order("sort_order");
       if (sErr) throw sErr;
 
+      // Single anon-readable round-trip: pull every review's provider_id and tally
+      // counts in JS (no per-provider N+1). average_rating already gives the score;
+      // this fills in the count for "4.8 (98)"-style displays.
+      const { data: reviewRows, error: rErr } = await supabase
+        .from("reviews")
+        .select("provider_id");
+      if (rErr) throw rErr;
+      const reviewCounts = new Map<string, number>();
+      for (const r of reviewRows || []) {
+        reviewCounts.set(r.provider_id, (reviewCounts.get(r.provider_id) ?? 0) + 1);
+      }
+
       return (profiles || []).map(p => dbProviderToProvider(
         p as DbProvider,
-        (services || []).filter(s => s.provider_id === p.id) as DbService[]
+        (services || []).filter(s => s.provider_id === p.id) as DbService[],
+        reviewCounts.get(p.id) ?? 0
       ));
     },
   });
