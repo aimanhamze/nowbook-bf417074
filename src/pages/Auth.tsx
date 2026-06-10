@@ -124,6 +124,10 @@ type PhoneStep = "input" | "otp";
 
 const OTP_COUNTDOWN = 60;
 
+// Temporarily hidden: Google OAuth currently returns a 404. Flip back to true
+// once the OAuth redirect is fixed to restore the "Sign in with Google" button.
+const SHOW_GOOGLE_SIGNIN = false;
+
 const Auth = () => {
   const { t } = useLang();
   const navigate = useNavigate();
@@ -626,7 +630,7 @@ const Auth = () => {
               </AnimatePresence>
 
               {/* ── Google sign-in (always visible) ── */}
-              {!showForgot && phoneStep === "input" && (
+              {SHOW_GOOGLE_SIGNIN && !showForgot && phoneStep === "input" && (
                 <motion.div
                   key="google-section"
                   initial={reduceMotion ? false : { opacity: 0 }}
