@@ -1,9 +1,9 @@
 import { useSearchParams } from "react-router-dom";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { categories, categoryNames, beautyCategories, healthCategories, fitnessCategories } from "@/lib/mock-data";
-import { useAllProviders } from "@/hooks/useAllProviders";
+import { useAllProviders, useAllProviderSchedules } from "@/hooks/useAllProviders";
 import { useFavorites } from "@/hooks/useFavorites";
-import { ProviderCard } from "@/components/home/ProviderCard";
+import { ProviderCardGrid } from "@/components/home/ProviderCardGrid";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
@@ -19,7 +19,15 @@ const Explore = () => {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { lang, t } = useLang();
   const { providers } = useAllProviders();
+  const { schedulesByProviderId } = useAllProviderSchedules();
   const { favoriteIds } = useFavorites();
+
+  // Live clock for open/closed badges; tick once a minute (same pattern as Home).
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Sync activeCategory when URL param changes (e.g. from "See All")
   useEffect(() => {
@@ -70,11 +78,28 @@ const Explore = () => {
   const pagedProviders = filtered.slice(providerPage * PAGE_SIZE, (providerPage + 1) * PAGE_SIZE);
 
   return (
-    <div className="min-h-screen pb-24">
+    <div
+      className="relative min-h-screen overflow-x-clip pb-24"
+      style={{ background: "var(--bg-atmosphere)" }}
+    >
+      {/* Radial accent glows — same atmosphere as Home. Anchored via logical
+          insets so they stay on the same side in both LTR and RTL. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[-4rem] [inset-inline-end:-4rem] h-[26rem] w-[26rem] rounded-full blur-3xl opacity-60"
+        style={{ background: "radial-gradient(circle, hsl(24 95% 78% / 0.55) 0%, transparent 65%)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[28rem] [inset-inline-start:-6rem] h-[32rem] w-[32rem] rounded-full blur-3xl opacity-55"
+        style={{ background: "radial-gradient(circle, hsl(265 60% 80% / 0.45) 0%, transparent 65%)" }}
+      />
+
+      <div className="relative">
       <header className="px-5 pt-12 pb-4">
         <h1 className="text-xl font-bold mb-4">{t("explore")}</h1>
         <div className="flex items-center gap-2">
-          <div className="flex-1 flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5">
+          <div className="flex-1 flex items-center gap-3 glass-card rounded-2xl px-4 py-3 transition-shadow focus-within:ring-1 focus-within:ring-accent/30">
             <Search className="h-4 w-4 text-muted-foreground" />
             <input
               type="text"
@@ -84,7 +109,7 @@ const Explore = () => {
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
-          <button className="p-2.5 rounded-xl border border-border bg-card">
+          <button className="glass-card p-3 rounded-2xl active:scale-95 transition-transform">
             <SlidersHorizontal className="h-4 w-4" />
           </button>
         </div>
@@ -96,8 +121,8 @@ const Explore = () => {
           className={cn(
             "px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
             !activeCategory
-              ? "bg-primary text-primary-foreground"
-              : "bg-secondary text-secondary-foreground"
+              ? "bg-accent text-accent-foreground shadow-[0_6px_16px_-6px_hsl(24_80%_55%/0.6)]"
+              : "bg-accent/10 text-accent border border-accent/20"
           )}
         >
           {t("all")}
@@ -109,8 +134,8 @@ const Explore = () => {
             className={cn(
               "px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
               cat.id === activeCategory
-                ? "bg-primary text-primary-foreground"
-                : "bg-secondary text-secondary-foreground"
+                ? "bg-accent text-accent-foreground shadow-[0_6px_16px_-6px_hsl(24_80%_55%/0.6)]"
+                : "bg-accent/10 text-accent border border-accent/20"
             )}
           >
             {cat.icon} {categoryNames[cat.id][lang]}
@@ -125,13 +150,19 @@ const Explore = () => {
         {filtered.length > 0 ? (
           <>
             <motion.div
-              className="flex flex-col gap-3"
+              className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
             >
               {pagedProviders.map((p, i) => (
-                <ProviderCard key={p.id} provider={p} index={i} />
+                <ProviderCardGrid
+                  key={p.id}
+                  provider={p}
+                  index={i}
+                  schedule={schedulesByProviderId.get(p.id)}
+                  now={now}
+                />
               ))}
             </motion.div>
             {totalPages > 1 && (
@@ -168,6 +199,7 @@ const Explore = () => {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 };
