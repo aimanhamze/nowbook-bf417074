@@ -1,10 +1,11 @@
 import { useSearchParams } from "react-router-dom";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { LayoutGrid, Search, SlidersHorizontal } from "lucide-react";
 import { categories, categoryNames, beautyCategories, healthCategories, fitnessCategories } from "@/lib/mock-data";
+import { categoryIcons } from "@/lib/categoryIcons";
+import { CategoryChip } from "@/components/CategoryChip";
 import { useAllProviders, useAllProviderSchedules } from "@/hooks/useAllProviders";
 import { useFavorites } from "@/hooks/useFavorites";
 import { ProviderCardGrid } from "@/components/home/ProviderCardGrid";
-import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
@@ -115,31 +116,23 @@ const Explore = () => {
         </div>
       </header>
 
-      <div className="flex gap-2 px-5 mb-6 overflow-x-auto pb-1 scrollbar-none">
-        <button
+      {/* Same chip + row behavior as Home's categories row (shared component,
+          proximity snap, dir-aware scroll); chips act as filters here. */}
+      <div className="flex gap-2 px-5 mb-6 overflow-x-auto pb-1 scrollbar-none [scroll-snap-type:x_proximity] [scroll-padding-inline-start:1.25rem]">
+        <CategoryChip
+          icon={LayoutGrid}
+          label={t("all")}
+          selected={!activeCategory}
           onClick={() => setActiveCategory("")}
-          className={cn(
-            "px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
-            !activeCategory
-              ? "bg-accent text-accent-foreground shadow-[0_6px_16px_-6px_hsl(24_80%_55%/0.6)]"
-              : "bg-accent/10 text-accent border border-accent/20"
-          )}
-        >
-          {t("all")}
-        </button>
+        />
         {categories.map((cat) => (
-          <button
+          <CategoryChip
             key={cat.id}
+            icon={categoryIcons[cat.id]}
+            label={categoryNames[cat.id][lang]}
+            selected={cat.id === activeCategory}
             onClick={() => setActiveCategory(cat.id === activeCategory ? "" : cat.id)}
-            className={cn(
-              "px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors",
-              cat.id === activeCategory
-                ? "bg-accent text-accent-foreground shadow-[0_6px_16px_-6px_hsl(24_80%_55%/0.6)]"
-                : "bg-accent/10 text-accent border border-accent/20"
-            )}
-          >
-            {cat.icon} {categoryNames[cat.id][lang]}
-          </button>
+          />
         ))}
       </div>
 
@@ -155,11 +148,10 @@ const Explore = () => {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
             >
-              {pagedProviders.map((p, i) => (
+              {pagedProviders.map((p) => (
                 <ProviderCardGrid
                   key={p.id}
                   provider={p}
-                  index={i}
                   schedule={schedulesByProviderId.get(p.id)}
                   now={now}
                 />

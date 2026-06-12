@@ -1,0 +1,38 @@
+import {
+  Baby,
+  Bone,
+  Brush,
+  Droplets,
+  Dumbbell,
+  Eye,
+  Flower2,
+  Hand,
+  HeartPulse,
+  Palette,
+  PersonStanding,
+  Scissors,
+  Smile,
+  Sparkles,
+  Wand2,
+  type LucideIcon,
+} from "lucide-react";
+
+/** One consistent lucide icon per category id (replaces the mixed emoji set).
+    Keys match `categories` in mock-data. */
+export const categoryIcons: Record<string, LucideIcon> = {
+  barber: Scissors,
+  salon: Brush,
+  nails: Sparkles,
+  brows: Wand2,
+  spa: Flower2,
+  skincare: Droplets,
+  makeup: Palette,
+  orthopedic: Bone,
+  dentist: Smile,
+  eye_doctor: Eye,
+  dermatologist: Hand,
+  physiotherapy: PersonStanding,
+  pediatrician: Baby,
+  gym: Dumbbell,
+  fitness_studio: HeartPulse,
+};

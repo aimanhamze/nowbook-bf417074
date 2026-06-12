@@ -168,6 +168,30 @@
     }
   }
 
+  /* Home content entrance: subtle fade + vertical translate-up (opacity and
+     transform ONLY — never positional props, and vertical so it is identical
+     in RTL and LTR). Replays on every route mount; stagger via inline
+     animation-delay. The top corner buttons (bell/avatar) must NOT get this —
+     they render statically so they can never jump on remount. */
+  .animate-home-enter {
+    animation: home-enter 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes home-enter {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-home-enter {
+      animation: none;
+    }
+  }
+
   /* Horizontal snap-scroll rail for per-category provider lists.
      RTL-correct via native flex + logical scroll behavior — no flex-row-reverse,
      no dir-aware JS. Snap alignment is set per child via `snap-start`. */
