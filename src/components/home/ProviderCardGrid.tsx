@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
-import { Star, Heart, Loader2 } from "lucide-react";
+import { Star, Heart, Loader2, Sparkles, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import type { Provider } from "@/lib/mock-data";
 import { categoryNames } from "@/lib/mock-data";
 import { useLang } from "@/contexts/LangContext";
@@ -12,24 +11,19 @@ import type { ProviderSchedule } from "@/hooks/useAllProviders";
 
 interface ProviderCardGridProps {
   provider: Provider;
-  index?: number;
   schedule?: ProviderSchedule;
   now?: Date;
 }
 
 /**
- * Image-forward provider card for the 2-column Explore grid. Shares the same
- * logic primitives as the Home rail card (ProviderCardVertical) — useFavorites,
- * getProviderStatus — but lays out a large cover banner on top with the name,
- * category and "rating (count)" beneath, plus a green "open"/red "closed" pill.
- * Alignment is dir-driven (no hardcoded left/right) so he/ar/en all read right.
+ * THE provider card — used identically on the Home rails and the Explore grid.
+ * Fixed-height cover (no layout shift, equal card heights in every row), name
+ * NEVER overlaid on the image, one meta row (rating+count OR a "new" badge),
+ * a city row (pin + short location), and a soft status pill on the image's
+ * bottom-end corner (soft green "open" / muted red "closed"). All corner
+ * positioning is dir-aware (start/end).
  */
-export function ProviderCardGrid({
-  provider,
-  index = 0,
-  schedule,
-  now,
-}: ProviderCardGridProps) {
+export function ProviderCardGrid({ provider, schedule, now }: ProviderCardGridProps) {
   const navigate = useNavigate();
   const { lang, t } = useLang();
   const { user } = useAuth();
@@ -54,51 +48,52 @@ export function ProviderCardGrid({
 
   const initial = provider.name[lang].trim()[0]?.toUpperCase() ?? "·";
 
+  // City short-form: most providers store just the city in `address`; for full
+  // addresses the city is conventionally the last comma-separated segment.
+  const fullAddress = (provider.address?.[lang] ?? "").trim();
+  const city = fullAddress
+    ? fullAddress.split(",").pop()!.trim().replace(/\.+$/, "").trim() || null
+    : null;
+
   return (
-    <motion.button
-      initial={{ opacity: 0, y: 16, filter: "blur(4px)" }}
-      whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-      viewport={{ once: true, amount: 0.2 }}
-      transition={{ delay: index * 0.06, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+    <button
       onClick={() => navigate(`/provider/${provider.id}`)}
-      className="glass-card relative flex flex-col rounded-2xl overflow-hidden w-full text-start active:scale-[0.98] transition-transform hover:shadow-[0_1px_2px_rgba(40,20,10,0.04),0_24px_56px_-22px_rgba(120,70,30,0.28)]"
+      className="surface-soft relative flex w-full flex-col overflow-hidden rounded-2xl text-start transition-transform active:scale-[0.98]"
     >
-      {/* Cover banner */}
-      <div className="relative aspect-[4/3] w-full bg-gradient-to-br from-accent/30 via-accent/10 to-[hsl(265_45%_88%)] overflow-hidden">
+      {/* Fixed-height cover — equal card heights, zero layout shift */}
+      <div className="relative h-[104px] w-full shrink-0 overflow-hidden bg-gradient-to-br from-accent/30 via-accent/10 to-[hsl(265_45%_88%)]">
         {imgOk ? (
           <img
             src={banner}
             alt={provider.name[lang]}
-            className="w-full h-full object-cover"
+            className="h-full w-full object-cover"
             loading="lazy"
             onError={() => setImgOk(false)}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-3xl font-bold text-accent">{initial}</span>
+          <div className="flex h-full w-full items-center justify-center">
+            <span className="text-2xl font-bold text-accent">{initial}</span>
           </div>
         )}
 
-        {/* Open / closed pill (dir-aware: bottom-start corner) */}
+        {/* Status pill (dir-aware: bottom-end corner). Soft solid backgrounds —
+            readable on any image; closed is a muted red, not alarm red. */}
         {status?.hasSchedule && (
-          <div
-            className={`absolute bottom-2 start-2 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold backdrop-blur-md ${
-              status.isOpen ? "bg-green-500/90 text-white" : "bg-red-500/90 text-white"
+          <span
+            className={`absolute bottom-2 end-2 rounded-full px-2 py-[3px] text-[11px] font-semibold leading-none ${
+              status.isOpen ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
             }`}
           >
-            <span aria-hidden className="block h-1.5 w-1.5 rounded-full bg-white/90" />
-            {status.isOpen && status.todayHours
-              ? t("openUntil").replace("{time}", status.todayHours.close)
-              : t("providerStatusClosed")}
-          </div>
+            {status.isOpen ? t("providerStatusOpen") : t("providerStatusClosed")}
+          </span>
         )}
 
-        {/* Favorite heart (dir-aware: top-end corner) */}
+        {/* Favorite heart (~28px, dir-aware: top-end corner) */}
         {user && (
           <button
             onClick={handleFavorite}
             aria-label={liked ? t("removeFromFavorites") : t("addToFavorites")}
-            className="absolute top-2 end-2 p-1.5 rounded-full bg-white/70 backdrop-blur-md border border-white/60 shadow-[0_2px_8px_-2px_rgba(120,70,30,0.18)] active:scale-90 transition-transform"
+            className="absolute top-2 end-2 rounded-full border border-white/60 bg-white/80 p-1.5 shadow-[0_2px_8px_-2px_rgba(120,70,30,0.18)] backdrop-blur-md transition-transform active:scale-90"
           >
             {isPending ? (
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -109,18 +104,45 @@ export function ProviderCardGrid({
         )}
       </div>
 
-      {/* Content */}
-      <div className="flex flex-col gap-1 p-3">
-        <h3 className="font-semibold text-sm leading-tight line-clamp-1">{provider.name[lang]}</h3>
-        <p className="text-xs text-muted-foreground truncate">{categoryNames[provider.category]?.[lang]}</p>
-        <div className="flex items-center gap-1 mt-0.5 text-xs font-medium">
-          <Star className="h-3.5 w-3.5 fill-accent text-accent shrink-0" />
-          <span>{provider.rating > 0 ? provider.rating.toFixed(1) : "—"}</span>
-          {provider.reviewCount > 0 && (
-            <span className="text-muted-foreground">({provider.reviewCount})</span>
+      {/* Body — every row has a fixed height so all cards in a row line up */}
+      <div className="flex w-full flex-col p-3">
+        <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
+          {provider.name[lang]}
+        </h3>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {categoryNames[provider.category]?.[lang]}
+        </p>
+
+        {/* Meta row: rating + count, or the "new" badge — never both */}
+        <div className="mt-1.5 flex h-5 items-center">
+          {provider.rating > 0 ? (
+            <span className="flex items-center gap-1 text-xs font-medium">
+              <Star className="h-3.5 w-3.5 shrink-0 fill-accent text-accent" />
+              {provider.rating.toFixed(1)}
+              {provider.reviewCount > 0 && (
+                <span className="font-normal text-muted-foreground">({provider.reviewCount})</span>
+              )}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">
+              <Sparkles className="h-3 w-3" />
+              {t("ratingNew")}
+            </span>
+          )}
+        </div>
+
+        {/* Location row: pin + city. The fixed-height container always renders
+            so every card in a row stays equal height; the icon+text only
+            appear when a location exists. */}
+        <div className="mt-1 flex h-4 items-center gap-1 text-[11px] text-muted-foreground">
+          {city && (
+            <>
+              <MapPin className="h-3 w-3 shrink-0" />
+              <span className="truncate">{city}</span>
+            </>
           )}
         </div>
       </div>
-    </motion.button>
+    </button>
   );
 }
