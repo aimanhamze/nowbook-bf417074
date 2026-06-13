@@ -265,7 +265,7 @@ const ProviderDetail = () => {
             </div>
           );
         })()}
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]">
           <button
             onClick={() => navigate(-1)}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95"
@@ -460,7 +460,7 @@ const ProviderDetail = () => {
       {/* Sticky Book Button */}
       <div className="fixed inset-x-0 bottom-0 z-50">
         <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[hsl(40_30%_96%)] to-transparent" />
-        <div className="border-t border-white/40 bg-white/70 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl">
+        <div className="border-t border-white/40 bg-white/70 p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] backdrop-blur-xl">
           <button
             onClick={() => navigate(`/provider/${provider.id}/book`)}
             className="w-full rounded-2xl bg-accent py-4 text-base font-semibold text-accent-foreground shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)] transition-transform active:scale-[0.98]"
