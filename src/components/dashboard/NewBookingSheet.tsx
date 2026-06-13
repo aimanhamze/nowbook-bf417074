@@ -434,7 +434,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
         </div>
 
         {/* ── Sticky footer: Back / Continue or Create ── */}
-        <div className="shrink-0 border-t border-border bg-background/95 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm">
+        <div className="shrink-0 border-t border-border bg-background/95 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] backdrop-blur-sm">
           <div className="flex items-center gap-3">
             {step > 1 && (
               <Button

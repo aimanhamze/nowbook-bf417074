@@ -79,6 +79,12 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
+    /* Stop iOS/WebKit (notably the Instagram & Facebook in-app browsers) from
+       auto-inflating text it heuristically treats as body copy, which overrode
+       our CSS sizing and enlarged hero/greeting/chip/card text. 100% pins the
+       page to the author-specified sizes; it does NOT disable user zoom. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {

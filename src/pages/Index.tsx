@@ -369,14 +369,14 @@ const Index = () => {
       <div className="relative">
         {/* ── Centered header ──────────────────────────────────────────────── */}
         {/* Top padding respects the PWA safe-area inset (notch devices). */}
-        <header className="relative px-5 pb-5 pt-[calc(env(safe-area-inset-top)+2rem)]">
+        <header className="relative px-5 pb-5 pt-[calc(env(safe-area-inset-top,0px)+2rem)]">
           {/* Corner buttons live OUTSIDE the animated wrapper: an animated
               parent transform moves absolutely-positioned children, which made
               them visibly jump on every route remount. Dir-aware logical
               insets; top matches the header's safe-area padding (minus the 2px
               the 44px tap target adds around the 40px circle). */}
           {user && (
-            <div className="absolute top-[calc(env(safe-area-inset-top)+1.75rem)] [inset-inline-start:1rem]">
+            <div className="absolute top-[calc(env(safe-area-inset-top,0px)+1.75rem)] [inset-inline-start:1rem]">
               <HeaderAvatar
                 src={profileData?.avatar_url || null}
                 initial={avatarInitial}
@@ -385,7 +385,7 @@ const Index = () => {
               />
             </div>
           )}
-          <div className="absolute top-[calc(env(safe-area-inset-top)+1.75rem)] [inset-inline-end:1rem]">
+          <div className="absolute top-[calc(env(safe-area-inset-top,0px)+1.75rem)] [inset-inline-end:1rem]">
             {/* 44px button (tap target) around the 40px visual circle. */}
             <button
               onClick={() => navigate("/notifications")}
