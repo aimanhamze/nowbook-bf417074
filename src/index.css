@@ -91,6 +91,24 @@
     @apply bg-background text-foreground font-sans;
   }
 
+  /* Page-level horizontal-overflow backstop.
+     Every page root guards its own overflow with `overflow-x: clip`, but `clip`
+     is only honored by modern engines (Safari 16+ / current Chromium). The
+     Instagram & Facebook in-app WebViews can run an engine that ignores it, so
+     the guard silently disappears there — and the full-bleed decorative glow
+     layers (≈26–32rem wide, positioned at negative inset-inline so they sit
+     past both edges on purpose) then push the page wider than the viewport.
+     The browser compensates by shrinking the usable layout width, which is why
+     the same text wraps earlier / the column looks narrower in-app than in
+     Chrome. `overflow-x: hidden` here is the universally-supported fallback:
+     it clips that accidental overflow on every page in every engine. It is a
+     no-op in Chrome/Safari (nothing legitimately overflows) and is symmetric,
+     so RTL is unaffected. */
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     text-wrap: balance;
     @apply tracking-tight;
