@@ -25,7 +25,7 @@ interface ProviderCardGridProps {
  */
 export function ProviderCardGrid({ provider, schedule, now }: ProviderCardGridProps) {
   const navigate = useNavigate();
-  const { lang, t } = useLang();
+  const { lang, t, isRtl } = useLang();
   const { user } = useAuth();
   const { isFavorite, toggleFavorite } = useFavorites();
   const liked = isFavorite(provider.id);
@@ -106,7 +106,10 @@ export function ProviderCardGrid({ provider, schedule, now }: ProviderCardGridPr
 
       {/* Body — every row has a fixed height so all cards in a row line up */}
       <div className="flex w-full flex-col p-3">
-        <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
+        <h3
+          dir="auto"
+          className={`truncate text-sm font-semibold leading-tight text-foreground [unicode-bidi:isolate] ${isRtl ? "text-right" : "text-left"}`}
+        >
           {provider.name[lang]}
         </h3>
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
