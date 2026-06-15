@@ -1,4 +1,4 @@
-import { User, Settings, LogIn, LogOut, Bell, BellOff, HelpCircle, Globe, Star, Loader2 } from "lucide-react";
+import { User, Settings, LogIn, LogOut, Bell, BellOff, HelpCircle, Globe, Star, QrCode, Loader2 } from "lucide-react";
 import { ForwardArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
@@ -36,6 +36,7 @@ const Profile = () => {
 
   const menuItems = [
     { icon: user ? LogOut : LogIn, label: user ? t("signOut") : t("signInUp"), action: handleSignInOut, danger: !!user },
+    ...(user && isProvider ? [{ icon: QrCode, label: t("myQrCode"), action: () => navigate("/qr-code") }] : []),
     ...(user && isProvider ? [{ icon: Star, label: t("myReviews"), action: () => navigate("/reviews") }] : []),
     ...(user && isSupported ? [{
       icon: isSubscribed ? Bell : BellOff,
