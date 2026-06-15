@@ -2,7 +2,7 @@ export type Lang = "he" | "ar" | "en";
 
 export const translations = {
   he: {
-    appName: "Dori",
+    appName: "Dorak",
     goodMorning: "בוקר טוב",
     goodAfternoon: "צהריים טובים",
     goodEvening: "ערב טוב",
@@ -415,7 +415,7 @@ export const translations = {
     noBreak: "ללא הפסקה",
   },
   ar: {
-    appName: "Dori",
+    appName: "Dorak",
     goodMorning: "صباح الخير",
     goodAfternoon: "مساء الخير",
     goodEvening: "مساء النور",
@@ -828,7 +828,7 @@ export const translations = {
     noBreak: "بدون استراحة",
   },
   en: {
-    appName: "Dori",
+    appName: "Dorak",
     goodMorning: "Good morning",
     goodAfternoon: "Good Afternoon",
     goodEvening: "Good Evening",

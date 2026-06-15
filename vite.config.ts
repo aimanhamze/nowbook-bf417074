@@ -24,8 +24,8 @@ export default defineConfig(({ mode }) => ({
         importScripts: ["/sw-push.js"],
       },
       manifest: {
-        name: "Dori - הזמנת תורים",
-        short_name: "Dori",
+        name: "Dorak — הזמנת תורים",
+        short_name: "Dorak",
         description: "הזמנת תורים בקלות",
         lang: "he",
         theme_color: "#fcfcfc",
