@@ -41,6 +41,7 @@ export const categories = [
   { id: "dentist", icon: "🦷" },
   { id: "eye_doctor", icon: "👁️‍🗨️" },
   { id: "dermatologist", icon: "🩺" },
+  { id: "aesthetic_medicine", icon: "💉" },
   { id: "physiotherapy", icon: "💪" },
   { id: "pediatrician", icon: "👶" },
   { id: "gym", icon: "🏋️" },
@@ -48,7 +49,7 @@ export const categories = [
 ] as const;
 
 export const beautyCategories = ["barber", "salon", "nails", "brows", "spa", "skincare", "makeup"] as const;
-export const healthCategories = ["orthopedic", "dentist", "eye_doctor", "dermatologist", "physiotherapy", "pediatrician"] as const;
+export const healthCategories = ["orthopedic", "dentist", "eye_doctor", "dermatologist", "aesthetic_medicine", "physiotherapy", "pediatrician"] as const;
 export const fitnessCategories = ["gym", "fitness_studio"] as const;
 
 export const categoryNames: Record<string, Record<Lang, string>> = {
@@ -63,6 +64,7 @@ export const categoryNames: Record<string, Record<Lang, string>> = {
   dentist: { he: "רופא שיניים", ar: "طبيب أسنان", en: "Dentist" },
   eye_doctor: { he: "רופא עיניים", ar: "طبيب عيون", en: "Eye Doctor" },
   dermatologist: { he: "רופא עור", ar: "طبيب جلدية", en: "Dermatologist" },
+  aesthetic_medicine: { he: "רפואה אסתטית", ar: "طب تجميلي", en: "Aesthetic Medicine" },
   physiotherapy: { he: "פיזיותרפיה", ar: "علاج طبيعي", en: "Physiotherapy" },
   pediatrician: { he: "רופא ילדים", ar: "طبيب أطفال", en: "Pediatrician" },
   gym: { he: "סטודיו אימונים", ar: "صالة رياضية", en: "Gym & Fitness" },

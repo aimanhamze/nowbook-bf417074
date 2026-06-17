@@ -13,6 +13,7 @@ import {
   Scissors,
   Smile,
   Sparkles,
+  Syringe,
   Wand2,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +32,7 @@ export const categoryIcons: Record<string, LucideIcon> = {
   dentist: Smile,
   eye_doctor: Eye,
   dermatologist: Hand,
+  aesthetic_medicine: Syringe,
   physiotherapy: PersonStanding,
   pediatrician: Baby,
   gym: Dumbbell,
