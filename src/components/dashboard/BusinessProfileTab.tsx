@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
-import { MapPin, Loader2 } from "lucide-react";
+import { MapPin, Loader2, RotateCcw } from "lucide-react";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,6 +16,17 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { categories, categoryNames } from "@/lib/mock-data";
 import { buildSocialLinks } from "@/lib/socialLinks";
 import { toast } from "sonner";
+
+export const DEFAULT_DEPOSIT_TEMPLATE = `שלום {customer_name} 😊
+קיבלנו את בקשת התור שלך ל{service_name} בתאריך {date} בשעה {time}.
+לאישור התור נדרש תשלום מקדמה של ₪{price}.`;
+
+export const DEFAULT_REMINDER_TEMPLATE = `שלום {customer_name} 😊
+רצינו להזכיר לך את התור שקבעת אצלנו:
+📅 תאריך: {date}
+⏰ שעה: {time}
+💇 שירות: {service_name}
+מצפים לראותך! 🙏`;
 
 function roundCoord(v: number): number {
   return Math.round(v * 1e6) / 1e6;
@@ -43,10 +54,12 @@ type FormValues = z.infer<typeof profileSchema>;
 
 export function BusinessProfileTab() {
   const { t, lang } = useLang();
-  const { profile, upsertProfile, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
+  const { profile, upsertProfile, updateWhatsAppTemplates, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
 
   const [accordionValue, setAccordionValue] = useState("");
   const [locationAccordionValue, setLocationAccordionValue] = useState("");
+  const [depositTemplate, setDepositTemplate] = useState(DEFAULT_DEPOSIT_TEMPLATE);
+  const [reminderTemplate, setReminderTemplate] = useState(DEFAULT_REMINDER_TEMPLATE);
 
   const {
     position: detectedPosition,
@@ -83,6 +96,8 @@ export function BusinessProfileTab() {
         latitude: profile.latitude ?? null,
         longitude: profile.longitude ?? null,
       });
+      setDepositTemplate(profile.deposit_message_template || DEFAULT_DEPOSIT_TEMPLATE);
+      setReminderTemplate(profile.reminder_message_template || DEFAULT_REMINDER_TEMPLATE);
     }
   }, [profile, reset]);
 
@@ -399,6 +414,101 @@ export function BusinessProfileTab() {
             </AccordionContent>
           </AccordionItem>
         </Accordion>
+      </div>
+
+      {/* WhatsApp message templates */}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-5">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <span>💬</span> {t("whatsappTemplates")}
+        </h3>
+
+        {/* Deposit template */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">{t("depositTemplate")}</Label>
+          <Textarea
+            rows={4}
+            value={depositTemplate}
+            onChange={(e) => setDepositTemplate(e.target.value)}
+            className="text-xs font-mono leading-relaxed"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            <span className="font-medium">{t("availablePlaceholders")}:</span>{" "}
+            {["{customer_name}", "{service_name}", "{date}", "{time}", "{price}"].map((p) => (
+              <code key={p} className="mx-0.5 rounded bg-secondary px-1 py-0.5">{p}</code>
+            ))}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="flex-1 text-xs h-8"
+              onClick={() =>
+                updateWhatsAppTemplates.mutate(
+                  { deposit_message_template: depositTemplate },
+                  { onSuccess: () => toast.success(t("templateSaved")), onError: () => toast.error("שגיאה בשמירה") }
+                )
+              }
+              disabled={updateWhatsAppTemplates.isPending}
+            >
+              {updateWhatsAppTemplates.isPending ? "שומר..." : "שמור"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1 text-xs h-8"
+              onClick={() => setDepositTemplate(DEFAULT_DEPOSIT_TEMPLATE)}
+            >
+              <RotateCcw className="h-3 w-3" />
+              {t("resetToDefault")}
+            </Button>
+          </div>
+        </div>
+
+        <div className="border-t border-border/60" />
+
+        {/* Reminder template */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">{t("reminderTemplate")}</Label>
+          <Textarea
+            rows={6}
+            value={reminderTemplate}
+            onChange={(e) => setReminderTemplate(e.target.value)}
+            className="text-xs font-mono leading-relaxed"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            <span className="font-medium">{t("availablePlaceholders")}:</span>{" "}
+            {["{customer_name}", "{service_name}", "{date}", "{time}"].map((p) => (
+              <code key={p} className="mx-0.5 rounded bg-secondary px-1 py-0.5">{p}</code>
+            ))}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="flex-1 text-xs h-8"
+              onClick={() =>
+                updateWhatsAppTemplates.mutate(
+                  { reminder_message_template: reminderTemplate },
+                  { onSuccess: () => toast.success(t("templateSaved")), onError: () => toast.error("שגיאה בשמירה") }
+                )
+              }
+              disabled={updateWhatsAppTemplates.isPending}
+            >
+              {updateWhatsAppTemplates.isPending ? "שומר..." : "שמור"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1 text-xs h-8"
+              onClick={() => setReminderTemplate(DEFAULT_REMINDER_TEMPLATE)}
+            >
+              <RotateCcw className="h-3 w-3" />
+              {t("resetToDefault")}
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Fixed action bar — pinned just above the BottomNav (~4rem tall) and
