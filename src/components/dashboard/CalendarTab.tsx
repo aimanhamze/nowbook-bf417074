@@ -11,6 +11,7 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { ForwardArrow } from "@/components/ui/directional-icon";
 import { NewBookingSheet } from "@/components/dashboard/NewBookingSheet";
+import { DEFAULT_REMINDER_TEMPLATE } from "@/components/dashboard/BusinessProfileTab";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,11 +24,18 @@ function toWhatsAppUrl(phone: string): string {
   return `https://wa.me/972${local}`;
 }
 
-function buildReminderMessage(booking: EnrichedBooking, address: string): string {
+function applyTemplate(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce((msg, [key, val]) => msg.replaceAll(`{${key}}`, val), template);
+}
+
+function buildReminderMessage(booking: EnrichedBooking, template: string): string {
   const date = format(parseISO(booking.booking_date), "d בMMM", { locale: he });
-  const name = booking.customer_name || "לקוח יקר";
-  const service = booking.service_names.join(", ");
-  return `שלום ${name} 😊\nרצינו להזכיר לך את התור שקבעת אצלנו:\n📅 תאריך: ${date}\n⏰ שעה: ${booking.booking_time}\n💇 שירות: ${service}\n📍 כתובת: ${address}\nמצפים לראותך! 🙏`;
+  return applyTemplate(template, {
+    customer_name: booking.customer_name || "לקוח יקר",
+    service_name: booking.service_names.join(", "),
+    date,
+    time: booking.booking_time,
+  });
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -93,6 +101,7 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
   const approveBooking = useApproveBooking();
   const rejectBooking = useRejectBooking();
   const { profile } = useProviderProfile();
+  const reminderTemplate = profile?.reminder_message_template || DEFAULT_REMINDER_TEMPLATE;
 
   const initials = booking.customer_name
     ? booking.customer_name.split(" ").map((w) => w[0]).join("").slice(0, 2)
@@ -216,7 +225,7 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
       {/* WhatsApp reminder — confirmed bookings only */}
       {isConfirmed && booking.customer_phone && (
         <a
-          href={`${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(buildReminderMessage(booking, profile?.address || ""))}`}
+          href={`${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(buildReminderMessage(booking, reminderTemplate))}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-center gap-1.5 w-full text-xs h-8 rounded-md border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 transition-colors font-medium"

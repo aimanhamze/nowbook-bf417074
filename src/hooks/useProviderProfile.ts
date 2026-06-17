@@ -120,6 +120,20 @@ export function useProviderProfile() {
     },
   });
 
+  const updateWhatsAppTemplates = useMutation({
+    mutationFn: async (values: { deposit_message_template?: string; reminder_message_template?: string }) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update(values)
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+    },
+  });
+
   const uploadCoverImage = useMutation({
     mutationFn: async (file: File) => {
       if (!user) throw new Error("Not authenticated");
@@ -188,6 +202,7 @@ export function useProviderProfile() {
     updateShowPrices,
     updateMinLeadTime,
     updateBookingWindow,
+    updateWhatsAppTemplates,
     uploadCoverImage,
     uploadAvatarImage,
   };

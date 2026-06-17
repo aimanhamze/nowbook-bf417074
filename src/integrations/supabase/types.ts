@@ -284,12 +284,14 @@ export type Database = {
           category: string
           cover_image: string | null
           created_at: string
+          deposit_message_template: string | null
           id: string
           is_visible: boolean
           latitude: number | null
           longitude: number | null
           min_lead_time_minutes: number
           phone: string | null
+          reminder_message_template: string | null
           requires_booking_approval: boolean
           show_prices: boolean
           social_links: Json | null
@@ -307,12 +309,14 @@ export type Database = {
           category?: string
           cover_image?: string | null
           created_at?: string
+          deposit_message_template?: string | null
           id?: string
           is_visible?: boolean
           latitude?: number | null
           longitude?: number | null
           min_lead_time_minutes?: number
           phone?: string | null
+          reminder_message_template?: string | null
           requires_booking_approval?: boolean
           show_prices?: boolean
           social_links?: Json | null
@@ -330,12 +334,14 @@ export type Database = {
           category?: string
           cover_image?: string | null
           created_at?: string
+          deposit_message_template?: string | null
           id?: string
           is_visible?: boolean
           latitude?: number | null
           longitude?: number | null
           min_lead_time_minutes?: number
           phone?: string | null
+          reminder_message_template?: string | null
           requires_booking_approval?: boolean
           show_prices?: boolean
           social_links?: Json | null

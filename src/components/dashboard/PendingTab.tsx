@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderBookings, useApproveBooking, useRejectBooking, usePendingCount, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { DEFAULT_DEPOSIT_TEMPLATE } from "@/components/dashboard/BusinessProfileTab";
 
 // Re-exported from the hooks module (relocated so BottomNav can consume the
 // count without pulling this component's import graph). Kept here for existing
@@ -20,14 +22,22 @@ function toWhatsAppUrl(phone: string): string {
   return `https://wa.me/972${local}`;
 }
 
-function buildDepositMessage(booking: EnrichedBooking): string {
-  const date = format(parseISO(booking.booking_date), "d בMMM", { locale: he });
-  const name = booking.customer_name || "לקוח יקר";
-  const service = booking.service_names.join(", ");
-  return `שלום ${name} 😊\nקיבלנו את בקשת התור שלך:\n📅 תאריך: ${date}\n⏰ שעה: ${booking.booking_time}\n💇 שירות: ${service}\nלאישור התור נבקש מקדמה של ₪${booking.total_price}.\nנשמח לשמוע ממך! 🙏`;
+function applyTemplate(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce((msg, [key, val]) => msg.replaceAll(`{${key}}`, val), template);
 }
 
-function PendingCard({ booking, index }: { booking: EnrichedBooking; index: number }) {
+function buildDepositMessage(booking: EnrichedBooking, template: string): string {
+  const date = format(parseISO(booking.booking_date), "d בMMM", { locale: he });
+  return applyTemplate(template, {
+    customer_name: booking.customer_name || "לקוח יקר",
+    service_name: booking.service_names.join(", "),
+    date,
+    time: booking.booking_time,
+    price: String(booking.total_price),
+  });
+}
+
+function PendingCard({ booking, index, depositTemplate }: { booking: EnrichedBooking; index: number; depositTemplate: string }) {
   const approveBooking = useApproveBooking();
   const rejectBooking = useRejectBooking();
 
@@ -126,7 +136,7 @@ function PendingCard({ booking, index }: { booking: EnrichedBooking; index: numb
       {/* WhatsApp deposit request */}
       {booking.customer_phone && (
         <a
-          href={`${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(buildDepositMessage(booking))}`}
+          href={`${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(buildDepositMessage(booking, depositTemplate))}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-center gap-1.5 w-full text-xs h-9 rounded-md border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 transition-colors font-medium"
@@ -142,6 +152,8 @@ function PendingCard({ booking, index }: { booking: EnrichedBooking; index: numb
 export function PendingTab() {
   const { t } = useLang();
   const { data: bookings = [], isLoading } = useProviderBookings();
+  const { profile } = useProviderProfile();
+  const depositTemplate = profile?.deposit_message_template || DEFAULT_DEPOSIT_TEMPLATE;
 
   const pending = bookings
     .filter((b) => b.status === "pending")
@@ -172,7 +184,7 @@ export function PendingTab() {
     <AnimatePresence mode="popLayout">
       <div className="space-y-3">
         {pending.map((booking, i) => (
-          <PendingCard key={booking.id} booking={booking} index={i} />
+          <PendingCard key={booking.id} booking={booking} index={i} depositTemplate={depositTemplate} />
         ))}
       </div>
     </AnimatePresence>
