@@ -34,6 +34,7 @@ const categoryLabels: Record<string, string> = {
   dentist: "🦷 רפואת שיניים",
   eye_doctor: "👁️‍🗨️ רופא עיניים",
   dermatologist: "🩺 עור ואסתטיקה",
+  aesthetic_medicine: "💉 רפואה אסתטית",
   physiotherapy: "💪 פיזיותרפיה",
   pediatrician: "👶 רופא ילדים",
   gym: "🏋️ סטודיו אימונים",
