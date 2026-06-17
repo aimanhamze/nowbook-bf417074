@@ -1,4 +1,4 @@
-import { Home, Search, Calendar, Heart, User, LayoutDashboard, Bell, BarChart3 } from "lucide-react";
+import { Home, Search, Calendar, Heart, User, LayoutDashboard, Bell, BarChart3, Store, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -12,7 +12,7 @@ export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useLang();
-  const { isProvider, user } = useAuth();
+  const { isProvider, isAdmin, user } = useAuth();
 
   // Provider-only: count of bookings awaiting approval. Returns 0 (no fetch)
   // for customers/logged-out, so it's safe to call unconditionally here.
@@ -35,7 +35,16 @@ export function BottomNav() {
     refetchInterval: 30000,
   });
 
-  const navItems = isProvider
+  // Admin nav takes precedence (an admin is never shown the consumer/provider
+  // bar). Non-admins are completely unaffected by this branch.
+  const navItems = isAdmin
+    ? [
+        { icon: LayoutDashboard, label: t("adminTabDashboard"), path: "/admin" },
+        { icon: Store, label: t("adminProviders"), path: "/admin/providers" },
+        { icon: Users, label: t("adminCustomers"), path: "/admin/customers" },
+        { icon: User, label: t("profile"), path: "/profile" },
+      ]
+    : isProvider
     ? [
         { icon: LayoutDashboard, label: t("dashboard"), path: "/dashboard" },
         { icon: BarChart3, label: t("statisticsTitle"), path: "/statistics" },

@@ -104,6 +104,8 @@ const App = () => (
                   <Route path="/statistics" element={<ProtectedRoute><ErrorBoundary><Statistics /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/notifications" element={<ProtectedRoute><ErrorBoundary><Notifications /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/admin" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
+                  <Route path="/admin/providers" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
+                  <Route path="/admin/customers" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
                   <Route path="/install" element={<ErrorBoundary><Install /></ErrorBoundary>} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>

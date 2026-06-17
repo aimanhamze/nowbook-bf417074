@@ -578,6 +578,13 @@ export type Database = {
           provider_id: string
         }[]
       }
+      admin_provider_last_logins: {
+        Args: never
+        Returns: {
+          last_sign_in_at: string
+          user_id: string
+        }[]
+      }
       admin_recent_bookings: {
         Args: { p_limit?: number }
         Returns: {

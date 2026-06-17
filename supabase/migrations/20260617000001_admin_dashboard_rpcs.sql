@@ -26,6 +26,18 @@
 -- whether the column is uuid[] or text[].
 -- ============================================================================
 
+-- NOTE: bookings.booking_time is a TEXT column in this database (HH:MM[:SS]),
+-- not a `time` type — the list RPCs below return it as text accordingly.
+--
+-- Drop first so re-applying this migration can change return signatures cleanly
+-- (CREATE OR REPLACE cannot alter a function's RETURNS TABLE column types).
+DROP FUNCTION IF EXISTS public.admin_dashboard_counts();
+DROP FUNCTION IF EXISTS public.admin_bookings_over_time(date, date);
+DROP FUNCTION IF EXISTS public.admin_provider_booking_counts();
+DROP FUNCTION IF EXISTS public.admin_recent_bookings(integer);
+DROP FUNCTION IF EXISTS public.admin_today_bookings();
+DROP FUNCTION IF EXISTS public.admin_pending_bookings();
+
 -- ----------------------------------------------------------------------------
 -- 1. admin_dashboard_counts() — single-row KPI bundle (counts only)
 -- ----------------------------------------------------------------------------
@@ -153,7 +165,7 @@ CREATE OR REPLACE FUNCTION public.admin_recent_bookings(
 RETURNS TABLE (
   booking_id    uuid,
   booking_date  date,
-  booking_time  time,
+  booking_time  text,
   status        text,
   business_name text,
   service_name  text,
@@ -193,7 +205,7 @@ CREATE OR REPLACE FUNCTION public.admin_today_bookings()
 RETURNS TABLE (
   booking_id    uuid,
   booking_date  date,
-  booking_time  time,
+  booking_time  text,
   status        text,
   business_name text,
   service_name  text,
@@ -235,7 +247,7 @@ CREATE OR REPLACE FUNCTION public.admin_pending_bookings()
 RETURNS TABLE (
   booking_id    uuid,
   booking_date  date,
-  booking_time  time,
+  booking_time  text,
   status        text,
   business_name text,
   service_name  text,
