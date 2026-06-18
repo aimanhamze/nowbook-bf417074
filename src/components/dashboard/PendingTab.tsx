@@ -37,7 +37,20 @@ function buildDepositMessage(booking: EnrichedBooking, template: string): string
   });
 }
 
-function PendingCard({ booking, index, depositTemplate, depositEnabled }: { booking: EnrichedBooking; index: number; depositTemplate: string; depositEnabled: boolean }) {
+// Fixed (non-editable) confirmation message sent after a booking is confirmed.
+// Template comes from translations.ts in the provider's current app language.
+function buildConfirmMessage(booking: EnrichedBooking, template: string, businessName: string): string {
+  const date = format(parseISO(booking.booking_date), "d בMMM", { locale: he });
+  return applyTemplate(template, {
+    business: businessName,
+    service: booking.service_names.join(", "),
+    date,
+    time: booking.booking_time,
+  });
+}
+
+function PendingCard({ booking, index, depositTemplate, depositEnabled, businessName }: { booking: EnrichedBooking; index: number; depositTemplate: string; depositEnabled: boolean; businessName: string }) {
+  const { t } = useLang();
   const approveBooking = useApproveBooking();
   const rejectBooking = useRejectBooking();
 
@@ -110,7 +123,22 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled }: { book
           size="sm"
           className="flex-1 text-xs h-9 text-emerald-700 border-emerald-300 bg-white hover:bg-emerald-50"
           onClick={() => approveBooking.mutate(booking.id, {
-            onSuccess: () => toast.success("התור אושר בהצלחה ✅"),
+            onSuccess: () => {
+              toast.success("התור אושר בהצלחה ✅");
+              // Best-effort: after the DB confirms (source of truth above), open
+              // WhatsApp pre-filled with the fixed confirmation message. Never
+              // blocks the confirmation — no phone = no WhatsApp, no error.
+              if (booking.customer_phone) {
+                try {
+                  const url = `${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(
+                    buildConfirmMessage(booking, t("confirmWhatsappMessage"), businessName)
+                  )}`;
+                  window.open(url, "_blank", "noopener,noreferrer");
+                } catch {
+                  // Ignore: the booking is already confirmed regardless.
+                }
+              }
+            },
             onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "שגיאה באישור התור"),
           })}
           disabled={approveBooking.isPending || rejectBooking.isPending}
@@ -188,7 +216,7 @@ export function PendingTab() {
     <AnimatePresence mode="popLayout">
       <div className="space-y-3">
         {pending.map((booking, i) => (
-          <PendingCard key={booking.id} booking={booking} index={i} depositTemplate={depositTemplate} depositEnabled={depositEnabled} />
+          <PendingCard key={booking.id} booking={booking} index={i} depositTemplate={depositTemplate} depositEnabled={depositEnabled} businessName={profile?.business_name ?? ""} />
         ))}
       </div>
     </AnimatePresence>
