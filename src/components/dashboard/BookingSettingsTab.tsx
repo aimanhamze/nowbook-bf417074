@@ -32,6 +32,7 @@ export function BookingSettingsTab() {
     updateBookingApproval,
     updateTreatmentNotesEnabled,
     updateShowPrices,
+    updateDepositRequestEnabled,
     updateMinLeadTime,
     updateBookingWindow,
   } = useProviderProfile();
@@ -41,6 +42,10 @@ export function BookingSettingsTab() {
   const requiresApproval = profile?.requires_booking_approval ?? false;
   const treatmentNotesEnabled = profile?.treatment_notes_enabled ?? false;
   const showPrices = profile?.show_prices ?? true;
+  // Cast: column added by 20260618000002 migration; types.ts regenerated after
+  // apply (matches the booking_window_days cast below).
+  const depositRequestEnabled =
+    (profile as { deposit_request_enabled?: boolean } | null)?.deposit_request_enabled ?? false;
   const minLeadTime = profile?.min_lead_time_minutes ?? 15;
   const bookingWindow = (profile as { booking_window_days?: number } | null)?.booking_window_days ?? 14;
 
@@ -113,6 +118,24 @@ export function BookingSettingsTab() {
           <div className="flex-1">
             <Label className="text-sm font-medium">{t("showPricesLabel")}</Label>
             <p className="text-xs text-muted-foreground mt-1">{t("showPricesHelp")}</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 pt-3 border-t border-border">
+          <Switch
+            checked={depositRequestEnabled}
+            onCheckedChange={async (next) => {
+              try {
+                await updateDepositRequestEnabled.mutateAsync(next);
+                toast.success(t("profileSaved"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Error");
+              }
+            }}
+            disabled={updateDepositRequestEnabled.isPending}
+          />
+          <div className="flex-1">
+            <Label className="text-sm font-medium">{t("depositRequestLabel")}</Label>
+            <p className="text-xs text-muted-foreground mt-1">{t("depositRequestHelp")}</p>
           </div>
         </div>
       </div>

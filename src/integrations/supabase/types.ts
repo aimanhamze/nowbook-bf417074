@@ -285,6 +285,7 @@ export type Database = {
           cover_image: string | null
           created_at: string
           deposit_message_template: string | null
+          deposit_request_enabled: boolean
           id: string
           is_visible: boolean
           latitude: number | null
@@ -310,6 +311,7 @@ export type Database = {
           cover_image?: string | null
           created_at?: string
           deposit_message_template?: string | null
+          deposit_request_enabled?: boolean
           id?: string
           is_visible?: boolean
           latitude?: number | null
@@ -335,6 +337,7 @@ export type Database = {
           cover_image?: string | null
           created_at?: string
           deposit_message_template?: string | null
+          deposit_request_enabled?: boolean
           id?: string
           is_visible?: boolean
           latitude?: number | null

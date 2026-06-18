@@ -37,7 +37,7 @@ function buildDepositMessage(booking: EnrichedBooking, template: string): string
   });
 }
 
-function PendingCard({ booking, index, depositTemplate }: { booking: EnrichedBooking; index: number; depositTemplate: string }) {
+function PendingCard({ booking, index, depositTemplate, depositEnabled }: { booking: EnrichedBooking; index: number; depositTemplate: string; depositEnabled: boolean }) {
   const approveBooking = useApproveBooking();
   const rejectBooking = useRejectBooking();
 
@@ -133,8 +133,8 @@ function PendingCard({ booking, index, depositTemplate }: { booking: EnrichedBoo
         </Button>
       </div>
 
-      {/* WhatsApp deposit request */}
-      {booking.customer_phone && (
+      {/* WhatsApp deposit request — only when the provider opted in */}
+      {depositEnabled && booking.customer_phone && (
         <a
           href={`${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(buildDepositMessage(booking, depositTemplate))}`}
           target="_blank"
@@ -154,6 +154,10 @@ export function PendingTab() {
   const { data: bookings = [], isLoading } = useProviderBookings();
   const { profile } = useProviderProfile();
   const depositTemplate = profile?.deposit_message_template || DEFAULT_DEPOSIT_TEMPLATE;
+  // Cast: column added by 20260618000002 migration; types.ts regenerated after
+  // apply. Default false → deposit button hidden until the provider opts in.
+  const depositEnabled =
+    (profile as { deposit_request_enabled?: boolean } | null)?.deposit_request_enabled ?? false;
 
   const pending = bookings
     .filter((b) => b.status === "pending")
@@ -184,7 +188,7 @@ export function PendingTab() {
     <AnimatePresence mode="popLayout">
       <div className="space-y-3">
         {pending.map((booking, i) => (
-          <PendingCard key={booking.id} booking={booking} index={i} depositTemplate={depositTemplate} />
+          <PendingCard key={booking.id} booking={booking} index={i} depositTemplate={depositTemplate} depositEnabled={depositEnabled} />
         ))}
       </div>
     </AnimatePresence>

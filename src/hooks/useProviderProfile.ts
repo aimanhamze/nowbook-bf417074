@@ -92,6 +92,23 @@ export function useProviderProfile() {
     },
   });
 
+  const updateDepositRequestEnabled = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        // Cast: column added by 20260618000002 migration; types.ts is
+        // regenerated after Aiman applies it (matches booking_window_days).
+        .update({ deposit_request_enabled: value } as never)
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+    },
+  });
+
   const updateMinLeadTime = useMutation({
     mutationFn: async (value: number) => {
       if (!user) throw new Error("Not authenticated");
@@ -200,6 +217,7 @@ export function useProviderProfile() {
     updateBookingApproval,
     updateTreatmentNotesEnabled,
     updateShowPrices,
+    updateDepositRequestEnabled,
     updateMinLeadTime,
     updateBookingWindow,
     updateWhatsAppTemplates,
