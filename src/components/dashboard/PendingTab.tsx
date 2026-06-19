@@ -60,6 +60,25 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
 
   const formattedDate = format(parseISO(booking.booking_date), "EEE, d בMMM", { locale: he });
 
+  // Pre-built wa.me confirmation link (null when the customer has no phone).
+  const confirmWhatsAppUrl = booking.customer_phone
+    ? `${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(
+        buildConfirmMessage(booking, t("confirmWhatsappMessage"), businessName)
+      )}`
+    : null;
+
+  // Fire the DB confirmation (status→confirmed + customer notification — the
+  // source of truth). Runs in the SAME synchronous tap as the WhatsApp open
+  // below, so it always happens whether or not WhatsApp opens. Guard prevents a
+  // double-confirm if the button is tapped twice before the card disappears.
+  const handleConfirm = () => {
+    if (approveBooking.isPending || rejectBooking.isPending) return;
+    approveBooking.mutate(booking.id, {
+      onSuccess: () => toast.success("התור אושר בהצלחה ✅"),
+      onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "שגיאה באישור התור"),
+    });
+  };
+
   return (
     <motion.div
       layout
@@ -118,34 +137,43 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
 
       {/* Approve / Reject */}
       <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1 text-xs h-9 text-emerald-700 border-emerald-300 bg-white hover:bg-emerald-50"
-          onClick={() => approveBooking.mutate(booking.id, {
-            onSuccess: () => {
-              toast.success("התור אושר בהצלחה ✅");
-              // Best-effort: after the DB confirms (source of truth above), open
-              // WhatsApp pre-filled with the fixed confirmation message. Never
-              // blocks the confirmation — no phone = no WhatsApp, no error.
-              if (booking.customer_phone) {
-                try {
-                  const url = `${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(
-                    buildConfirmMessage(booking, t("confirmWhatsappMessage"), businessName)
-                  )}`;
-                  window.open(url, "_blank", "noopener,noreferrer");
-                } catch {
-                  // Ignore: the booking is already confirmed regardless.
-                }
-              }
-            },
-            onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "שגיאה באישור התור"),
-          })}
-          disabled={approveBooking.isPending || rejectBooking.isPending}
-        >
-          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-          {approveBooking.isPending ? "מאשר..." : "אשר תור"}
-        </Button>
+        {confirmWhatsAppUrl ? (
+          // iOS Safari suppresses window.open()/navigation that runs AFTER an
+          // await (the old onSuccess callback lost the user-gesture chain, so it
+          // only worked on lenient Android). Here the WhatsApp link opens via a
+          // real <a> navigation — exactly like the working deposit button below —
+          // synchronously within the tap, while handleConfirm fires the DB
+          // confirmation in the same gesture. So WhatsApp opens on iOS too, and
+          // the booking is confirmed regardless of the popup.
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="flex-1 text-xs h-9 text-emerald-700 border-emerald-300 bg-white hover:bg-emerald-50"
+          >
+            <a
+              href={confirmWhatsAppUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={handleConfirm}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+              {approveBooking.isPending ? "מאשר..." : "אשר תור"}
+            </a>
+          </Button>
+        ) : (
+          // No phone → confirm only, no WhatsApp.
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 text-xs h-9 text-emerald-700 border-emerald-300 bg-white hover:bg-emerald-50"
+            onClick={handleConfirm}
+            disabled={approveBooking.isPending || rejectBooking.isPending}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+            {approveBooking.isPending ? "מאשר..." : "אשר תור"}
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"
