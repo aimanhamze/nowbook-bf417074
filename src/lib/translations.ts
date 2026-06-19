@@ -469,6 +469,9 @@ export const translations = {
     adminLastLogin: "התחברות אחרונה",
     adminNeverLoggedIn: "מעולם לא",
     adminCustomers: "לקוחות",
+    latestStartTime: "שעת התחלה אחרונה",
+    latestStartTimeHelper: "הלקוח לא יוכל לקבוע לאחר שעה זו",
+    availableUntil: "זמין עד שעה {time} בלבד",
   },
   ar: {
     appName: "Dorak",
@@ -938,6 +941,9 @@ export const translations = {
     adminLastLogin: "آخر دخول",
     adminNeverLoggedIn: "أبداً",
     adminCustomers: "زبائن",
+    latestStartTime: "آخر وقت بدء",
+    latestStartTimeHelper: "لا يمكن الحجز بعد هذا الوقت",
+    availableUntil: "متاح حتى {time} فقط",
   },
   en: {
     appName: "Dorak",
@@ -1407,6 +1413,9 @@ export const translations = {
     adminLastLogin: "Last login",
     adminNeverLoggedIn: "Never",
     adminCustomers: "Customers",
+    latestStartTime: "Latest Start Time",
+    latestStartTimeHelper: "Customer cannot book after this time",
+    availableUntil: "Available until {time} only",
   },
 } as const;
 

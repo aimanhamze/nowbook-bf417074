@@ -36,6 +36,7 @@ export interface DbService {
   service_type: string;
   max_capacity: number;
   scheduled_time: string | null;
+  latest_start_time: string | null;
 }
 
 export interface SlotCapacity {
@@ -74,6 +75,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCoun
       service_type: (s.service_type as 'private' | 'group') || 'private',
       max_capacity: s.max_capacity ?? 1,
       scheduled_time: s.scheduled_time ?? null,
+      latest_start_time: s.latest_start_time ?? null,
     })),
   };
 }
@@ -309,7 +311,7 @@ export function useRealAvailability(providerId: string | undefined) {
       if (!providerId) return [];
       const { data, error } = await supabase
         .from("provider_services")
-        .select("id, duration, service_type, max_capacity")
+        .select("id, duration, service_type, max_capacity, latest_start_time")
         .eq("provider_id", providerId);
       if (error) throw error;
       return data || [];
@@ -340,7 +342,7 @@ export function useRealAvailability(providerId: string | undefined) {
    * (new_start < b.end && b.start < new_start + new_duration), so the client
    * never offers a slot the trigger would reject, nor hides one it would allow.
    */
-  const getAvailableSlots = (date: Date, requestedDuration?: number, capacity = 1, primaryServiceId?: string): string[] => {
+  const getAvailableSlots = (date: Date, requestedDuration?: number, capacity = 1, primaryServiceId?: string, latestStartTime?: string | null): string[] => {
     if (!providerId) return [];
 
     const dow = date.getDay();
@@ -383,8 +385,10 @@ export function useRealAvailability(providerId: string | undefined) {
     const breakEnd = slot.break_end ? parseTime(slot.break_end) : null;
 
     const slotCapacity = capacity > 0 ? capacity : 1;
+    const latestStartMins = latestStartTime ? parseTime(latestStartTime) : null;
     const slots: string[] = [];
     for (let t = start; t + neededDuration <= end; t += SLOT_STEP) {
+      if (latestStartMins !== null && t > latestStartMins) continue;
       const overlapping = bookedIntervals.filter(
         bi => t < bi.end && bi.start < t + neededDuration
       );

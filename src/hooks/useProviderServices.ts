@@ -55,6 +55,7 @@ export function useProviderServices() {
       service_type: 'private' | 'group';
       max_capacity: number;
       scheduled_time?: string | null;
+      latest_start_time?: string | null;
     }) => {
       if (!profile) throw new Error("No provider profile");
       const isFitness = profile.category === 'fitness_studio';
@@ -72,6 +73,7 @@ export function useProviderServices() {
           ? service.max_capacity
           : Math.max(1, service.max_capacity || 1),
         scheduled_time: service.scheduled_time || null,
+        latest_start_time: service.latest_start_time || null,
       };
       if (service.id) {
         const { error } = await supabase

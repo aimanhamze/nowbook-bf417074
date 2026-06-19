@@ -9,6 +9,7 @@ export interface Service {
   service_type?: 'private' | 'group';
   max_capacity?: number;
   scheduled_time?: string | null; // HH:MM — fixed time for group classes
+  latest_start_time?: string | null; // HH:MM — customer cannot book after this time
 }
 
 export interface Provider {

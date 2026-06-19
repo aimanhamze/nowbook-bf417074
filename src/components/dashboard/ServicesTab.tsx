@@ -37,6 +37,7 @@ type EditState = {
   price: number;
   service_type: 'private' | 'group';
   max_capacity: number;
+  latest_start_time: string;
 };
 
 type AddSessionState = {
@@ -87,6 +88,7 @@ export function ServicesTab() {
         ...editing,
         name: editing.name.trim(),
         max_capacity: editing.max_capacity,
+        latest_start_time: editing.latest_start_time || null,
       });
       toast.success(t("serviceSaved"));
       setEditing(null);
@@ -138,7 +140,7 @@ export function ServicesTab() {
     }
   };
 
-  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 1 });
+  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 1, latest_start_time: "" });
 
   const openEdit = (svc: typeof services[number]) => setEditing({
     id: svc.id,
@@ -147,6 +149,7 @@ export function ServicesTab() {
     price: svc.price,
     service_type: (svc.service_type as 'private' | 'group') || 'private',
     max_capacity: svc.max_capacity ?? 1,
+    latest_start_time: (svc as { latest_start_time?: string | null }).latest_start_time?.slice(0, 5) ?? "",
   });
 
   const openAddSession = (svc: typeof services[number]) => {
@@ -274,6 +277,16 @@ export function ServicesTab() {
               </div>
             )}
 
+            <div>
+              <Label>{"שעת התחלה אחרונה (אופציונלי)"}</Label>
+              <Input
+                type="time"
+                value={editing.latest_start_time}
+                onChange={e => setEditing({ ...editing, latest_start_time: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground mt-1">{t("latestStartTimeHelper")}</p>
+            </div>
+
             <div className="flex gap-2">
               <Button size="sm" onClick={handleSave} disabled={upsertService.isPending}>{t("save")}</Button>
               <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>{t("cancel")}</Button>
@@ -375,6 +388,11 @@ export function ServicesTab() {
                       {svc.duration} {t("min")}{svc.price > 0 ? ` · ₪${svc.price}` : null}
                       {svcSessions.length > 0 && (
                         <span className="ms-1 text-accent font-medium">· {svcSessions.length} מפגשים</span>
+                      )}
+                      {(svc as { latest_start_time?: string | null }).latest_start_time && (
+                        <span className="ms-1 text-orange-600 font-medium">
+                          · עד {(svc as { latest_start_time?: string | null }).latest_start_time!.slice(0, 5)}
+                        </span>
                       )}
                     </p>
                   </div>
