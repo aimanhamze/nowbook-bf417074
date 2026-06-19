@@ -128,7 +128,7 @@ const BookAppointment = () => {
   const leadTimeCutoff = now.getHours() * 60 + now.getMinutes() + minLeadTimeMinutes;
 
   const allSlotsRaw = !hasScheduledSessions && !isGroupBooking
-    ? getAvailableSlots(selectedDate, totalDuration || 15, primaryService?.max_capacity ?? 1, primaryService?.id)
+    ? getAvailableSlots(selectedDate, totalDuration || 15, primaryService?.max_capacity ?? 1, primaryService?.id, primaryService?.latest_start_time)
     : [];
 
   const availableSlots = isToday
@@ -395,6 +395,11 @@ const BookAppointment = () => {
                           </span>
                         )}
                       </div>
+                      {service.latest_start_time && (
+                        <p className="text-[11px] text-orange-600 font-medium mb-1">
+                          {t("availableUntil").replace("{time}", service.latest_start_time.slice(0, 5))}
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
                           <Clock className="h-3 w-3" />
