@@ -20,6 +20,7 @@ export interface EnrichedBooking {
   service_names: string[];
   is_group_service: boolean;
   service_capacity: number;
+  class_schedule_id: string | null;
 }
 
 export function useProviderBookings() {
@@ -73,6 +74,7 @@ export function useProviderBookings() {
           service_names: (b.service_ids || []).map((id) => serviceMap.get(id)?.name || id),
           is_group_service: primaryService?.service_type === 'group',
           service_capacity: primaryService?.max_capacity ?? 1,
+          class_schedule_id: b.class_schedule_id ?? null,
         };
       });
     },

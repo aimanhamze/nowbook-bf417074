@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { format, isSameDay, parseISO, isAfter, isToday } from "date-fns";
+import { format, isSameDay, parseISO, isAfter, isToday, getDay } from "date-fns";
 import { he } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
@@ -9,6 +9,7 @@ import { useLang } from "@/contexts/LangContext";
 import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, useSaveTreatmentNote, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
+import { useProviderClassSchedule, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
 import { ForwardArrow } from "@/components/ui/directional-icon";
 import { NewBookingSheet } from "@/components/dashboard/NewBookingSheet";
 import { DEFAULT_REMINDER_TEMPLATE } from "@/components/dashboard/BusinessProfileTab";
@@ -374,15 +375,124 @@ function GroupClassCard({ time, bookings, serviceName, maxCapacity, index }: {
   );
 }
 
+function ClassSlotCard({ classEntry, bookings, index }: {
+  classEntry: ClassScheduleEntry;
+  bookings: EnrichedBooking[];
+  index: number;
+}) {
+  const { t } = useLang();
+  const [expanded, setExpanded] = useState(false);
+  const cancelBooking = useCancelBooking();
+  const isGroup = classEntry.class_type === 'group';
+
+  const activeBookings = bookings.filter(b => b.status !== 'cancelled');
+  const bookedCount = activeBookings.length;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ delay: index * 0.04, duration: 0.25 }}
+      className="rounded-2xl border border-accent/30 bg-card p-4 space-y-3"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${isGroup ? 'text-accent' : 'text-muted-foreground'}`}>
+              {isGroup ? <Users className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+              {isGroup ? t("groupClass") : t("privateService")}
+            </span>
+            <Badge className={`text-[10px] px-1.5 ${bookedCount >= classEntry.max_capacity ? 'bg-red-100 text-red-700 border-red-200' : 'bg-accent/10 text-accent border-accent/20'}`}>
+              {bookedCount}/{classEntry.max_capacity} {t("classSlots")}
+            </Badge>
+          </div>
+          <p className="font-semibold text-sm truncate">{classEntry.class_name}</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+            <Clock className="h-3 w-3" /> {classEntry.start_time.slice(0, 5)} · {classEntry.duration_minutes} {t("min")}
+          </p>
+        </div>
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="p-1.5 rounded-lg hover:bg-secondary transition-colors ml-2"
+        >
+          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="space-y-2 overflow-hidden"
+          >
+            {activeBookings.length === 0 ? (
+              <p className="text-xs text-muted-foreground pt-2 border-t border-border/50">אין משתתפים רשומים עדיין</p>
+            ) : (
+              activeBookings.map((b) => {
+                const initials = b.customer_name
+                  ? b.customer_name.split(" ").map(w => w[0]).join("").slice(0, 2)
+                  : "?";
+                return (
+                  <div key={b.id} className="flex items-center gap-3 py-2 border-t border-border">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={b.customer_avatar || undefined} />
+                      <AvatarFallback className="bg-accent/10 text-accent text-xs font-bold">{initials}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{b.customer_name || b.customer_phone || "לקוח אנונימי"}</p>
+                      {b.customer_phone && (
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <a href={`tel:${b.customer_phone}`} className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors">
+                            <Phone className="h-3 w-3" />{b.customer_phone}
+                          </a>
+                          <a href={toWhatsAppUrl(b.customer_phone)} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 flex items-center gap-0.5 hover:text-emerald-700 transition-colors">
+                            <MessageCircle className="h-3 w-3" />WhatsApp
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                    <Badge variant="outline" className={`text-[10px] shrink-0 ${statusConfig[b.status]?.className || ''}`}>
+                      {statusConfig[b.status]?.label || b.status}
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7 px-2 text-amber-600 border-amber-200 shrink-0"
+                      onClick={() => cancelBooking.mutate(b.id, {
+                        onSuccess: () => toast.success("משתתף הוסר מהשיעור"),
+                        onError: () => toast.error("שגיאה בביטול"),
+                      })}
+                      disabled={cancelBooking.isPending}
+                    >
+                      <XCircle className="h-3 w-3 mr-1" /> הסר
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
 type CalendarItem =
   | { type: 'private'; booking: EnrichedBooking }
-  | { type: 'group'; time: string; bookings: EnrichedBooking[]; maxCapacity: number; serviceName: string };
+  | { type: 'group'; time: string; bookings: EnrichedBooking[]; maxCapacity: number; serviceName: string }
+  | { type: 'class_slot'; classEntry: ClassScheduleEntry; bookings: EnrichedBooking[] };
 
 export function CalendarTab() {
   const { t } = useLang();
   const navigate = useNavigate();
   const { data: bookings = [], isLoading } = useProviderBookings();
   const { services, isLoading: servicesLoading } = useProviderServices();
+  const { profile } = useProviderProfile();
+  const { schedule } = useProviderClassSchedule();
+  const isFitnessStudio = profile?.category === 'fitness_studio';
   // A provider with no services yet can never have bookings. Once services are
   // confirmed empty (not merely still loading), show a getting-started card
   // instead of the bare "no bookings" empty state. Gating on the resolved load
@@ -396,9 +506,30 @@ export function CalendarTab() {
       .sort((a, b) => a.booking_time.localeCompare(b.booking_time));
   }, [bookings, selectedDate]);
 
-  // Build calendar items: group "group" bookings by time+service, keep private bookings separate
+  // Build calendar items: for fitness_studio use class slots, otherwise group/private bookings
   const calendarItems = useMemo((): CalendarItem[] => {
     const items: CalendarItem[] = [];
+
+    if (isFitnessStudio) {
+      // Show class schedule slots for this day_of_week, with any bookings attached
+      const dayOfWeek = getDay(selectedDate);
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const classesForDay = schedule.filter(c => c.day_of_week === dayOfWeek && c.is_active);
+
+      for (const classEntry of classesForDay) {
+        const classBookings = bookings.filter(
+          b => b.class_schedule_id === classEntry.id && b.booking_date === dateStr
+        );
+        items.push({ type: 'class_slot', classEntry, bookings: classBookings });
+      }
+
+      return items.sort((a, b) => {
+        const timeA = a.type === 'class_slot' ? a.classEntry.start_time : '';
+        const timeB = b.type === 'class_slot' ? b.classEntry.start_time : '';
+        return timeA.localeCompare(timeB);
+      });
+    }
+
     const groupMap = new Map<string, EnrichedBooking[]>();
 
     for (const b of bookingsForDate) {
@@ -422,11 +553,11 @@ export function CalendarTab() {
     }
 
     return items.sort((a, b) => {
-      const timeA = a.type === 'private' ? a.booking.booking_time : a.time;
-      const timeB = b.type === 'private' ? b.booking.booking_time : b.time;
+      const timeA = a.type === 'private' ? a.booking.booking_time : a.type === 'group' ? a.time : '';
+      const timeB = b.type === 'private' ? b.booking.booking_time : b.type === 'group' ? b.time : '';
       return timeA.localeCompare(timeB);
     });
-  }, [bookingsForDate, t]);
+  }, [bookingsForDate, bookings, schedule, selectedDate, isFitnessStudio, t]);
 
   const datesWithBookings = useMemo(() => bookings.map((b) => parseISO(b.booking_date)), [bookings]);
 
@@ -516,13 +647,22 @@ export function CalendarTab() {
         ) : calendarItems.length === 0 ? (
           <div className="text-center py-12 rounded-2xl border border-dashed border-border">
             <CalendarIcon className="h-10 w-10 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">{t("noUpcomingBookings")}</p>
+            <p className="text-sm text-muted-foreground">
+              {isFitnessStudio ? "אין שיעורים ביום זה" : t("noUpcomingBookings")}
+            </p>
           </div>
         ) : (
           <AnimatePresence mode="popLayout">
             <div className="space-y-3">
               {calendarItems.map((item, i) =>
-                item.type === 'group' ? (
+                item.type === 'class_slot' ? (
+                  <ClassSlotCard
+                    key={`slot-${item.classEntry.id}`}
+                    classEntry={item.classEntry}
+                    bookings={item.bookings}
+                    index={i}
+                  />
+                ) : item.type === 'group' ? (
                   <GroupClassCard
                     key={`group-${item.time}-${item.serviceName}`}
                     time={item.time}
