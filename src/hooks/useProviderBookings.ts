@@ -21,6 +21,7 @@ export interface EnrichedBooking {
   is_group_service: boolean;
   service_capacity: number;
   class_schedule_id: string | null;
+  class_name: string | null;
 }
 
 export function useProviderBookings() {
@@ -59,6 +60,13 @@ export function useProviderBookings() {
         (services || []).map((s) => [s.id, s])
       );
 
+      // Batch-fetch class names for any fitness_studio bookings
+      const classIds = [...new Set(bookings.map((b) => b.class_schedule_id).filter(Boolean))] as string[];
+      const { data: classRows } = classIds.length > 0
+        ? await supabase.from("provider_class_schedule").select("id, class_name").in("id", classIds)
+        : { data: [] };
+      const classMap = new Map((classRows || []).map((c) => [c.id, c.class_name as string]));
+
       return bookings.map((b): EnrichedBooking => {
         // Walk-in: user_id is null → profileMap lookup is skipped (no account).
         const customer = b.user_id ? profileMap.get(b.user_id) : undefined;
@@ -75,6 +83,7 @@ export function useProviderBookings() {
           is_group_service: primaryService?.service_type === 'group',
           service_capacity: primaryService?.max_capacity ?? 1,
           class_schedule_id: b.class_schedule_id ?? null,
+          class_name: b.class_schedule_id ? (classMap.get(b.class_schedule_id) ?? null) : null,
         };
       });
     },

@@ -26,11 +26,16 @@ function applyTemplate(template: string, vars: Record<string, string>): string {
   return Object.entries(vars).reduce((msg, [key, val]) => msg.replaceAll(`{${key}}`, val), template);
 }
 
+function resolveServiceLabel(booking: EnrichedBooking): string {
+  if (booking.service_names.length > 0) return booking.service_names.join(", ");
+  return booking.class_name || "שיעור";
+}
+
 function buildDepositMessage(booking: EnrichedBooking, template: string): string {
   const date = format(parseISO(booking.booking_date), "d בMMM", { locale: he });
   return applyTemplate(template, {
     customer_name: booking.customer_name || "לקוח יקר",
-    service_name: booking.service_names.join(", "),
+    service_name: resolveServiceLabel(booking),
     date,
     time: booking.booking_time,
     price: String(booking.total_price),
@@ -43,7 +48,7 @@ function buildConfirmMessage(booking: EnrichedBooking, template: string, busines
   const date = format(parseISO(booking.booking_date), "d בMMM", { locale: he });
   return applyTemplate(template, {
     business: businessName,
-    service: booking.service_names.join(", "),
+    service: resolveServiceLabel(booking),
     date,
     time: booking.booking_time,
   });
@@ -119,14 +124,21 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
             </div>
           )}
         </div>
-        <span className="text-xs font-bold text-amber-600">₪{booking.total_price}</span>
+        {booking.total_price > 0 && (
+          <span className="text-xs font-bold text-amber-600">₪{booking.total_price}</span>
+        )}
       </div>
 
-      {/* Service chips */}
+      {/* Service / class chips */}
       <div className="flex flex-wrap gap-1">
-        {booking.service_names.map((name, i) => (
-          <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">{name}</span>
-        ))}
+        {booking.service_names.length > 0
+          ? booking.service_names.map((name, i) => (
+              <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">{name}</span>
+            ))
+          : booking.class_name
+          ? <span className="text-[11px] px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">{booking.class_name}</span>
+          : null
+        }
       </div>
 
       {/* Date + time */}

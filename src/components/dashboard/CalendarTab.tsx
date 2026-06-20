@@ -375,10 +375,11 @@ function GroupClassCard({ time, bookings, serviceName, maxCapacity, index }: {
   );
 }
 
-function ClassSlotCard({ classEntry, bookings, index }: {
+function ClassSlotCard({ classEntry, bookings, index, reminderTemplate }: {
   classEntry: ClassScheduleEntry;
   bookings: EnrichedBooking[];
   index: number;
+  reminderTemplate: string;
 }) {
   const { t } = useLang();
   const [expanded, setExpanded] = useState(false);
@@ -454,21 +455,41 @@ function ClassSlotCard({ classEntry, bookings, index }: {
                         </div>
                       )}
                     </div>
-                    <Badge variant="outline" className={`text-[10px] shrink-0 ${statusConfig[b.status]?.className || ''}`}>
-                      {statusConfig[b.status]?.label || b.status}
-                    </Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-7 px-2 text-amber-600 border-amber-200 shrink-0"
-                      onClick={() => cancelBooking.mutate(b.id, {
-                        onSuccess: () => toast.success("משתתף הוסר מהשיעור"),
-                        onError: () => toast.error("שגיאה בביטול"),
-                      })}
-                      disabled={cancelBooking.isPending}
-                    >
-                      <XCircle className="h-3 w-3 mr-1" /> הסר
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Badge variant="outline" className={`text-[10px] ${statusConfig[b.status]?.className || ''}`}>
+                        {statusConfig[b.status]?.label || b.status}
+                      </Badge>
+                      {b.status === 'confirmed' && b.customer_phone && (
+                        <a
+                          href={`${toWhatsAppUrl(b.customer_phone)}?text=${encodeURIComponent(
+                            applyTemplate(reminderTemplate, {
+                              customer_name: b.customer_name || "לקוח יקר",
+                              service_name: classEntry.class_name,
+                              date: format(parseISO(b.booking_date), "d בMMM", { locale: he }),
+                              time: b.booking_time,
+                            })
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-1 rounded-md border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-colors"
+                        >
+                          <MessageCircle className="h-3 w-3" />
+                          תזכורת
+                        </a>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7 px-2 text-amber-600 border-amber-200"
+                        onClick={() => cancelBooking.mutate(b.id, {
+                          onSuccess: () => toast.success("משתתף הוסר מהשיעור"),
+                          onError: () => toast.error("שגיאה בביטול"),
+                        })}
+                        disabled={cancelBooking.isPending}
+                      >
+                        <XCircle className="h-3 w-3 mr-1" /> הסר
+                      </Button>
+                    </div>
                   </div>
                 );
               })
@@ -668,6 +689,7 @@ export function CalendarTab() {
                     classEntry={item.classEntry}
                     bookings={item.bookings}
                     index={i}
+                    reminderTemplate={profile?.reminder_message_template || DEFAULT_REMINDER_TEMPLATE}
                   />
                 ) : item.type === 'group' ? (
                   <GroupClassCard
