@@ -75,6 +75,30 @@ const BookAppointment = () => {
     return () => clearInterval(timerId);
   }, []);
 
+  // Derive occurrence dates here (before early returns) so hooks are never conditional
+  const _occurrenceDates = selectedClass
+    ? getUpcomingDates(selectedClass.day_of_week, 6, provider?.bookingWindowDays ?? 42)
+    : [];
+  const _occurrenceDateStrs = _occurrenceDates.map((d) => format(d, "yyyy-MM-dd"));
+
+  const { data: classBookingCounts = {} } = useQuery({
+    queryKey: ["class-booking-counts", selectedClass?.id, _occurrenceDateStrs],
+    queryFn: async () => {
+      if (!selectedClass) return {} as Record<string, number>;
+      const { data } = await supabase
+        .from("bookings")
+        .select("booking_date")
+        .eq("class_schedule_id", selectedClass.id)
+        .in("booking_date", _occurrenceDateStrs)
+        .in("status", ["confirmed", "pending"]);
+      return (data || []).reduce((acc, b) => {
+        acc[b.booking_date] = (acc[b.booking_date] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+    },
+    enabled: !!selectedClass && _occurrenceDateStrs.length > 0,
+  });
+
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center gap-4">
@@ -189,29 +213,9 @@ const BookAppointment = () => {
     return acc;
   }, {} as Record<number, ClassScheduleEntry[]>);
 
-  const occurrenceDates = selectedClass
-    ? getUpcomingDates(selectedClass.day_of_week, 6, provider.bookingWindowDays ?? 42)
-    : [];
-
-  // Fetch confirmed+pending booking counts per occurrence date for the selected class
-  const occurrenceDateStrs = occurrenceDates.map((d) => format(d, "yyyy-MM-dd"));
-  const { data: classBookingCounts = {} } = useQuery({
-    queryKey: ["class-booking-counts", selectedClass?.id, occurrenceDateStrs],
-    queryFn: async () => {
-      if (!selectedClass) return {} as Record<string, number>;
-      const { data } = await supabase
-        .from("bookings")
-        .select("booking_date")
-        .eq("class_schedule_id", selectedClass.id)
-        .in("booking_date", occurrenceDateStrs)
-        .in("status", ["confirmed", "pending"]);
-      return (data || []).reduce((acc, b) => {
-        acc[b.booking_date] = (acc[b.booking_date] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-    },
-    enabled: !!selectedClass && occurrenceDateStrs.length > 0,
-  });
+  // occurrenceDates / classBookingCounts are computed above the early returns (hooks order)
+  const occurrenceDates = _occurrenceDates;
+  const occurrenceDateStrs = _occurrenceDateStrs;
 
   // Standard flow canProceed / handleNext
   const canProceed =
