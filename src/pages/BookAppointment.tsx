@@ -22,7 +22,7 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const SPRING = { duration: 0.5, ease: [0.16, 1, 0.3, 1] } as const;
 
@@ -192,6 +192,26 @@ const BookAppointment = () => {
   const occurrenceDates = selectedClass
     ? getUpcomingDates(selectedClass.day_of_week, 6, provider.bookingWindowDays ?? 42)
     : [];
+
+  // Fetch confirmed+pending booking counts per occurrence date for the selected class
+  const occurrenceDateStrs = occurrenceDates.map((d) => format(d, "yyyy-MM-dd"));
+  const { data: classBookingCounts = {} } = useQuery({
+    queryKey: ["class-booking-counts", selectedClass?.id, occurrenceDateStrs],
+    queryFn: async () => {
+      if (!selectedClass) return {} as Record<string, number>;
+      const { data } = await supabase
+        .from("bookings")
+        .select("booking_date")
+        .eq("class_schedule_id", selectedClass.id)
+        .in("booking_date", occurrenceDateStrs)
+        .in("status", ["confirmed", "pending"]);
+      return (data || []).reduce((acc, b) => {
+        acc[b.booking_date] = (acc[b.booking_date] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+    },
+    enabled: !!selectedClass && occurrenceDateStrs.length > 0,
+  });
 
   // Standard flow canProceed / handleNext
   const canProceed =
@@ -482,8 +502,9 @@ const BookAppointment = () => {
                                       {cls.start_time.slice(0, 5)} · {cls.duration_minutes} {t("min")}
                                     </span>
                                     {isGroup && (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        · {t("maxCapacity")}: {cls.max_capacity}
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                                        <Users className="h-2.5 w-2.5" />
+                                        {cls.max_capacity} {t("classSlots")}
                                       </span>
                                     )}
                                   </div>
@@ -528,26 +549,34 @@ const BookAppointment = () => {
               ) : (
                 <div className="flex flex-col gap-2">
                   {occurrenceDates.map((date) => {
+                    const dateStr = format(date, "yyyy-MM-dd");
                     const isSelected =
                       selectedOccurrence !== null &&
-                      format(date, "yyyy-MM-dd") === format(selectedOccurrence, "yyyy-MM-dd");
+                      dateStr === format(selectedOccurrence, "yyyy-MM-dd");
                     const isPast = date < new Date(now.getTime() + minLeadTimeMinutes * 60 * 1000);
                     if (isPast) return null;
+                    const bookedCount = classBookingCounts[dateStr] || 0;
+                    const spotsLeft = selectedClass.max_capacity - bookedCount;
+                    const isFull = spotsLeft <= 0;
+                    const isGroup = selectedClass.class_type === "group";
                     return (
                       <button
                         key={date.toISOString()}
-                        onClick={() => setSelectedOccurrence(date)}
+                        onClick={() => !isFull && setSelectedOccurrence(date)}
+                        disabled={isFull}
                         className={cn(
                           "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
                           isSelected
                             ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
+                            : isFull
+                            ? "border-border/40 bg-muted/60 opacity-60 cursor-not-allowed"
                             : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] hover:border-accent/30"
                         )}
                       >
                         <div className="flex items-center gap-3">
                           <div className={cn(
                             "w-12 h-12 rounded-xl flex flex-col items-center justify-center text-xs font-bold shrink-0",
-                            isSelected ? "bg-accent text-accent-foreground" : "bg-secondary text-foreground"
+                            isSelected ? "bg-accent text-accent-foreground" : isFull ? "bg-muted text-muted-foreground" : "bg-secondary text-foreground"
                           )}>
                             <span className="text-[10px] uppercase">{format(date, "EEE", { locale: dateFnsLocale })}</span>
                             <span className="text-lg leading-none">{format(date, "d")}</span>
@@ -559,9 +588,27 @@ const BookAppointment = () => {
                               <Clock className="h-3 w-3" />
                               {selectedClass.start_time.slice(0, 5)} · {selectedClass.duration_minutes} {t("min")}
                             </p>
+                            {isGroup && (
+                              <p className={cn(
+                                "text-[11px] font-semibold mt-0.5 flex items-center gap-1",
+                                isFull ? "text-red-500"
+                                : spotsLeft === 1 ? "text-orange-500"
+                                : "text-emerald-600"
+                              )}>
+                                <span className={cn(
+                                  "w-1.5 h-1.5 rounded-full shrink-0",
+                                  isFull ? "bg-red-500" : spotsLeft === 1 ? "bg-orange-400" : "bg-emerald-500"
+                                )} />
+                                {isFull
+                                  ? t("classFull")
+                                  : spotsLeft === 1
+                                  ? t("lastSpot")
+                                  : `${spotsLeft} ${t("spotsLeft")}`}
+                              </p>
+                            )}
                           </div>
                         </div>
-                        {isSelected && (
+                        {isSelected && !isFull && (
                           <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0">
                             <Check className="h-3 w-3 text-accent-foreground" />
                           </div>
