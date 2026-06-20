@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           booking_date: string
           booking_time: string
+          class_schedule_id: string | null
           created_at: string
           customer_name: string | null
           customer_phone: string | null
@@ -34,6 +35,7 @@ export type Database = {
         Insert: {
           booking_date: string
           booking_time: string
+          class_schedule_id?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
@@ -50,6 +52,7 @@ export type Database = {
         Update: {
           booking_date?: string
           booking_time?: string
+          class_schedule_id?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
@@ -64,6 +67,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bookings_class_schedule_id_fkey"
+            columns: ["class_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "provider_class_schedule"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bookings_provider_id_fkey"
             columns: ["provider_id"]
@@ -238,6 +248,56 @@ export type Database = {
           },
         ]
       }
+      provider_class_schedule: {
+        Row: {
+          class_name: string
+          class_type: string
+          created_at: string | null
+          day_of_week: number
+          duration_minutes: number
+          id: string
+          is_active: boolean
+          max_capacity: number
+          provider_id: string
+          start_time: string
+          updated_at: string | null
+        }
+        Insert: {
+          class_name: string
+          class_type: string
+          created_at?: string | null
+          day_of_week: number
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean
+          max_capacity?: number
+          provider_id: string
+          start_time: string
+          updated_at?: string | null
+        }
+        Update: {
+          class_name?: string
+          class_type?: string
+          created_at?: string | null
+          day_of_week?: number
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean
+          max_capacity?: number
+          provider_id?: string
+          start_time?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_class_schedule_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       provider_photos: {
         Row: {
           caption: string | null
@@ -360,6 +420,7 @@ export type Database = {
           duration: number
           id: string
           is_active: boolean
+          latest_start_time: string | null
           max_capacity: number
           name: string
           price: number
@@ -374,6 +435,7 @@ export type Database = {
           duration?: number
           id?: string
           is_active?: boolean
+          latest_start_time?: string | null
           max_capacity?: number
           name: string
           price?: number
@@ -388,6 +450,7 @@ export type Database = {
           duration?: number
           id?: string
           is_active?: boolean
+          latest_start_time?: string | null
           max_capacity?: number
           name?: string
           price?: number
