@@ -4,12 +4,13 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { CalendarTab } from "@/components/dashboard/CalendarTab";
 import { PendingTab, usePendingCount } from "@/components/dashboard/PendingTab";
+import { WeeklyScheduleTab } from "@/components/dashboard/WeeklyScheduleTab";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 
-type TabId = "calendar" | "pending";
+type TabId = "calendar" | "pending" | "schedule";
 
 export default function ProviderCalendar() {
   const { t } = useLang();
@@ -20,6 +21,7 @@ export default function ProviderCalendar() {
   const pendingCount = usePendingCount();
   const requiresApproval = profile?.requires_booking_approval ?? false;
   const showPendingTab = requiresApproval || pendingCount > 0;
+  const isFitnessStudio = profile?.category === "fitness_studio";
 
   // Accept location.state.tab === "pending" from the BusinessProfileTab guard dialog.
   const initialTab: TabId =
@@ -41,9 +43,6 @@ export default function ProviderCalendar() {
 
   if (!user || !isProvider) return null;
 
-  // If no profile yet, provider was not set up by admin. Mirrors Dashboard's
-  // guard so the new /calendar landing degrades gracefully for the no-profile
-  // edge case (manually-granted role, or a failed create-provider insert).
   if (!isLoading && !profile) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-5 gap-4">
@@ -53,13 +52,13 @@ export default function ProviderCalendar() {
     );
   }
 
+  const showTabBar = showPendingTab || isFitnessStudio;
+
   return (
     <div
       className="relative min-h-screen overflow-x-clip pb-24"
       style={{ background: "var(--bg-atmosphere-soft)" }}
     >
-      {/* Soft atmosphere — same look as the Dashboard. Logical inset keeps the
-          glow on the same visual side in RTL and LTR. */}
       <div
         aria-hidden
         className="pointer-events-none absolute top-[-4rem] [inset-inline-end:-5rem] h-[22rem] w-[22rem] rounded-full blur-3xl opacity-45"
@@ -67,51 +66,66 @@ export default function ProviderCalendar() {
       />
 
       <div className="relative">
-      <header className="px-5 pt-12 pb-4">
-        <div className="flex items-center gap-3 mb-4">
-          <button onClick={() => navigate(-1)} className="active:scale-95">
-            <BackArrow className="h-5 w-5" />
-          </button>
-          <h1 className="text-xl font-bold flex-1">{t("bookingsCalendar")}</h1>
-        </div>
-
-        {/* Tab bar — Pending tab is hidden when the provider doesn't require approval AND no stale pending bookings exist */}
-        {showPendingTab ? (
-          <div className="flex gap-1 bg-secondary rounded-2xl p-1">
-            <button
-              onClick={() => setActiveTab("calendar")}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 active:scale-[0.97] ${
-                activeTab === "calendar" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
-              }`}
-            >
-              {t("bookingsCalendar")}
+        <header className="px-5 pt-12 pb-4">
+          <div className="flex items-center gap-3 mb-4">
+            <button onClick={() => navigate(-1)} className="active:scale-95">
+              <BackArrow className="h-5 w-5" />
             </button>
-            <button
-              onClick={() => setActiveTab("pending")}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 active:scale-[0.97] flex items-center justify-center gap-1.5 ${
-                activeTab === "pending" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
-              }`}
-            >
-              {t("pendingTab")}
-              {pendingCount > 0 && (
-                <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
+            <h1 className="text-xl font-bold flex-1">{t("bookingsCalendar")}</h1>
           </div>
-        ) : null}
-      </header>
 
-      <motion.div
-        key={activeTab}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2 }}
-        className="px-5"
-      >
-        {activeTab === "calendar" ? <CalendarTab /> : <PendingTab />}
-      </motion.div>
+          {showTabBar && (
+            <div className="flex gap-1 bg-secondary rounded-2xl p-1">
+              <button
+                onClick={() => setActiveTab("calendar")}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 active:scale-[0.97] ${
+                  activeTab === "calendar" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {t("bookingsCalendar")}
+              </button>
+
+              {isFitnessStudio && (
+                <button
+                  onClick={() => setActiveTab("schedule")}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 active:scale-[0.97] ${
+                    activeTab === "schedule" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {t("weeklySchedule")}
+                </button>
+              )}
+
+              {showPendingTab && (
+                <button
+                  onClick={() => setActiveTab("pending")}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 active:scale-[0.97] flex items-center justify-center gap-1.5 ${
+                    activeTab === "pending" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {t("pendingTab")}
+                  {pendingCount > 0 && (
+                    <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none">
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+        </header>
+
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+          className="px-5"
+        >
+          {activeTab === "calendar" && <CalendarTab />}
+          {activeTab === "pending" && <PendingTab />}
+          {activeTab === "schedule" && isFitnessStudio && <WeeklyScheduleTab />}
+        </motion.div>
       </div>
     </div>
   );
