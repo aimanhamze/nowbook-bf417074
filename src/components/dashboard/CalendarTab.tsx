@@ -497,7 +497,8 @@ export function CalendarTab() {
   // confirmed empty (not merely still loading), show a getting-started card
   // instead of the bare "no bookings" empty state. Gating on the resolved load
   // avoids flashing the setup card at established providers mid-fetch.
-  const noServices = !servicesLoading && services.length === 0;
+  // fitness_studio providers use class schedule, not provider_services — never show the setup card for them
+  const noServices = !servicesLoading && services.length === 0 && !isFitnessStudio;
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const bookingsForDate = useMemo(() => {
@@ -523,9 +524,15 @@ export function CalendarTab() {
         items.push({ type: 'class_slot', classEntry, bookings: classBookings });
       }
 
+      // Also surface any bookings without a class_schedule_id (walk-ins / old bookings)
+      const orphanBookings = bookingsForDate.filter(b => !b.class_schedule_id);
+      for (const b of orphanBookings) {
+        items.push({ type: 'private', booking: b });
+      }
+
       return items.sort((a, b) => {
-        const timeA = a.type === 'class_slot' ? a.classEntry.start_time : '';
-        const timeB = b.type === 'class_slot' ? b.classEntry.start_time : '';
+        const timeA = a.type === 'class_slot' ? a.classEntry.start_time : a.type === 'private' ? a.booking.booking_time : '';
+        const timeB = b.type === 'class_slot' ? b.classEntry.start_time : b.type === 'private' ? b.booking.booking_time : '';
         return timeA.localeCompare(timeB);
       });
     }
