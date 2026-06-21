@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { CustomerAutocomplete } from "@/components/dashboard/CustomerAutocomplete";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
@@ -390,13 +391,18 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                     <Label htmlFor="walkin-name" className="text-xs">
                       {t("walkInCustomerName")} <span className="text-destructive">*</span>
                     </Label>
-                    <Input
+                    <CustomerAutocomplete
                       id="walkin-name"
-                      autoComplete="name"
                       value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      onValueChange={setName}
+                      onSelectCustomer={(pickedName, pickedPhone) => {
+                        // Pre-fill BOTH text fields; they stay editable. This does
+                        // NOT link the booking to an account — walk-in stays a text
+                        // name/phone with user_id NULL on insert.
+                        setName(pickedName);
+                        setPhone(pickedPhone);
+                      }}
                       placeholder={t("walkInCustomerNamePlaceholder")}
-                      className="h-12"
                     />
                   </div>
                   <div className="space-y-1.5">
