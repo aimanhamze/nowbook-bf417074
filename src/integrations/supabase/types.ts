@@ -420,6 +420,7 @@ export type Database = {
           duration: number
           id: string
           is_active: boolean
+          is_parallel: boolean
           latest_start_time: string | null
           max_capacity: number
           name: string
@@ -435,6 +436,7 @@ export type Database = {
           duration?: number
           id?: string
           is_active?: boolean
+          is_parallel?: boolean
           latest_start_time?: string | null
           max_capacity?: number
           name: string
@@ -450,6 +452,7 @@ export type Database = {
           duration?: number
           id?: string
           is_active?: boolean
+          is_parallel?: boolean
           latest_start_time?: string | null
           max_capacity?: number
           name?: string

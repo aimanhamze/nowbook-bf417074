@@ -311,7 +311,7 @@ export function useRealAvailability(providerId: string | undefined) {
       if (!providerId) return [];
       const { data, error } = await supabase
         .from("provider_services")
-        .select("id, duration, service_type, max_capacity, latest_start_time")
+        .select("id, duration, service_type, max_capacity, latest_start_time, is_parallel")
         .eq("provider_id", providerId);
       if (error) throw error;
       return data || [];
@@ -385,6 +385,16 @@ export function useRealAvailability(providerId: string | undefined) {
     const breakEnd = slot.break_end ? parseTime(slot.break_end) : null;
 
     const slotCapacity = capacity > 0 ? capacity : 1;
+    // PARALLEL EXCEPTION (mirrors prevent_booking_conflicts Clause 1): a
+    // cross-service overlap is NOT a conflict when BOTH the incoming primary
+    // service and the existing booking's primary service have is_parallel=true.
+    // Missing service / flag → treated non-parallel (still blocks), matching the
+    // trigger's COALESCE(..., false) fail-safe. This only relaxes the
+    // cross-service mirror; same-service capacity (Clause 2) and group logic are
+    // untouched, so a parallel service never bypasses its own capacity.
+    const isParallel = (sid: string | undefined): boolean =>
+      !!services.find(s => s.id === sid)?.is_parallel;
+    const newIsParallel = isParallel(primaryServiceId);
     const latestStartMins = latestStartTime ? parseTime(latestStartTime) : null;
     const slots: string[] = [];
     for (let t = start; t + neededDuration <= end; t += SLOT_STEP) {
@@ -392,11 +402,15 @@ export function useRealAvailability(providerId: string | undefined) {
       const overlapping = bookedIntervals.filter(
         bi => t < bi.end && bi.start < t + neededDuration
       );
-      // CLAUSE 1 (cross-service exclusive): any overlap for a DIFFERENT primary
-      // service blocks the slot. CLAUSE 2 (same-service pool): same-service
-      // overlaps may share up to slotCapacity. Mirrors the trigger's two
-      // clauses exactly; with capacity 1 this is "any overlap blocks".
-      const hasDifferentService = overlapping.some(bi => bi.serviceId !== primaryServiceId);
+      // CLAUSE 1 (cross-service exclusive): an overlap for a DIFFERENT primary
+      // service blocks the slot — UNLESS both services are parallel (exception
+      // above). CLAUSE 2 (same-service pool): same-service overlaps may share up
+      // to slotCapacity. Mirrors the trigger's clauses exactly; with capacity 1
+      // and no parallel flag this is "any overlap blocks".
+      const hasDifferentService = overlapping.some(
+        bi => bi.serviceId !== primaryServiceId
+          && !(newIsParallel && isParallel(bi.serviceId))
+      );
       const sameServiceCount = overlapping.filter(bi => bi.serviceId === primaryServiceId).length;
       const inBreak = breakStart !== null && breakEnd !== null
         && t >= breakStart && t < breakEnd;
