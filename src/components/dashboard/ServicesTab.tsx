@@ -14,10 +14,17 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderSessions } from "@/hooks/useProviderSessions";
+import { ParallelServicesSheet } from "@/components/dashboard/ParallelServicesSheet";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -29,6 +36,12 @@ const serviceSchema = z.object({
   price: z.number().min(0, "מחיר לא יכול להיות שלילי").max(99999),
   max_capacity: z.number().min(2, "קבוצה דורשת לפחות 2 מקומות").max(100),
 });
+
+// Hidden per product decision (we may rework per-slot capacity later). Flip to
+// `true` to restore the private-service "max customers per slot" input + helper
+// note in the add/edit form. While false, private services always save
+// max_capacity = 1. Group/class capacity is unaffected.
+const SHOW_PRIVATE_CAPACITY = false;
 
 type EditState = {
   id?: string;
@@ -87,7 +100,10 @@ export function ServicesTab() {
       await upsertService.mutateAsync({
         ...editing,
         name: editing.name.trim(),
-        max_capacity: editing.max_capacity,
+        // Capacity input is hidden for PRIVATE services (SHOW_PRIVATE_CAPACITY),
+        // so hard-default them to 1 rather than trusting the now-unedited field.
+        // Group/class services keep their configured capacity.
+        max_capacity: editing.service_type === 'group' ? editing.max_capacity : 1,
         latest_start_time: editing.latest_start_time || null,
       });
       toast.success(t("serviceSaved"));
@@ -174,126 +190,151 @@ export function ServicesTab() {
         </Button>
       </div>
 
-      {/* Service editor form */}
-      <AnimatePresence>
-        {editing && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="rounded-2xl border border-border bg-card p-4 space-y-3 overflow-hidden"
-          >
-            <div>
-              <Label>{t("serviceName")}</Label>
-              <Input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />
-            </div>
+      {/* Parallel-services entry point — counter button opens the config sheet */}
+      <ParallelServicesSheet />
 
-            {isFitness && (
+      {/* Add/Edit service — bottom sheet (matches ParallelServicesSheet).
+          Controlled by `editing`: openNew()/openEdit() open it; closing or
+          cancel clears `editing`. Same form, fields, validation, hidden-capacity
+          behavior and upsertService mutation — only the container changed. */}
+      <Sheet open={!!editing} onOpenChange={(open) => { if (!open) setEditing(null); }}>
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[92vh] flex-col gap-0 rounded-t-3xl border-t p-0"
+        >
+          {/* Grab handle */}
+          <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/20" />
+
+          {/* Header */}
+          <SheetHeader className="shrink-0 px-5 pb-1 pt-3 text-start">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                {editing?.id ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+              </span>
+              <SheetTitle>{editing?.id ? t("editServiceTitle") : t("addService")}</SheetTitle>
+            </div>
+          </SheetHeader>
+
+          {/* Body — only mounted while editing, so `editing` is non-null inside */}
+          {editing && (
+            <div className="flex-1 space-y-3 overflow-y-auto px-5 pb-5 pt-4">
               <div>
-                <Label className="mb-1.5 block">{t("serviceType")}</Label>
-                <div className="flex rounded-xl border border-border overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setEditing({ ...editing, service_type: 'private', max_capacity: 1 })}
-                    className={cn(
-                      "flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
-                      editing.service_type === 'private'
-                        ? "bg-accent text-accent-foreground"
-                        : "bg-card text-muted-foreground hover:bg-secondary"
-                    )}
-                  >
-                    <User className="h-3.5 w-3.5" />
-                    {t("privateService")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditing({ ...editing, service_type: 'group', max_capacity: Math.max(2, editing.max_capacity) })}
-                    className={cn(
-                      "flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
-                      editing.service_type === 'group'
-                        ? "bg-accent text-accent-foreground"
-                        : "bg-card text-muted-foreground hover:bg-secondary"
-                    )}
-                  >
-                    <Users className="h-3.5 w-3.5" />
-                    {t("groupClass")}
-                  </button>
+                <Label>{t("serviceName")}</Label>
+                <Input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />
+              </div>
+
+              {isFitness && (
+                <div>
+                  <Label className="mb-1.5 block">{t("serviceType")}</Label>
+                  <div className="flex rounded-xl border border-border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setEditing({ ...editing, service_type: 'private', max_capacity: 1 })}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
+                        editing.service_type === 'private'
+                          ? "bg-accent text-accent-foreground"
+                          : "bg-card text-muted-foreground hover:bg-secondary"
+                      )}
+                    >
+                      <User className="h-3.5 w-3.5" />
+                      {t("privateService")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditing({ ...editing, service_type: 'group', max_capacity: Math.max(2, editing.max_capacity) })}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5",
+                        editing.service_type === 'group'
+                          ? "bg-accent text-accent-foreground"
+                          : "bg-card text-muted-foreground hover:bg-secondary"
+                      )}
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      {t("groupClass")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>{t("duration")} ({t("min")})</Label>
+                  <Input type="number" value={editing.duration} onChange={e => setEditing({ ...editing, duration: Number(e.target.value) })} onFocus={e => e.target.select()} />
+                </div>
+                <div>
+                  <Label>{t("price")} (₪)</Label>
+                  <Input type="number" value={editing.price} onChange={e => setEditing({ ...editing, price: Number(e.target.value) })} onFocus={e => e.target.select()} />
                 </div>
               </div>
-            )}
 
-            <div className="grid grid-cols-2 gap-3">
+              {isFitness && editing.service_type === 'group' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <Label>{t("maxCapacity")}</Label>
+                  <Input
+                    type="number"
+                    min={2}
+                    max={100}
+                    value={editing.max_capacity}
+                    onChange={e => setEditing({ ...editing, max_capacity: Math.max(2, Number(e.target.value)) })}
+                    onFocus={e => e.target.select()}
+                  />
+                </motion.div>
+              )}
+
+              {/* Per-slot capacity for ordinary (private) services — available to
+                  every provider, NOT gated to fitness and NOT group framing.
+                  1 = normal single-customer service.
+                  HIDDEN: gated behind SHOW_PRIVATE_CAPACITY (currently false) so
+                  providers don't see/edit it; flip the flag to restore. */}
+              {SHOW_PRIVATE_CAPACITY && editing.service_type === 'private' && (
+                <div>
+                  <Label>{t("maxCustomersPerSlot")}</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={editing.max_capacity}
+                    // Don't clamp per-keystroke: Math.max(1, …) snapped the value
+                    // back to 1 whenever the field was briefly empty/0 mid-typing
+                    // (Number("") = 0 → Math.max(1,0) = 1), making it uneditable.
+                    // Store the raw number while editing; clamp to [1,100] on blur.
+                    // handleSave also validates the 1-100 range as a backstop.
+                    onChange={e => setEditing({ ...editing, max_capacity: Number(e.target.value) })}
+                    onBlur={() => setEditing(prev =>
+                      prev ? { ...prev, max_capacity: Math.min(100, Math.max(1, prev.max_capacity || 1)) } : prev
+                    )}
+                    onFocus={e => e.target.select()}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">{t("maxCustomersPerSlotHelp")}</p>
+                </div>
+              )}
+
               <div>
-                <Label>{t("duration")} ({t("min")})</Label>
-                <Input type="number" value={editing.duration} onChange={e => setEditing({ ...editing, duration: Number(e.target.value) })} onFocus={e => e.target.select()} />
-              </div>
-              <div>
-                <Label>{t("price")} (₪)</Label>
-                <Input type="number" value={editing.price} onChange={e => setEditing({ ...editing, price: Number(e.target.value) })} onFocus={e => e.target.select()} />
+                <Label>{"שעת התחלה אחרונה (אופציונלי)"}</Label>
+                <Input
+                  type="time"
+                  value={editing.latest_start_time}
+                  onChange={e => setEditing({ ...editing, latest_start_time: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">{t("latestStartTimeHelper")}</p>
               </div>
             </div>
+          )}
 
-            {isFitness && editing.service_type === 'group' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <Label>{t("maxCapacity")}</Label>
-                <Input
-                  type="number"
-                  min={2}
-                  max={100}
-                  value={editing.max_capacity}
-                  onChange={e => setEditing({ ...editing, max_capacity: Math.max(2, Number(e.target.value)) })}
-                  onFocus={e => e.target.select()}
-                />
-              </motion.div>
-            )}
-
-            {/* Per-slot capacity for ordinary (private) services — available to
-                every provider, NOT gated to fitness and NOT group framing.
-                1 = normal single-customer service. */}
-            {editing.service_type === 'private' && (
-              <div>
-                <Label>{t("maxCustomersPerSlot")}</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={editing.max_capacity}
-                  // Don't clamp per-keystroke: Math.max(1, …) snapped the value
-                  // back to 1 whenever the field was briefly empty/0 mid-typing
-                  // (Number("") = 0 → Math.max(1,0) = 1), making it uneditable.
-                  // Store the raw number while editing; clamp to [1,100] on blur.
-                  // handleSave also validates the 1-100 range as a backstop.
-                  onChange={e => setEditing({ ...editing, max_capacity: Number(e.target.value) })}
-                  onBlur={() => setEditing(prev =>
-                    prev ? { ...prev, max_capacity: Math.min(100, Math.max(1, prev.max_capacity || 1)) } : prev
-                  )}
-                  onFocus={e => e.target.select()}
-                />
-                <p className="text-xs text-muted-foreground mt-1">{t("maxCustomersPerSlotHelp")}</p>
-              </div>
-            )}
-
-            <div>
-              <Label>{"שעת התחלה אחרונה (אופציונלי)"}</Label>
-              <Input
-                type="time"
-                value={editing.latest_start_time}
-                onChange={e => setEditing({ ...editing, latest_start_time: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground mt-1">{t("latestStartTimeHelper")}</p>
-            </div>
-
+          {/* Sticky footer — save / cancel */}
+          <div className="shrink-0 border-t border-border bg-background/95 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] backdrop-blur-sm">
             <div className="flex gap-2">
-              <Button size="sm" onClick={handleSave} disabled={upsertService.isPending}>{t("save")}</Button>
-              <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>{t("cancel")}</Button>
+              <Button onClick={handleSave} disabled={upsertService.isPending} className="h-12 flex-1 text-base font-semibold">{t("save")}</Button>
+              <Button variant="ghost" onClick={() => setEditing(null)} className="h-12">{t("cancel")}</Button>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Add session form */}
       <AnimatePresence>

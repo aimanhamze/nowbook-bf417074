@@ -91,6 +91,22 @@ export function useProviderServices() {
     onSuccess: invalidateServiceCaches,
   });
 
+  // Lightweight single-column update for the "parallel services" toggle. Kept
+  // separate from upsertService (which rewrites the whole row and doesn't carry
+  // is_parallel) so checking a box never clobbers name/price/capacity. Same
+  // table + provider-owns-own-service RLS path as upsertService/deleteService.
+  const updateServiceParallel = useMutation({
+    mutationFn: async ({ id, is_parallel }: { id: string; is_parallel: boolean }) => {
+      if (!profile) throw new Error("No provider profile");
+      const { error } = await supabase
+        .from("provider_services")
+        .update({ is_parallel })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidateServiceCaches,
+  });
+
   // Soft-delete: never hard DELETE a service that may be referenced by past
   // bookings (orphans their service_names). First refuse the delete if any
   // FUTURE booking still references it; otherwise flip is_active=false so the
@@ -122,5 +138,5 @@ export function useProviderServices() {
     onSuccess: invalidateServiceCaches,
   });
 
-  return { services: servicesQuery.data || [], isLoading: servicesQuery.isLoading, error: servicesQuery.error, upsertService, deleteService };
+  return { services: servicesQuery.data || [], isLoading: servicesQuery.isLoading, error: servicesQuery.error, upsertService, updateServiceParallel, deleteService };
 }
