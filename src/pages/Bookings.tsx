@@ -13,7 +13,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { Tables } from "@/integrations/supabase/types";
 
-const CANCELLATION_HOURS_THRESHOLD = 5;
+// Fallback cutoff (hours) when a booking's provider can't be resolved (e.g. the
+// provider went invisible). Matches the column default; real cutoff comes from
+// each booking's OWN provider (provider_profiles.cancellation_notice_hours).
+const DEFAULT_CANCELLATION_HOURS = 5;
 
 const Bookings = () => {
   const navigate = useNavigate();
@@ -99,6 +102,10 @@ const Bookings = () => {
             getServiceNames={getServiceNames}
             providerPhone={allProviders.find((p) => p.id === booking.provider_id)?.phone ?? null}
             showPrices={allProviders.find((p) => p.id === booking.provider_id)?.showPrices ?? true}
+            cancellationNoticeHours={
+              allProviders.find((p) => p.id === booking.provider_id)?.cancellationNoticeHours
+                ?? DEFAULT_CANCELLATION_HOURS
+            }
           />
           ))}
           <div className="flex justify-between items-center pt-2 pb-4">
@@ -126,13 +133,14 @@ const Bookings = () => {
   );
 };
 
-function BookingCard({ booking, index, getProviderName, getServiceNames, providerPhone, showPrices }: {
+function BookingCard({ booking, index, getProviderName, getServiceNames, providerPhone, showPrices, cancellationNoticeHours }: {
   booking: Tables<"bookings">;
   index: number;
   getProviderName: (id: string) => string;
   getServiceNames: (ids: string[]) => string;
   providerPhone: string | null;
   showPrices: boolean;
+  cancellationNoticeHours: number;
 }) {
   const { t } = useLang();
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -144,8 +152,10 @@ function BookingCard({ booking, index, getProviderName, getServiceNames, provide
   const isPast = bookingDateTime < now;
   const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
   const isActive = !isPast && (booking.status === "confirmed" || booking.status === "pending");
-  const canCancel = isActive && hoursUntilBooking > CANCELLATION_HOURS_THRESHOLD;
-  const canCallToCancel = isActive && hoursUntilBooking <= CANCELLATION_HOURS_THRESHOLD;
+  // Cutoff comes from THIS booking's provider. 0 = always cancellable while
+  // active (no late-cancel block / call-to-cancel state).
+  const canCancel = isActive && (cancellationNoticeHours <= 0 || hoursUntilBooking > cancellationNoticeHours);
+  const canCallToCancel = isActive && cancellationNoticeHours > 0 && hoursUntilBooking <= cancellationNoticeHours;
   const canReview = isPast && booking.status === "confirmed" && !existingReview;
 
   const cancelMutation = useMutation({
@@ -281,7 +291,7 @@ function BookingCard({ booking, index, getProviderName, getServiceNames, provide
 
       {canCallToCancel && (
         <div className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700">
-          {t("cancellationBlocked")}
+          {t("cancellationBlocked").replace("{hours}", String(cancellationNoticeHours))}
         </div>
       )}
 

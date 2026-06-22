@@ -21,6 +21,9 @@ import { toast } from "sonner";
 
 const LEAD_TIME_OPTIONS = [15, 30, 60, 120, 240, 1440] as const;
 const BOOKING_WINDOW_OPTIONS = [3, 7, 14, 30, 60, 90] as const;
+// Customer self-cancel cutoff in hours. 0 = always cancellable; range 0–72
+// matches the DB CHECK constraint (20260622000001 migration).
+const CANCELLATION_NOTICE_OPTIONS = [0, 1, 2, 3, 5, 12, 24, 48, 72] as const;
 
 // All controls save immediately and read straight from `profile.*` — no
 // react-hook-form, so the watch+setValue+reset combobox bug can't occur here.
@@ -35,6 +38,7 @@ export function BookingSettingsTab() {
     updateDepositRequestEnabled,
     updateMinLeadTime,
     updateBookingWindow,
+    updateCancellationNoticeHours,
   } = useProviderProfile();
   const pendingCount = usePendingCount();
   const [pendingGuardOpen, setPendingGuardOpen] = useState(false);
@@ -48,6 +52,14 @@ export function BookingSettingsTab() {
     (profile as { deposit_request_enabled?: boolean } | null)?.deposit_request_enabled ?? false;
   const minLeadTime = profile?.min_lead_time_minutes ?? 15;
   const bookingWindow = (profile as { booking_window_days?: number } | null)?.booking_window_days ?? 14;
+  // Cast: column added by 20260622000001 migration; types.ts regenerated after apply.
+  const cancellationNoticeHours =
+    (profile as { cancellation_notice_hours?: number } | null)?.cancellation_notice_hours ?? 5;
+
+  const cancellationOptionLabel = (h: number) =>
+    h === 0
+      ? t("cancellationNoticeAlways")
+      : t("cancellationNoticeHoursValue").replace("{n}", String(h));
 
   const handleApprovalToggle = async (next: boolean) => {
     if (!next && pendingCount > 0) {
@@ -186,6 +198,32 @@ export function BookingSettingsTab() {
               {BOOKING_WINDOW_OPTIONS.map((days) => (
                 <SelectItem key={days} value={String(days)}>
                   {t(`bookingWindow${days}` as Parameters<typeof t>[0])}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>{t("cancellationNoticeLabel")}</Label>
+          <p className="text-xs text-muted-foreground mt-1 mb-2">{t("cancellationNoticeHelp")}</p>
+          <Select
+            value={String(cancellationNoticeHours)}
+            onValueChange={async (v) => {
+              try {
+                await updateCancellationNoticeHours.mutateAsync(Number(v));
+                toast.success(t("profileSaved"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Error");
+              }
+            }}
+            disabled={updateCancellationNoticeHours.isPending}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {CANCELLATION_NOTICE_OPTIONS.map((h) => (
+                <SelectItem key={h} value={String(h)}>
+                  {cancellationOptionLabel(h)}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -28,6 +28,7 @@ export interface Provider {
   socialLinks?: SocialLinks | null;
   requiresBookingApproval: boolean;
   showPrices: boolean;
+  cancellationNoticeHours: number;
 }
 
 export const categories = [

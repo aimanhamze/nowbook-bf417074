@@ -341,6 +341,7 @@ export type Database = {
           average_rating: number | null
           booking_window_days: number | null
           business_name: string
+          cancellation_notice_hours: number
           category: string
           cover_image: string | null
           created_at: string
@@ -367,6 +368,7 @@ export type Database = {
           average_rating?: number | null
           booking_window_days?: number | null
           business_name?: string
+          cancellation_notice_hours?: number
           category?: string
           cover_image?: string | null
           created_at?: string
@@ -393,6 +395,7 @@ export type Database = {
           average_rating?: number | null
           booking_window_days?: number | null
           business_name?: string
+          cancellation_notice_hours?: number
           category?: string
           cover_image?: string | null
           created_at?: string

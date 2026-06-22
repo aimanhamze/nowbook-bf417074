@@ -137,6 +137,24 @@ export function useProviderProfile() {
     },
   });
 
+  const updateCancellationNoticeHours = useMutation({
+    mutationFn: async (value: number) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        // Cast: column added by 20260622000001 migration; types.ts is
+        // regenerated after apply (matches booking_window_days / deposit_request_enabled).
+        .update({ cancellation_notice_hours: value } as never)
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      // Customer Bookings.tsx reads this via useAllProviders, so refresh it too.
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+    },
+  });
+
   const updateWhatsAppTemplates = useMutation({
     mutationFn: async (values: { deposit_message_template?: string; reminder_message_template?: string }) => {
       if (!user) throw new Error("Not authenticated");
@@ -220,6 +238,7 @@ export function useProviderProfile() {
     updateDepositRequestEnabled,
     updateMinLeadTime,
     updateBookingWindow,
+    updateCancellationNoticeHours,
     updateWhatsAppTemplates,
     uploadCoverImage,
     uploadAvatarImage,
