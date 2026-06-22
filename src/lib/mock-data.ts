@@ -29,6 +29,7 @@ export interface Provider {
   requiresBookingApproval: boolean;
   showPrices: boolean;
   cancellationNoticeHours: number;
+  phone: string | null;
 }
 
 export const categories = [
