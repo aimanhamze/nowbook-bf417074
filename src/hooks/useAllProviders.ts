@@ -71,6 +71,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCoun
     requiresBookingApproval: dbp.requires_booking_approval ?? false,
     showPrices: dbp.show_prices ?? true,
     cancellationNoticeHours: dbp.cancellation_notice_hours ?? 5,
+    phone: dbp.phone ?? null,
     services: services.filter(s => s.is_active).map(s => ({
       id: s.id,
       name: { he: s.name, ar: s.name, en: s.name },
