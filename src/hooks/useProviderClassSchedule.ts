@@ -38,6 +38,7 @@ export function useProviderClassSchedule() {
         .from("provider_class_schedule")
         .select("*")
         .eq("provider_id", profile.id)
+        .eq("is_active", true)
         .order("day_of_week")
         .order("start_time");
       if (error) throw error;
