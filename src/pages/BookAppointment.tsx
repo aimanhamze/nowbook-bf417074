@@ -99,6 +99,39 @@ const BookAppointment = () => {
     enabled: !!selectedClass && _occurrenceDateStrs.length > 0,
   });
 
+  // Step 1: live booking counts for the next upcoming occurrence of each class
+  const _nextOccMap: Record<string, string> = {};
+  if (isFitnessStudio) {
+    classSchedule.forEach(cls => {
+      const next = getUpcomingDates(cls.day_of_week, 1, provider?.bookingWindowDays ?? 14)[0];
+      if (next) _nextOccMap[cls.id] = format(next, "yyyy-MM-dd");
+    });
+  }
+  const _nextOccClassIds = Object.keys(_nextOccMap);
+
+  const { data: classNextBookingCounts = {} } = useQuery<Record<string, number>>({
+    queryKey: ["class-next-booking-counts", _nextOccClassIds],
+    queryFn: async () => {
+      if (!_nextOccClassIds.length) return {};
+      const dates = [...new Set(Object.values(_nextOccMap))];
+      const { data } = await supabase
+        .from("bookings")
+        .select("class_schedule_id, booking_date")
+        .in("class_schedule_id", _nextOccClassIds)
+        .in("booking_date", dates)
+        .in("status", ["confirmed", "pending"]);
+      const counts: Record<string, number> = {};
+      (data || []).forEach(b => {
+        if (b.class_schedule_id && _nextOccMap[b.class_schedule_id] === b.booking_date) {
+          counts[b.class_schedule_id] = (counts[b.class_schedule_id] || 0) + 1;
+        }
+      });
+      return counts;
+    },
+    enabled: _nextOccClassIds.length > 0,
+    staleTime: 30_000,
+  });
+
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center gap-4">
@@ -296,7 +329,8 @@ const BookAppointment = () => {
           toast.error(t("leadTimeError").replace("{time}", timeDisplay));
         } else if (error.message === "GROUP_CAPACITY_EXCEEDED") {
           toast.error(t("bookingCapacityFullError"));
-          queryClient.invalidateQueries({ queryKey: ["provider-bookings-public", provider.id] });
+          queryClient.invalidateQueries({ queryKey: ["class-booking-counts"] });
+          queryClient.invalidateQueries({ queryKey: ["class-next-booking-counts"] });
         } else if (error.message === "DUPLICATE_USER_BOOKING") {
           toast.error(t("duplicateUserBookingError"));
         } else {
@@ -339,6 +373,8 @@ const BookAppointment = () => {
       await supabase.from("notifications").insert(customerNotif);
       queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["class-booking-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["class-next-booking-counts"] });
 
       const { error: pushError } = await supabase.functions.invoke("send-push", {
         body: {
@@ -472,6 +508,9 @@ const BookAppointment = () => {
                           {dayClasses.map((cls, i) => {
                             const isSelected = selectedClass?.id === cls.id;
                             const isGroup = cls.class_type === "group";
+                            const nextBooked = classNextBookingCounts[cls.id] ?? 0;
+                            const nextSpotsLeft = cls.max_capacity - nextBooked;
+                            const nextIsFull = isGroup && nextSpotsLeft <= 0;
                             return (
                               <motion.button
                                 key={cls.id}
@@ -506,9 +545,18 @@ const BookAppointment = () => {
                                       {cls.start_time.slice(0, 5)} · {cls.duration_minutes} {t("min")}
                                     </span>
                                     {isGroup && (
-                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                                      <span className={cn(
+                                        "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold shrink-0",
+                                        nextIsFull ? "bg-red-100 text-red-600"
+                                        : nextSpotsLeft === 1 ? "bg-orange-100 text-orange-600"
+                                        : "bg-secondary text-muted-foreground"
+                                      )}>
                                         <Users className="h-2.5 w-2.5" />
-                                        {cls.max_capacity} {t("classSlots")}
+                                        {nextIsFull
+                                          ? t("classFull")
+                                          : nextSpotsLeft === 1
+                                          ? t("lastSpot")
+                                          : `${nextSpotsLeft}/${cls.max_capacity} ${t("spotsLeft")}`}
                                       </span>
                                     )}
                                   </div>
