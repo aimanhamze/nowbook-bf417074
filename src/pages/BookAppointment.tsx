@@ -557,7 +557,10 @@ const BookAppointment = () => {
                     const isSelected =
                       selectedOccurrence !== null &&
                       dateStr === format(selectedOccurrence, "yyyy-MM-dd");
-                    const isPast = date < new Date(now.getTime() + minLeadTimeMinutes * 60 * 1000);
+                    const [classH, classM] = selectedClass.start_time.split(":").map(Number);
+                    const classDateTime = new Date(date);
+                    classDateTime.setHours(classH, classM, 0, 0);
+                    const isPast = classDateTime < new Date(now.getTime() + minLeadTimeMinutes * 60 * 1000);
                     if (isPast) return null;
                     const bookedCount = classBookingCounts[dateStr] || 0;
                     const spotsLeft = selectedClass.max_capacity - bookedCount;
