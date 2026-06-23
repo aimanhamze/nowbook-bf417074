@@ -81,20 +81,22 @@ const BookAppointment = () => {
     : [];
   const _occurrenceDateStrs = _occurrenceDates.map((d) => format(d, "yyyy-MM-dd"));
 
+  // Uses SECURITY DEFINER RPC to bypass RLS — direct table queries only return
+  // the current user's rows, causing spots to always display as max capacity.
   const { data: classBookingCounts = {} } = useQuery({
     queryKey: ["class-booking-counts", selectedClass?.id, _occurrenceDateStrs],
     queryFn: async () => {
-      if (!selectedClass) return {} as Record<string, number>;
-      const { data } = await supabase
-        .from("bookings")
-        .select("booking_date")
-        .eq("class_schedule_id", selectedClass.id)
-        .in("booking_date", _occurrenceDateStrs)
-        .in("status", ["confirmed", "pending"]);
-      return (data || []).reduce((acc, b) => {
-        acc[b.booking_date] = (acc[b.booking_date] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      if (!selectedClass || !_occurrenceDateStrs.length) return {} as Record<string, number>;
+      const { data, error } = await supabase.rpc("get_class_booking_counts", {
+        p_class_ids: [selectedClass.id],
+        p_dates: _occurrenceDateStrs,
+      });
+      if (error) return {} as Record<string, number>;
+      const counts: Record<string, number> = {};
+      (data || []).forEach((row: { class_schedule_id: string; booking_date: string; booked_count: number }) => {
+        counts[row.booking_date] = row.booked_count;
+      });
+      return counts;
     },
     enabled: !!selectedClass && _occurrenceDateStrs.length > 0,
   });
@@ -114,16 +116,15 @@ const BookAppointment = () => {
     queryFn: async () => {
       if (!_nextOccClassIds.length) return {};
       const dates = [...new Set(Object.values(_nextOccMap))];
-      const { data } = await supabase
-        .from("bookings")
-        .select("class_schedule_id, booking_date")
-        .in("class_schedule_id", _nextOccClassIds)
-        .in("booking_date", dates)
-        .in("status", ["confirmed", "pending"]);
+      const { data, error } = await supabase.rpc("get_class_booking_counts", {
+        p_class_ids: _nextOccClassIds,
+        p_dates: dates,
+      });
+      if (error) return {};
       const counts: Record<string, number> = {};
-      (data || []).forEach(b => {
-        if (b.class_schedule_id && _nextOccMap[b.class_schedule_id] === b.booking_date) {
-          counts[b.class_schedule_id] = (counts[b.class_schedule_id] || 0) + 1;
+      (data || []).forEach((row: { class_schedule_id: string; booking_date: string; booked_count: number }) => {
+        if (_nextOccMap[row.class_schedule_id] === row.booking_date) {
+          counts[row.class_schedule_id] = row.booked_count;
         }
       });
       return counts;
