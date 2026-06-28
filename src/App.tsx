@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
+import { NameGate } from "@/components/NameGate";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Suspense, lazy, useEffect } from "react";
 
@@ -84,6 +85,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <PageTitleUpdater />
+              <NameGate>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
@@ -112,6 +114,7 @@ const App = () => (
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
+              </NameGate>
               <BottomNav />
             </BrowserRouter>
           </AuthProvider>
