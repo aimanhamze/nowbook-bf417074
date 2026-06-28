@@ -152,11 +152,6 @@ const Auth = () => {
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Welcome screen (first login, no display_name) ─────────────────────────
-  const [showWelcome, setShowWelcome] = useState(false);
-  const [displayName, setDisplayName] = useState("");
-  const [welcomeLoading, setWelcomeLoading] = useState(false);
-
   // ── Dev login ──────────────────────────────────────────────────────────────
   const DEV_TEST_EMAIL = import.meta.env.VITE_DEV_TEST_EMAIL as string | undefined;
   const [showDevLogin, setShowDevLogin] = useState(false);
@@ -198,14 +193,17 @@ const Auth = () => {
     logoTapTimer.current = setTimeout(() => { logoTapCount.current = 0; }, 2000);
   };
 
-  /** After any successful auth, check display_name and route accordingly. */
+  /** After any successful auth, mirror phone and enter the app.
+   *  Requiring a display name is handled centrally by <NameGate>, which gates
+   *  customers only (never providers/admins) — so we do NOT show a name screen
+   *  here. */
   const afterAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate("/"); return; }
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("display_name, phone")
+      .select("phone")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -217,11 +215,7 @@ const Auth = () => {
         .eq("user_id", user.id);
     }
 
-    if (!profile?.display_name) {
-      setShowWelcome(true);
-    } else {
-      navigate("/");
-    }
+    navigate("/");
   };
 
   // ── Email handlers ─────────────────────────────────────────────────────────
@@ -314,23 +308,6 @@ const Auth = () => {
     setCountdown(0);
   };
 
-  // ── Welcome screen handler ─────────────────────────────────────────────────
-
-  const handleWelcomeSubmit = async () => {
-    const name = displayName.trim();
-    if (!name) return;
-    setWelcomeLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const updates: Record<string, string> = { display_name: name };
-      if (user.phone) updates.phone = e164ToLocal(user.phone);
-      const { error } = await supabase.from("profiles").update(updates).eq("user_id", user.id);
-      if (error) { toast.error(error.message); setWelcomeLoading(false); return; }
-    }
-    setWelcomeLoading(false);
-    navigate("/");
-  };
-
   // ── Motion presets (respect prefers-reduced-motion) ─────────────────────────
 
   const cardEntrance = reduceMotion
@@ -342,44 +319,6 @@ const Auth = () => {
       };
 
   const slideX = reduceMotion ? 0 : 10;
-
-  // ── Welcome screen ─────────────────────────────────────────────────────────
-
-  if (showWelcome) {
-    return (
-      <div className="relative flex min-h-screen flex-col items-center justify-center px-6">
-        <AuthBackground />
-        <motion.div
-          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: reduceMotion ? 0.2 : 0.5, ease: EASE }}
-          className="relative w-full max-w-[420px] space-y-6 rounded-[28px] bg-white p-7 text-center shadow-[0_20px_50px_-20px_rgba(16,32,56,0.18),0_4px_12px_rgba(16,32,56,0.05)]"
-        >
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-[#102038]">ברוך הבא לדורק! 👋</h1>
-            <p className="text-sm text-[#606068]">איך קוראים לך?</p>
-          </div>
-          <input
-            type="text"
-            placeholder="השם שלי..."
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleWelcomeSubmit()}
-            autoFocus
-            className={`${FIELD} text-center`}
-          />
-          <button
-            onClick={handleWelcomeSubmit}
-            disabled={!displayName.trim() || welcomeLoading}
-            aria-busy={welcomeLoading}
-            className={PRIMARY_BTN}
-          >
-            {welcomeLoading ? <Spinner /> : "בואו נתחיל"}
-          </button>
-        </motion.div>
-      </div>
-    );
-  }
 
   // ── Main auth page ─────────────────────────────────────────────────────────
 

@@ -522,6 +522,12 @@ export const translations = {
     dur45: "45 דקות",
     dur60: "60 דקות",
     dur90: "90 דקות",
+    nameGateTitle: "ברוך הבא לדורק! 👋",
+    nameGateSubtitle: "איך קוראים לך?",
+    nameGateHint: "כדי שנדע איך לפנות אליך והעסקים יזהו אותך בהזמנות",
+    nameGatePlaceholder: "השם שלי...",
+    nameGateSubmit: "בואו נתחיל",
+    nameGateLogout: "התחברות עם מספר אחר",
   },
   ar: {
     appName: "Dorak",
@@ -1044,6 +1050,12 @@ export const translations = {
     dur45: "45 دقيقة",
     dur60: "60 دقيقة",
     dur90: "90 دقيقة",
+    nameGateTitle: "أهلاً بك في دورك! 👋",
+    nameGateSubtitle: "ما اسمك؟",
+    nameGateHint: "حتى نعرف كيف نخاطبك وتتعرّف عليك الأعمال في الحجوزات",
+    nameGatePlaceholder: "اسمي...",
+    nameGateSubmit: "لنبدأ",
+    nameGateLogout: "تسجيل الدخول برقم آخر",
   },
   en: {
     appName: "Dorak",
@@ -1566,6 +1578,12 @@ export const translations = {
     dur45: "45 minutes",
     dur60: "60 minutes",
     dur90: "90 minutes",
+    nameGateTitle: "Welcome to Dorak! 👋",
+    nameGateSubtitle: "What's your name?",
+    nameGateHint: "So we know what to call you and businesses can recognize your bookings",
+    nameGatePlaceholder: "My name...",
+    nameGateSubmit: "Let's start",
+    nameGateLogout: "Sign in with a different number",
   },
 } as const;
 

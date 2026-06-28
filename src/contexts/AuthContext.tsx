@@ -8,6 +8,9 @@ interface AuthContextType {
   loading: boolean;
   isProvider: boolean;
   isAdmin: boolean;
+  /** True until the current user's roles have been resolved. Gating logic should
+   *  wait for this to be false so a provider/admin is never treated as a customer. */
+  roleLoading: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -19,7 +22,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isProvider, setIsProvider] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [roleLoading, setRoleLoading] = useState(false);
+  // Starts true: while there is a user whose roles are still unknown, consumers
+  // must not assume "customer". Reset to false explicitly when there is no user.
+  const [roleLoading, setRoleLoading] = useState(true);
 
   useEffect(() => {
     if (!user) {
@@ -70,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, isProvider, isAdmin, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, isProvider, isAdmin, roleLoading, signOut }}>
       {children}
     </AuthContext.Provider>
   );
