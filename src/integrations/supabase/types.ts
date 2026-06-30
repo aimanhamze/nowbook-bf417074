@@ -356,6 +356,7 @@ export type Database = {
           reminder_message_template: string | null
           requires_booking_approval: boolean
           show_prices: boolean
+          slot_interval_minutes: number
           social_links: Json | null
           treatment_notes_enabled: boolean
           updated_at: string
@@ -383,6 +384,7 @@ export type Database = {
           reminder_message_template?: string | null
           requires_booking_approval?: boolean
           show_prices?: boolean
+          slot_interval_minutes?: number
           social_links?: Json | null
           treatment_notes_enabled?: boolean
           updated_at?: string
@@ -410,6 +412,7 @@ export type Database = {
           reminder_message_template?: string | null
           requires_booking_approval?: boolean
           show_prices?: boolean
+          slot_interval_minutes?: number
           social_links?: Json | null
           treatment_notes_enabled?: boolean
           updated_at?: string
@@ -688,6 +691,14 @@ export type Database = {
         }[]
       }
       booking_time_to_minutes: { Args: { _time: string }; Returns: number }
+      get_class_booking_counts: {
+        Args: { p_class_ids: string[]; p_dates: string[] }
+        Returns: {
+          booked_count: number
+          booking_date: string
+          class_schedule_id: string
+        }[]
+      }
       get_display_name: { Args: { _user_id: string }; Returns: string }
       get_provider_busy_slots: {
         Args: { p_from_date: string; p_provider_id: string; p_to_date: string }

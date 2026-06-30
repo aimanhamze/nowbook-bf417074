@@ -155,6 +155,24 @@ export function useProviderProfile() {
     },
   });
 
+  const updateSlotInterval = useMutation({
+    mutationFn: async (value: number) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        // Cast: column added by 20260630000001 migration; types.ts is
+        // regenerated after apply (matches cancellation_notice_hours pattern).
+        .update({ slot_interval_minutes: value } as never)
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      // Customer/walk-in slot grids read it via the provider-slot-interval query.
+      queryClient.invalidateQueries({ queryKey: ["provider-slot-interval"] });
+    },
+  });
+
   const updateWhatsAppTemplates = useMutation({
     mutationFn: async (values: { deposit_message_template?: string; reminder_message_template?: string }) => {
       if (!user) throw new Error("Not authenticated");
@@ -239,6 +257,7 @@ export function useProviderProfile() {
     updateMinLeadTime,
     updateBookingWindow,
     updateCancellationNoticeHours,
+    updateSlotInterval,
     updateWhatsAppTemplates,
     uploadCoverImage,
     uploadAvatarImage,
