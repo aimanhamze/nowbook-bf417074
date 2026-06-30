@@ -24,6 +24,9 @@ const BOOKING_WINDOW_OPTIONS = [3, 7, 14, 30, 60, 90] as const;
 // Customer self-cancel cutoff in hours. 0 = always cancellable; range 0–72
 // matches the DB CHECK constraint (20260622000001 migration).
 const CANCELLATION_NOTICE_OPTIONS = [0, 1, 2, 3, 5, 12, 24, 48, 72] as const;
+// Display granularity of the customer's available-times grid. Range mirrors the
+// DB CHECK constraint (15,30,45,60) from the 20260630000001 migration.
+const SLOT_INTERVAL_OPTIONS = [15, 30, 45, 60] as const;
 
 // All controls save immediately and read straight from `profile.*` — no
 // react-hook-form, so the watch+setValue+reset combobox bug can't occur here.
@@ -39,6 +42,7 @@ export function BookingSettingsTab() {
     updateMinLeadTime,
     updateBookingWindow,
     updateCancellationNoticeHours,
+    updateSlotInterval,
   } = useProviderProfile();
   const pendingCount = usePendingCount();
   const [pendingGuardOpen, setPendingGuardOpen] = useState(false);
@@ -55,6 +59,9 @@ export function BookingSettingsTab() {
   // Cast: column added by 20260622000001 migration; types.ts regenerated after apply.
   const cancellationNoticeHours =
     (profile as { cancellation_notice_hours?: number } | null)?.cancellation_notice_hours ?? 5;
+  // Cast: column added by 20260630000001 migration; types.ts regenerated after apply.
+  const slotInterval =
+    (profile as { slot_interval_minutes?: number } | null)?.slot_interval_minutes ?? 15;
 
   const cancellationOptionLabel = (h: number) =>
     h === 0
@@ -224,6 +231,32 @@ export function BookingSettingsTab() {
               {CANCELLATION_NOTICE_OPTIONS.map((h) => (
                 <SelectItem key={h} value={String(h)}>
                   {cancellationOptionLabel(h)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>{t("slotIntervalLabel")}</Label>
+          <p className="text-xs text-muted-foreground mt-1 mb-2">{t("slotIntervalHelp")}</p>
+          <Select
+            value={String(slotInterval)}
+            onValueChange={async (v) => {
+              try {
+                await updateSlotInterval.mutateAsync(Number(v));
+                toast.success(t("profileSaved"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Error");
+              }
+            }}
+            disabled={updateSlotInterval.isPending}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {SLOT_INTERVAL_OPTIONS.map((m) => (
+                <SelectItem key={m} value={String(m)}>
+                  {t("slotIntervalValue").replace("{n}", String(m))}
                 </SelectItem>
               ))}
             </SelectContent>

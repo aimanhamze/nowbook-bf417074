@@ -324,6 +324,32 @@ export function useRealAvailability(providerId: string | undefined) {
     enabled: !!providerId,
   });
 
+  // Per-provider DISPLAY granularity for the slot grid. provider_profiles is
+  // anon-readable (same channel useAllProviders uses), so this works for the
+  // customer booking view AND the provider walk-in sheet. Display-only: it sets
+  // the spacing of candidate start-times, never any booking/overlap logic.
+  const slotIntervalQuery = useQuery({
+    queryKey: ["provider-slot-interval", providerId],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      if (!providerId) return null;
+      const { data, error } = await supabase
+        .from("provider_profiles")
+        // Cast: column added by 20260630000001 migration; types.ts regenerated
+        // after apply (matches cancellation_notice_hours / booking_window_days).
+        .select("slot_interval_minutes")
+        .eq("id", providerId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { slot_interval_minutes?: number } | null;
+    },
+    enabled: !!providerId,
+  });
+
+  // Defensive fallback to 15 when the column/value is missing (matches the
+  // migration default → zero change for providers who never set it).
+  const slotStep = slotIntervalQuery.data?.slot_interval_minutes || 15;
+
   /**
    * Returns available time slots for private services.
    *
@@ -381,10 +407,14 @@ export function useRealAvailability(providerId: string | undefined) {
         });
       });
 
-    const SLOT_STEP = 15;
+    // SLOT_STEP = display granularity (provider's slot_interval_minutes). It only
+    // controls the SPACING of offered start-times; it is decoupled from
+    // neededDuration (which keeps its own 15-min fallback) so changing the
+    // interval never changes how long a booking is or the overlap math below.
+    const SLOT_STEP = slotStep;
     const start = parseTime(slot.start_time);
     const end = parseTime(slot.end_time);
-    const neededDuration = requestedDuration || SLOT_STEP;
+    const neededDuration = requestedDuration || 15;
 
     const breakStart = slot.break_start ? parseTime(slot.break_start) : null;
     const breakEnd = slot.break_end ? parseTime(slot.break_end) : null;
@@ -441,7 +471,9 @@ export function useRealAvailability(providerId: string | undefined) {
     const slot = (availabilityQuery.data || []).find(a => a.day_of_week === dow);
     if (!slot || !slot.is_available) return [];
 
-    const SLOT_STEP = 15;
+    // Same display granularity as private slots (provider's slot_interval_minutes,
+    // 15 fallback). The `+ 30` minimum-window check below is unchanged.
+    const SLOT_STEP = slotStep;
     const start = parseTime(slot.start_time);
     const end = parseTime(slot.end_time);
 
