@@ -1,8 +1,8 @@
-jow # Dori — Project Summary for AI Context
+# Ehjezly — Project Summary for AI Context
 
 ## What Is This App?
 
-**Dori** is a mobile-first appointment booking PWA (Progressive Web App) built for the Israeli/Arab market. It connects customers with service providers (barbers, salons, doctors, gyms, etc.) for booking appointments. Think of it as a local "booking.com" for personal services.
+**Ehjezly** is a mobile-first appointment booking PWA (Progressive Web App) built for the Israeli/Arab market. It connects customers with service providers (barbers, salons, doctors, gyms, etc.) for booking appointments. Think of it as a local "booking.com" for personal services.
 
 - **Primary language**: Hebrew (RTL), with full Arabic and English support
 - **Currency**: Israeli Shekel (₪)
