@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // Lenient on purpose: providers log in with fake addresses like
-// someone@dorak.com, so we only require a `local@domain.tld` shape — no
+// someone@ehjezly.com, so we only require a `local@domain.tld` shape — no
 // MX/real-domain checks. `email_confirm: true` below makes them work without
 // any verification round-trip, exactly like create-provider does.
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
