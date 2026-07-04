@@ -24,7 +24,7 @@ VITE_SUPABASE_ANON_KEY=
 
 ## Architecture
 
-**Dori** is a mobile-first appointment booking PWA for the Israeli/Arab market. Stack: React 18 + TypeScript + Vite + Supabase + Tailwind CSS + Radix UI (shadcn/ui).
+**Ehjezly** is a mobile-first appointment booking PWA for the Israeli/Arab market. Stack: React 18 + TypeScript + Vite + Supabase + Tailwind CSS + Radix UI (shadcn/ui).
 
 ### Routing & Auth (`src/App.tsx`)
 All pages are `React.lazy()`-loaded with `<Suspense>` + `<ErrorBoundary>` wrappers. Route guards:
