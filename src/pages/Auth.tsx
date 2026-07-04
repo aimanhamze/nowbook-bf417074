@@ -8,6 +8,7 @@ import { BackArrow } from "@/components/ui/directional-icon";
 import { Loader2, Eye, EyeOff, Mail, Phone, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import eLogo from "@/assets/e_logo.png";
 
 const emailSchema = z.string().email();
 
@@ -83,15 +84,17 @@ function GoogleLogo() {
   );
 }
 
-/** DORAK wordmark — dark ink with a small orange accent on the "A". */
+/** Ehjezly logo. Tapping it 5× within 2s toggles the hidden dev-login panel,
+ *  so the onTap handler (handleLogoTap) MUST stay wired to this element. */
 function Wordmark({ onTap }: { onTap: () => void }) {
   return (
-    <span
+    <img
+      src={eLogo}
+      alt="Ehjezly"
       onClick={onTap}
-      className="inline-block select-none text-lg font-extrabold tracking-[0.22em] text-[#102038]"
-    >
-      DOR<span className="text-[#E76C29]">A</span>K
-    </span>
+      draggable={false}
+      className="mx-auto block h-28 w-auto cursor-pointer select-none"
+    />
   );
 }
 
@@ -364,7 +367,7 @@ const Auth = () => {
           {/* Wordmark + heading + subtitle */}
           <div className="mb-6 text-center">
             <Wordmark onTap={handleLogoTap} />
-            <h1 className="mt-4 text-[30px] font-bold leading-tight text-[#102038]">{t("signIn")}</h1>
+            <h1 className="mt-4 text-2xl font-bold leading-tight text-[#102038]">{t("signIn")}</h1>
             <p className="mt-1.5 text-sm text-[#606068]">שמחים לראות אותך שוב</p>
             <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-[#E76C29]" />
           </div>

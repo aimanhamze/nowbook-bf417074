@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import { QRCodeCanvas } from "qrcode.react";
+import { E_LOGO_DATA_URL } from "./eLogoDataUrl";
 
 export const QR_CARD_WIDTH = 1080;
 export const QR_CARD_HEIGHT = 1350;
@@ -49,19 +50,14 @@ export const QrCard = forwardRef<HTMLDivElement, QrCardProps>(
             "linear-gradient(160deg, #FFE7CE 0%, #FFF2E4 46%, #FEFEFE 100%)",
         }}
       >
-        {/* Brand wordmark — matches Auth.tsx: dark ink with orange "A". */}
-        <div
-          style={{
-            fontSize: 50,
-            fontWeight: 800,
-            letterSpacing: "0.22em",
-            color: "#102038",
-            // Wordmark is always LTR regardless of card direction.
-            direction: "ltr",
-          }}
-        >
-          DOR<span style={{ color: "#E76C29" }}>A</span>K
-        </div>
+        {/* Brand logo. Inlined as a base64 data-URI (see eLogoDataUrl.ts) so
+            html-to-image renders it in the exported PNG — it can't reliably
+            fetch external asset URLs. No blur/filter, so it exports crisply. */}
+        <img
+          src={E_LOGO_DATA_URL}
+          alt="Ehjezly"
+          style={{ height: 240, width: "auto", display: "block" }}
+        />
 
         {/* Business name + QR + caption, vertically centered group. */}
         <div
