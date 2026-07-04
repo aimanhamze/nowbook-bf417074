@@ -2,7 +2,7 @@ export type Lang = "he" | "ar" | "en";
 
 export const translations = {
   he: {
-    appName: "Dorak",
+    appName: "Ehjezly",
     goodMorning: "בוקר טוב",
     goodAfternoon: "צהריים טובים",
     goodEvening: "ערב טוב",
@@ -533,7 +533,7 @@ export const translations = {
     nameGateLogout: "התחברות עם מספר אחר",
   },
   ar: {
-    appName: "Dorak",
+    appName: "Ehjezly",
     goodMorning: "صباح الخير",
     goodAfternoon: "مساء الخير",
     goodEvening: "مساء النور",
@@ -1064,7 +1064,7 @@ export const translations = {
     nameGateLogout: "تسجيل الدخول برقم آخر",
   },
   en: {
-    appName: "Dorak",
+    appName: "Ehjezly",
     goodMorning: "Good morning",
     goodAfternoon: "Good Afternoon",
     goodEvening: "Good Evening",
@@ -1587,7 +1587,7 @@ export const translations = {
     dur45: "45 minutes",
     dur60: "60 minutes",
     dur90: "90 minutes",
-    nameGateTitle: "Welcome to Dorak! 👋",
+    nameGateTitle: "Welcome to Ehjezly! 👋",
     nameGateSubtitle: "What's your name?",
     nameGateHint: "So we know what to call you and businesses can recognize your bookings",
     nameGatePlaceholder: "My name...",

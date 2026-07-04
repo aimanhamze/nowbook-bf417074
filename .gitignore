@@ -35,3 +35,6 @@ supabase/.temp/
 
 # Screenshots (Instagram exports)
 screenshots/
+
+# Higgsfield AI video assets
+higgsfield/

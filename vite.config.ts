@@ -24,8 +24,8 @@ export default defineConfig(({ mode }) => ({
         importScripts: ["/sw-push.js"],
       },
       manifest: {
-        name: "Dorak — הזמנת תורים",
-        short_name: "Dorak",
+        name: "Ehjezly — הזמנת תורים",
+        short_name: "Ehjezly",
         description: "הזמנת תורים בקלות",
         lang: "he",
         theme_color: "#fcfcfc",

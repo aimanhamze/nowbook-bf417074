@@ -1,4 +1,4 @@
-const STORAGE_KEY = "dori:map:lastView:v1";
+const STORAGE_KEY = "ehjezly:map:lastView:v1";
 
 export interface MapView {
   center: [number, number];

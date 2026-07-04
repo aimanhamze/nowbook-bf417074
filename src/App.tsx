@@ -51,25 +51,25 @@ function PageTitleUpdater() {
 
   useEffect(() => {
     const routeTitles: Record<string, string> = {
-      "/": `Dorak — ${t("home")}`,
-      "/explore": `Dorak — ${t("explore")}`,
-      "/nearby": `Dorak — ${t("nearbyTitle")}`,
-      "/bookings": `Dorak — ${t("myBookings")}`,
-      "/favorites": `Dorak — ${t("favorites")}`,
-      "/profile": `Dorak — ${t("profile")}`,
-      "/settings": `Dorak — ${t("settings")}`,
-      "/auth": `Dorak — ${t("signIn")}`,
-      "/notifications": `Dorak — ${t("notificationsLabel")}`,
-      "/dashboard": `Dorak — ${t("dashboard")}`,
-      "/calendar": `Dorak — ${t("bookingsCalendar")}`,
-      "/admin": `Dorak — Admin`,
-      "/booking-confirmed": `Dorak — ${t("bookingConfirmed")}`,
+      "/": `Ehjezly — ${t("home")}`,
+      "/explore": `Ehjezly — ${t("explore")}`,
+      "/nearby": `Ehjezly — ${t("nearbyTitle")}`,
+      "/bookings": `Ehjezly — ${t("myBookings")}`,
+      "/favorites": `Ehjezly — ${t("favorites")}`,
+      "/profile": `Ehjezly — ${t("profile")}`,
+      "/settings": `Ehjezly — ${t("settings")}`,
+      "/auth": `Ehjezly — ${t("signIn")}`,
+      "/notifications": `Ehjezly — ${t("notificationsLabel")}`,
+      "/dashboard": `Ehjezly — ${t("dashboard")}`,
+      "/calendar": `Ehjezly — ${t("bookingsCalendar")}`,
+      "/admin": `Ehjezly — Admin`,
+      "/booking-confirmed": `Ehjezly — ${t("bookingConfirmed")}`,
     };
 
     const base = location.pathname.split("/").slice(0, 2).join("/");
     document.title = routeTitles[location.pathname]
       || routeTitles[base]
-      || "Dorak — הזמנת תורים";
+      || "Ehjezly — הזמנת תורים";
   }, [location.pathname, t]);
 
   return null;

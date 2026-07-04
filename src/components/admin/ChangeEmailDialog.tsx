@@ -16,7 +16,7 @@ import { useLang } from "@/contexts/LangContext";
 import type { Tables } from "@/integrations/supabase/types";
 
 // Lenient on purpose, mirroring the Edge Function's server-side check: providers
-// log in with fake addresses like someone@dorak.com, so we only require a
+// log in with fake addresses like someone@ehjezly.com, so we only require a
 // `local@domain.tld` shape. The server validates again — never trust this alone.
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -129,7 +129,7 @@ export function ChangeEmailDialog({ provider, open, onOpenChange }: ChangeEmailD
                 type="email"
                 dir="ltr"
                 autoComplete="off"
-                placeholder="provider@dorak.com"
+                placeholder="provider@ehjezly.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />

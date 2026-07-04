@@ -83,7 +83,7 @@ export default function ProviderQrCode() {
       });
       const link = document.createElement("a");
       link.href = dataUrl;
-      link.download = `dorak-card-${fileSlug}.png`;
+      link.download = `ehjezly-card-${fileSlug}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
