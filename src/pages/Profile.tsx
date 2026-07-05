@@ -3,6 +3,7 @@ import { ForwardArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 import { useNavigate } from "react-router-dom";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -11,7 +12,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 const Profile = () => {
   const { lang, setLang, t } = useLang();
-  const { user, signOut, isProvider } = useAuth();
+  const { user, signOut, isProvider, isAdmin } = useAuth();
+  // Shared page: only providers get the desktop column frame; customers and
+  // admins keep the page exactly as-is at every width.
+  const providerView = isProvider && !isAdmin;
   const navigate = useNavigate();
   const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
   // Existing cached hook; gated internally by `enabled: !!user`. Only its data
@@ -81,7 +85,7 @@ const Profile = () => {
 
   return (
     <div
-      className="relative min-h-screen overflow-x-clip pb-24"
+      className={`relative min-h-screen overflow-x-clip pb-24 ${providerView ? providerDesktopPage : ""}`}
       style={{ background: "var(--bg-atmosphere)" }}
     >
       {/* Radial accent glows — matched to Home. Anchored via logical insets so
@@ -97,7 +101,7 @@ const Profile = () => {
         style={{ background: "radial-gradient(circle, hsl(265 60% 80% / 0.4) 0%, transparent 65%)" }}
       />
 
-      <div className="relative">
+      <div className={`relative ${providerView ? providerDesktopColumn : ""}`}>
         <header className="px-5 pt-12 pb-5">
           <h1 className="text-xl font-bold">{t("profile")}</h1>
         </header>

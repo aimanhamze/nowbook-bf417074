@@ -9,6 +9,7 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
 import { QrCard, QR_CARD_WIDTH, QR_CARD_HEIGHT } from "@/components/qr/QrCard";
+import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 
 // On-screen preview width (px) for the branded card. The full 1080px card is
 // CSS-scaled down into this viewport; the captured node keeps its real size.
@@ -98,7 +99,8 @@ export default function ProviderQrCode() {
   const cardScale = CARD_PREVIEW_WIDTH / QR_CARD_WIDTH;
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className={`min-h-screen pb-24 ${providerDesktopPage}`}>
+      <div className={providerDesktopColumn}>
       <header className="px-5 pt-12 pb-4">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("/profile")} className="active:scale-95" aria-label={t("profile")}>
@@ -163,6 +165,7 @@ export default function ProviderQrCode() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

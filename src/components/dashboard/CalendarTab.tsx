@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday, getDay } from "date-fns";
-import { he } from "date-fns/locale";
+import { he, ar, enUS } from "date-fns/locale";
 import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -507,7 +507,8 @@ type CalendarItem =
   | { type: 'class_slot'; classEntry: ClassScheduleEntry; bookings: EnrichedBooking[] };
 
 export function CalendarTab() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
   const navigate = useNavigate();
   const { data: bookings = [], isLoading } = useProviderBookings();
   const { services, isLoading: servicesLoading } = useProviderServices();
@@ -622,6 +623,7 @@ export function CalendarTab() {
           mode="single"
           selected={selectedDate}
           onSelect={(d) => d && setSelectedDate(d)}
+          locale={dateFnsLocale}
           className="pointer-events-auto"
           modifiers={{ hasBooking: datesWithBookings }}
           modifiersStyles={{
@@ -639,7 +641,7 @@ export function CalendarTab() {
       <div>
         <div className="flex items-center justify-between mb-3 gap-2">
           <h3 className="text-sm font-semibold min-w-0 truncate">
-            {isSelectedToday ? "📅 תורים להיום" : format(selectedDate, "EEEE, d בMMMM", { locale: he })}
+            {isSelectedToday ? "📅 תורים להיום" : format(selectedDate, "EEEE, d MMM", { locale: dateFnsLocale })}
           </h3>
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs text-muted-foreground">

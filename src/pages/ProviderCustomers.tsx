@@ -8,6 +8,7 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderCustomers } from "@/hooks/useProviderCustomers";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
+import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 
 // Standalone provider "My Customers" page. ALL customer PII comes from the
 // single isolated hook useProviderCustomers() — this page does no profiles/
@@ -50,7 +51,7 @@ export default function ProviderCustomers() {
 
   return (
     <div
-      className="relative min-h-screen overflow-x-clip pb-24"
+      className={`relative min-h-screen overflow-x-clip pb-24 ${providerDesktopPage}`}
       style={{ background: "var(--bg-atmosphere)" }}
     >
       {/* Warm radial accent glows — matched to Profile/Home for identity continuity. */}
@@ -65,7 +66,7 @@ export default function ProviderCustomers() {
         style={{ background: "radial-gradient(circle, hsl(265 60% 80% / 0.4) 0%, transparent 65%)" }}
       />
 
-      <div className="relative">
+      <div className={`relative ${providerDesktopColumn}`}>
         <header className="px-5 pt-12 pb-4">
           <div className="flex items-center gap-3 mb-4">
             <button onClick={() => navigate("/profile")} className="active:scale-95" aria-label={t("profile")}>

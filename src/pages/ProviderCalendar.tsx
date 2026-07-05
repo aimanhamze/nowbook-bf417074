@@ -9,6 +9,7 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 
 type TabId = "calendar" | "pending" | "schedule";
 
@@ -56,7 +57,7 @@ export default function ProviderCalendar() {
 
   return (
     <div
-      className="relative min-h-screen overflow-x-clip pb-24"
+      className={`relative min-h-screen overflow-x-clip pb-24 ${providerDesktopPage}`}
       style={{ background: "var(--bg-atmosphere-soft)" }}
     >
       <div
@@ -65,7 +66,7 @@ export default function ProviderCalendar() {
         style={{ background: "radial-gradient(circle, hsl(24 95% 80% / 0.34) 0%, transparent 65%)" }}
       />
 
-      <div className="relative">
+      <div className={`relative ${providerDesktopColumn}`}>
         <header className="px-5 pt-12 pb-4">
           <div className="flex items-center gap-3 mb-4">
             <button onClick={() => navigate(-1)} className="active:scale-95">

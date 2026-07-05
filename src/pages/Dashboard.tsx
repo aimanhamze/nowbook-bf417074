@@ -13,6 +13,7 @@ import { AvailabilityTab } from "@/components/dashboard/AvailabilityTab";
 import { PhotosTab } from "@/components/dashboard/PhotosTab";
 import { Button } from "@/components/ui/button";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 
 const tabs = [
   { id: "profile", icon: User },
@@ -72,7 +73,7 @@ export default function Dashboard() {
     // atmosphere — gentler saturation, higher lightness, fading to near white.
     // Inline so the shared --bg-atmosphere (customer view) stays untouched.
     <div
-      className="relative min-h-screen overflow-x-clip pb-24"
+      className={`relative min-h-screen overflow-x-clip pb-24 ${providerDesktopPage}`}
       style={{ background: "var(--bg-atmosphere-soft)" }}
     >
       {/* Subtle accent glow — softened/lightened for the dashboard so the page
@@ -83,7 +84,7 @@ export default function Dashboard() {
         style={{ background: "radial-gradient(circle, hsl(24 95% 80% / 0.34) 0%, transparent 65%)" }}
       />
 
-      <div className="relative">
+      <div className={`relative ${providerDesktopColumn}`}>
         <header className="px-5 pt-12 pb-3">
           <div className="mb-5 flex items-center gap-3">
             <button

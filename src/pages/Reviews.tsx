@@ -6,6 +6,7 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { ReviewsTab } from "@/components/dashboard/ReviewsTab";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
+import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 
 // Standalone provider Reviews page. Reuses ReviewsTab verbatim (the rating
 // summary, distribution, and list — all computed from rows via
@@ -35,18 +36,20 @@ export default function Reviews() {
   }
 
   return (
-    <div className="min-h-screen pb-24">
-      <header className="px-5 pt-12 pb-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/profile")} className="active:scale-95" aria-label={t("profile")}>
-            <BackArrow className="h-5 w-5" />
-          </button>
-          <h1 className="text-xl font-bold flex-1">{t("myReviews")}</h1>
-        </div>
-      </header>
+    <div className={`min-h-screen pb-24 ${providerDesktopPage}`}>
+      <div className={providerDesktopColumn}>
+        <header className="px-5 pt-12 pb-4">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/profile")} className="active:scale-95" aria-label={t("profile")}>
+              <BackArrow className="h-5 w-5" />
+            </button>
+            <h1 className="text-xl font-bold flex-1">{t("myReviews")}</h1>
+          </div>
+        </header>
 
-      <div className="px-5">
-        <ReviewsTab />
+        <div className="px-5">
+          <ReviewsTab />
+        </div>
       </div>
     </div>
   );
