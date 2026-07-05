@@ -66,7 +66,15 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/80 backdrop-blur-xl">
+    <nav
+      className={cn(
+        "fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/80 backdrop-blur-xl",
+        // Provider desktop frame: align the bar with the centered provider
+        // column (see providerDesktop.ts) instead of stretching full width.
+        // lg:-only, so mobile — and every customer/admin viewport — is untouched.
+        isProvider && !isAdmin && "lg:mx-auto lg:max-w-2xl lg:border-x lg:border-border/70"
+      )}
+    >
       <div className="flex items-center justify-around py-2 px-2">
         {navItems.map(({ icon: Icon, label, path, badge }) => {
           const isActive = location.pathname === path;

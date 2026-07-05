@@ -8,6 +8,7 @@ import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, Star, Users, Receipt } from "lucide-react";
 import { StatsCharts } from "@/components/statistics/StatsCharts";
+import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 
 // Period window for the statistics aggregation. Wired to data in Phase 2.
 export type StatsPeriod = "week" | "month" | "3months";
@@ -48,7 +49,8 @@ export default function Statistics() {
   }
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className={`min-h-screen pb-24 ${providerDesktopPage}`}>
+      <div className={providerDesktopColumn}>
       <header className="px-5 pt-12 pb-4">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("/profile")} className="active:scale-95" aria-label={t("profile")}>
@@ -150,6 +152,7 @@ export default function Statistics() {
             <StatsCharts stats={stats} />
           </div>
         )}
+      </div>
       </div>
     </div>
   );

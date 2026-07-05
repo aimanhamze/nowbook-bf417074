@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,10 @@ const typeIcons: Record<string, string> = {
 const Notifications = () => {
   const navigate = useNavigate();
   const { lang, t } = useLang();
-  const { user } = useAuth();
+  const { user, isProvider, isAdmin } = useAuth();
+  // Shared page: only providers get the desktop column frame; customers and
+  // admins keep the page exactly as-is at every width.
+  const providerView = isProvider && !isAdmin;
   const queryClient = useQueryClient();
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
 
@@ -105,7 +109,7 @@ const Notifications = () => {
 
   return (
     <div
-      className="relative min-h-screen overflow-x-clip pb-24"
+      className={`relative min-h-screen overflow-x-clip pb-24 ${providerView ? providerDesktopPage : ""}`}
       style={{ background: "var(--bg-atmosphere-soft)" }}
     >
       {/* Soft atmosphere — same look as the Dashboard. Logical inset keeps the
@@ -116,7 +120,7 @@ const Notifications = () => {
         style={{ background: "radial-gradient(circle, hsl(24 95% 80% / 0.34) 0%, transparent 65%)" }}
       />
 
-      <div className="relative">
+      <div className={`relative ${providerView ? providerDesktopColumn : ""}`}>
       <header className="px-5 pt-12 pb-4 flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="active:scale-95">
           <BackArrow className="h-5 w-5" />

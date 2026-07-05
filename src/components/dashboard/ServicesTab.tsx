@@ -20,6 +20,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -200,7 +201,7 @@ export function ServicesTab() {
       <Sheet open={!!editing} onOpenChange={(open) => { if (!open) setEditing(null); }}>
         <SheetContent
           side="bottom"
-          className="flex max-h-[92vh] flex-col gap-0 rounded-t-3xl border-t p-0"
+          className={`flex max-h-[92vh] flex-col gap-0 rounded-t-3xl border-t p-0 ${providerDesktopSheet}`}
         >
           {/* Grab handle */}
           <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/20" />

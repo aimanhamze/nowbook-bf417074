@@ -11,6 +11,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { cn } from "@/lib/utils";
@@ -77,7 +78,7 @@ export function ParallelServicesSheet() {
 
       <SheetContent
         side="bottom"
-        className="flex max-h-[88vh] flex-col gap-0 rounded-t-3xl border-t p-0"
+        className={`flex max-h-[88vh] flex-col gap-0 rounded-t-3xl border-t p-0 ${providerDesktopSheet}`}
       >
         {/* Grab handle */}
         <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/20" />
