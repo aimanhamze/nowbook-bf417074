@@ -7,11 +7,11 @@ import WriteReviewSection from "@/components/reviews/WriteReviewSection";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
 import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
-import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight, Images, Sparkles } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { FaWhatsapp, FaInstagram, FaTiktok, FaFacebook, FaWaze } from "react-icons/fa6";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
@@ -118,8 +118,13 @@ const ProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [coverImgSrc, setCoverImgSrc] = useState("");
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [aboutExpanded, setAboutExpanded] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const { lang, t } = useLang();
+  // Full-screen viewer for the hero images (cover / profile picture) —
+  // separate from the gallery lightbox, which browses the photos array.
+  const [fullImageSrc, setFullImageSrc] = useState<string | null>(null);
+  const { lang, t, isRtl } = useLang();
   const { user } = useAuth();
   const { provider, isLoading } = useProviderById(id);
   const { data: dbReviews } = useProviderReviews(id);
@@ -149,6 +154,7 @@ const ProviderDetail = () => {
     const primary = provider?.coverImage?.trim() || "";
     const fallback = provider?.image?.trim() || "";
     setCoverImgSrc(primary || fallback);
+    setAvatarFailed(false);
   }, [provider?.id, provider?.coverImage, provider?.image]);
 
   const handleCoverImageError = () => {
@@ -218,16 +224,43 @@ const ProviderDetail = () => {
 
       <div className="relative">
       {/* Cover */}
-      <div className="relative h-72 overflow-hidden bg-gradient-to-br from-accent/15 via-secondary to-secondary/40">
+      <div className="relative overflow-hidden bg-gradient-to-br from-accent/15 via-secondary to-secondary/40">
         {coverImgSrc ? (
-          <img
-            src={coverImgSrc}
-            alt={provider.name[lang]}
-            className="h-full w-full object-cover"
-            onError={handleCoverImageError}
-          />
+          coverImgSrc === (provider.image?.trim() || "") ? (
+            // Avatar standing in for a missing cover: fixed height, blurred,
+            // so the same photo isn't shown twice (avatar renders sharply
+            // below) and it reads as an intentional backdrop.
+            <button
+              type="button"
+              className="block w-full"
+              onClick={() => setFullImageSrc(coverImgSrc)}
+            >
+              <img
+                src={coverImgSrc}
+                alt={provider.name[lang]}
+                className="h-64 w-full scale-110 object-cover blur-xl"
+                onError={handleCoverImageError}
+              />
+            </button>
+          ) : (
+            // Real cover: keep the image's natural aspect ratio (height only
+            // clamped to a sane range) so designed banners with text/logos
+            // are shown in full instead of being cropped by a fixed height.
+            <button
+              type="button"
+              className="block w-full"
+              onClick={() => setFullImageSrc(coverImgSrc)}
+            >
+              <img
+                src={coverImgSrc}
+                alt={provider.name[lang]}
+                className="max-h-96 min-h-56 w-full object-cover"
+                onError={handleCoverImageError}
+              />
+            </button>
+          )
         ) : (
-          <div className="flex h-full w-full items-center justify-center">
+          <div className="flex h-64 w-full items-center justify-center">
             <span className="select-none text-[7rem] font-extralight leading-none tracking-tighter text-foreground/25 md:text-[9rem]">
               {provider.name[lang]?.charAt(0)?.toUpperCase()}
             </span>
@@ -236,35 +269,6 @@ const ProviderDetail = () => {
         {/* Bottom of cover fades to transparent so the page atmosphere
             shows through cleanly where the info card lands. */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/45 via-black/0 to-transparent" />
-        {status.hasSchedule && (() => {
-          const basePillClass = "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-md backdrop-blur-md";
-          const statusPillClass = `${basePillClass} ${
-            status.isOpen
-              ? "border-green-500/30 bg-green-500/15 text-green-700"
-              : "border-red-500/30 bg-red-500/15 text-red-700"
-          }`;
-          const hoursPillClass = `${basePillClass} ${
-            status.isOpen
-              ? "border-green-500/30 bg-green-500/15 text-green-700"
-              : "border-white/40 bg-white/85"
-          }`;
-          return (
-            <div className="absolute inset-x-4 bottom-12 z-10 flex translate-y-1/2 items-center justify-between">
-              {status.todayHours && (
-                <div className={hoursPillClass}>
-                  <span dir="ltr">{status.todayHours.open} - {status.todayHours.close}</span>
-                </div>
-              )}
-              <div className={statusPillClass}>
-                <span
-                  aria-hidden
-                  className={`block h-1.5 w-1.5 rounded-full ${status.isOpen ? "bg-green-500" : "bg-red-500"}`}
-                />
-                <span>{t(status.isOpen ? "providerStatusOpen" : "providerStatusClosed")}</span>
-              </div>
-            </div>
-          );
-        })()}
         <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]">
           <button
             onClick={() => navigate(-1)}
@@ -293,16 +297,82 @@ const ProviderDetail = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
       >
-        <div className="glass-card rounded-3xl p-6 text-center">
-          <h1 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">{provider.name[lang]}</h1>
-          {reviewCount > 0 && (
-            <div className="mb-3 flex items-center justify-center gap-1 text-sm text-muted-foreground">
-              <Star className="h-4 w-4 fill-accent text-accent" />
-              <span className="font-medium text-foreground">{avgRating.toFixed(1)}</span>
-              <span>({reviewCount})</span>
+        <div className="glass-card relative rounded-3xl px-6 pb-6 pt-[4.25rem] text-center">
+          {/* Profile picture — straddles the cover/card seam. Outer div owns
+              the centering transform; the motion.div only animates scale so
+              framer's inline transform can't override the translate. */}
+          <div className="absolute -top-14 left-1/2 -translate-x-1/2">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.7 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+              className="h-28 w-28 overflow-hidden rounded-full bg-gradient-to-br from-accent/25 to-secondary shadow-[0_12px_32px_-8px_rgba(40,20,10,0.35)] ring-4 ring-white/90"
+            >
+              {provider.image?.trim() && !avatarFailed ? (
+                <button
+                  type="button"
+                  className="block h-full w-full"
+                  onClick={() => setFullImageSrc(provider.image.trim())}
+                >
+                  <img
+                    src={provider.image.trim()}
+                    alt={provider.name[lang]}
+                    className="h-full w-full object-cover"
+                    onError={() => setAvatarFailed(true)}
+                  />
+                </button>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <span className="select-none text-4xl font-light text-foreground/50">
+                    {provider.name[lang]?.charAt(0)?.toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </motion.div>
+          </div>
+
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{provider.name[lang]}</h1>
+
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            {categoryNames[provider.category]?.[lang] && (
+              <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+                {categoryNames[provider.category][lang]}
+              </span>
+            )}
+            {reviewCount > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-secondary/70 px-3 py-1 text-xs text-muted-foreground">
+                <Star className="h-3.5 w-3.5 fill-accent text-accent" />
+                <span className="font-medium text-foreground">{avgRating.toFixed(1)}</span>
+                <span>({reviewCount})</span>
+              </span>
+            )}
+          </div>
+
+          {status.hasSchedule && (
+            <div className="mt-3 flex justify-center">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
+                  status.isOpen
+                    ? "border-green-500/30 bg-green-500/10 text-green-700"
+                    : "border-red-500/30 bg-red-500/10 text-red-700"
+                }`}
+              >
+                <span
+                  aria-hidden
+                  className={`block h-1.5 w-1.5 rounded-full ${status.isOpen ? "bg-green-500" : "bg-red-500"}`}
+                />
+                <span>{t(status.isOpen ? "providerStatusOpen" : "providerStatusClosed")}</span>
+                {status.todayHours && (
+                  <>
+                    <span aria-hidden className="opacity-40">·</span>
+                    <span dir="ltr">{status.todayHours.open} - {status.todayHours.close}</span>
+                  </>
+                )}
+              </span>
             </div>
           )}
-          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
             <MapPin className="h-3.5 w-3.5 shrink-0 text-accent" />
             {provider.address[lang]}
           </p>
@@ -310,64 +380,175 @@ const ProviderDetail = () => {
         </div>
       </motion.div>
 
-      {/* About */}
+      {/* About — soft card matching the rest of the page; long descriptions
+          clamp to 4 lines with a read-more toggle so the section never
+          pushes the services/hours below the fold. */}
       {provider.about[lang] && (
         <section className="mt-8 px-5">
           <SectionLabel className="mb-3">{t("about")}</SectionLabel>
-          <p className="text-start text-sm leading-relaxed text-foreground/80">{provider.about[lang]}</p>
-        </section>
-      )}
-
-      {/* Photo Gallery */}
-      {photos.length > 0 && (
-        <section className="mt-8">
-          <SectionLabel className="mb-3 px-5">{t("ourWork")}</SectionLabel>
-          <div className="flex gap-2 overflow-x-auto px-5 pb-2 scrollbar-hide">
-            {photos.map((photo, i) => (
-              <motion.button
-                key={photo.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.04, duration: 0.3 }}
-                onClick={() => setLightboxIndex(i)}
-                className="flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden bg-secondary active:scale-95 transition-transform"
+          <div className="surface-soft rounded-2xl p-5">
+            <p
+              className={`whitespace-pre-line text-start text-sm leading-7 text-foreground/85 ${
+                aboutExpanded ? "" : "line-clamp-4"
+              }`}
+            >
+              {provider.about[lang]}
+            </p>
+            {(provider.about[lang]?.length ?? 0) > 180 && (
+              <button
+                onClick={() => setAboutExpanded(v => !v)}
+                className="mt-2 text-xs font-semibold text-accent"
               >
-                <img src={photo.url} alt={photo.caption ?? ""} className="w-full h-full object-cover" />
-              </motion.button>
-            ))}
+                {t(aboutExpanded ? "showLess" : "readMore")}
+              </button>
+            )}
           </div>
         </section>
       )}
 
-      {/* Lightbox */}
-      <AnimatePresence>
-        {lightboxIndex !== null && (
+      {/* Photo Gallery — static collage (Google-Business style): a featured
+          tile plus a grid of smaller ones, layout adapting to photo count.
+          At most 5 tiles render; a "+N" scrim on the last tile signals the
+          rest, and tapping any tile browses the full set in the lightbox. */}
+      {photos.length > 0 && (() => {
+        const visible = photos.slice(0, 5);
+        const hiddenCount = photos.length - visible.length;
+
+        const tile = (i: number, sizeClass: string, withMoreBadge = false) => (
+          <motion.button
+            key={visible[i].id}
+            initial={{ opacity: 0, scale: 0.97 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.05, duration: 0.3 }}
+            onClick={() => setLightboxIndex(i)}
+            className={`relative overflow-hidden rounded-xl bg-secondary ring-1 ring-black/5 transition-transform active:scale-[0.98] ${sizeClass}`}
+          >
+            <img
+              src={visible[i].url}
+              alt={visible[i].caption ?? ""}
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            {withMoreBadge && hiddenCount > 0 && (
+              <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/50 text-white">
+                <Images className="h-4 w-4" />
+                <span className="text-base font-semibold">+{hiddenCount}</span>
+              </div>
+            )}
+          </motion.button>
+        );
+
+        return (
+          <section className="mt-8 px-5">
+            <SectionLabel className="mb-3">{t("ourWork")}</SectionLabel>
+            {visible.length === 1 && (
+              <div className="grid">{tile(0, "aspect-[16/10] w-full")}</div>
+            )}
+            {visible.length === 2 && (
+              <div className="grid grid-cols-2 gap-1.5">
+                {tile(0, "aspect-square")}
+                {tile(1, "aspect-square")}
+              </div>
+            )}
+            {visible.length === 3 && (
+              <div className="grid grid-cols-2 grid-rows-2 gap-1.5">
+                {tile(0, "row-span-2 h-full")}
+                {tile(1, "aspect-square")}
+                {tile(2, "aspect-square")}
+              </div>
+            )}
+            {visible.length === 4 && (
+              <div className="grid grid-cols-2 gap-1.5">
+                {tile(0, "aspect-square")}
+                {tile(1, "aspect-square")}
+                {tile(2, "aspect-square")}
+                {tile(3, "aspect-square")}
+              </div>
+            )}
+            {visible.length === 5 && (
+              <div className="grid grid-cols-[1.25fr_1fr] gap-1.5">
+                {tile(0, "h-full")}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {tile(1, "aspect-square")}
+                  {tile(2, "aspect-square")}
+                  {tile(3, "aspect-square")}
+                  {tile(4, "aspect-square", true)}
+                </div>
+              </div>
+            )}
+          </section>
+        );
+      })()}
+
+      {/* Hero image viewer — full-screen look at the cover / profile picture.
+          Tap anywhere (or X) to close. Unmounts synchronously on close (no
+          AnimatePresence) for the same tap-swallowing reason as the lightbox. */}
+      {fullImageSrc && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black p-4"
+          onClick={() => setFullImageSrc(null)}
+        >
+          <button
+            className="absolute top-[calc(env(safe-area-inset-top,0px)+1rem)] left-4 z-10 rounded-full bg-white/10 p-2 text-white"
+            onClick={() => setFullImageSrc(null)}
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <motion.img
+            src={fullImageSrc}
+            alt={provider.name[lang]}
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2 }}
+            className="max-h-full max-w-full rounded-xl object-contain"
+            onClick={e => e.stopPropagation()}
+          />
+        </motion.div>
+      )}
+
+      {/* Lightbox — full-screen viewer with a bottom thumbnail filmstrip:
+          active thumb ringed white, others dimmed; tap to jump, and the
+          strip auto-scrolls to keep the active thumbnail visible.
+          Deliberately NOT wrapped in AnimatePresence: a stuck exit animation
+          left the invisible overlay mounted at z-60, swallowing every tap on
+          the page. Closing must unmount synchronously. */}
+      {lightboxIndex !== null && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black"
             onClick={() => setLightboxIndex(null)}
           >
             <button
-              className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white z-10"
+              className="absolute top-[calc(env(safe-area-inset-top,0px)+1rem)] left-4 z-10 rounded-full bg-white/10 p-2 text-white"
               onClick={() => setLightboxIndex(null)}
             >
               <X className="h-5 w-5" />
             </button>
-            {lightboxIndex > 0 && (
+            <p
+              dir="ltr"
+              className="absolute top-[calc(env(safe-area-inset-top,0px)+1.375rem)] left-1/2 -translate-x-1/2 text-xs text-white/60"
+            >
+              {lightboxIndex + 1} / {photos.length}
+            </p>
+            {/* In RTL the gallery flows right-to-left (next photo sits to the
+                LEFT in the filmstrip), so the physical arrows swap roles:
+                ◀ advances, ▶ goes back. In LTR it's the usual mapping. */}
+            {(isRtl ? lightboxIndex < photos.length - 1 : lightboxIndex > 0) && (
               <button
-                className="absolute left-3 p-2 rounded-full bg-white/10 text-white z-10"
-                onClick={e => { e.stopPropagation(); setLightboxIndex(lightboxIndex - 1); }}
+                className="absolute left-3 z-10 rounded-full bg-white/10 p-2 text-white"
+                onClick={e => { e.stopPropagation(); setLightboxIndex(lightboxIndex + (isRtl ? 1 : -1)); }}
               >
                 <ChevronLeft className="h-6 w-6" />
               </button>
             )}
-            {lightboxIndex < photos.length - 1 && (
+            {(isRtl ? lightboxIndex > 0 : lightboxIndex < photos.length - 1) && (
               <button
-                className="absolute right-3 p-2 rounded-full bg-white/10 text-white z-10"
-                onClick={e => { e.stopPropagation(); setLightboxIndex(lightboxIndex + 1); }}
+                className="absolute right-3 z-10 rounded-full bg-white/10 p-2 text-white"
+                onClick={e => { e.stopPropagation(); setLightboxIndex(lightboxIndex + (isRtl ? -1 : 1)); }}
               >
                 <ChevronRight className="h-6 w-6" />
               </button>
@@ -377,24 +558,77 @@ const ProviderDetail = () => {
               initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.2 }}
-              className="max-w-full max-h-full px-12"
+              // Finger-swipe navigation. Mirrors with direction like the
+              // arrows: in LTR the next photo is to the right (swipe left to
+              // advance); in RTL it's to the left (swipe right to advance).
+              // Constraints keep the image anchored; past either end it just
+              // springs back.
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.25}
+              dragMomentum={false}
+              onDragEnd={(_, info) => {
+                const step = (delta: number) =>
+                  setLightboxIndex(i =>
+                    i === null ? i : Math.min(Math.max(i + delta, 0), photos.length - 1)
+                  );
+                if (info.offset.x < -56 || info.velocity.x < -500) {
+                  step(isRtl ? -1 : 1); // swiped toward the left
+                } else if (info.offset.x > 56 || info.velocity.x > 500) {
+                  step(isRtl ? 1 : -1); // swiped toward the right
+                }
+              }}
+              // pb-14 ≈ bottom chrome (filmstrip) minus top chrome (close/counter
+              // bar), so flex-centering lands the image midway between the two.
+              // Slim px-4 lets the photo run nearly full-width; the nav arrows
+              // float over its edges instead of reserving side gutters.
+              className="max-h-full max-w-full px-4 pb-14"
               onClick={e => e.stopPropagation()}
             >
               <img
                 src={photos[lightboxIndex].url}
                 alt={photos[lightboxIndex].caption ?? ""}
-                className="max-w-[90vw] max-h-[80vh] rounded-xl object-contain"
+                className="max-h-[calc(100dvh-12rem)] max-w-full rounded-xl object-contain"
               />
               {photos[lightboxIndex].caption && (
-                <p className="text-white/80 text-sm text-center mt-3">{photos[lightboxIndex].caption}</p>
+                <p className="mt-3 text-center text-sm text-white/80">{photos[lightboxIndex].caption}</p>
               )}
             </motion.div>
-            <p className="absolute bottom-6 text-white/50 text-xs">
-              {lightboxIndex + 1} / {photos.length}
-            </p>
+            <div
+              className="absolute inset-x-0 bottom-0 overflow-x-auto bg-gradient-to-t from-black via-black/80 to-transparent pb-[calc(env(safe-area-inset-bottom,0px)+0.875rem)] pt-4 scrollbar-hide"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="mx-auto flex w-max gap-2 px-4">
+                {photos.map((photo, i) => {
+                  const isActive = i === lightboxIndex;
+                  return (
+                    <button
+                      key={photo.id}
+                      ref={el => {
+                        if (isActive && el) {
+                          el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+                        }
+                      }}
+                      onClick={() => setLightboxIndex(i)}
+                      className={`h-16 w-14 shrink-0 overflow-hidden rounded-lg transition-all ${
+                        isActive
+                          ? "ring-2 ring-white"
+                          : "opacity-50 ring-1 ring-white/20 hover:opacity-80"
+                      }`}
+                    >
+                      <img
+                        src={photo.url}
+                        alt={photo.caption ?? ""}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </motion.div>
-        )}
-      </AnimatePresence>
+      )}
 
       {/* Weekly Hours */}
       {status.hasSchedule && (
@@ -421,11 +655,14 @@ const ProviderDetail = () => {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 + i * 0.06, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                className="surface-soft flex items-center justify-between gap-4 rounded-2xl p-4 transition-colors hover:border-accent/30"
+                className="surface-soft flex items-center gap-3.5 rounded-2xl p-4 transition-colors hover:border-accent/30"
               >
-                <div className="min-w-0 text-start">
-                  <p className="truncate text-sm font-medium">{service.name[lang]}</p>
-                  <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1 text-start">
+                  <p className="line-clamp-2 text-sm font-medium leading-snug">{service.name[lang]}</p>
+                  <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                     <Clock className="h-3 w-3" />
                     {service.duration} {t("min")}
                   </span>
@@ -433,7 +670,7 @@ const ProviderDetail = () => {
                 {provider.showPrices && service.price > 0 && (
                   <div className="flex shrink-0 items-baseline gap-0.5 text-end">
                     <span className="text-sm text-muted-foreground">₪</span>
-                    <span className="text-lg font-semibold tracking-tight">{service.price}</span>
+                    <span className="text-lg font-semibold tracking-tight tabular-nums">{service.price}</span>
                   </div>
                 )}
               </motion.div>

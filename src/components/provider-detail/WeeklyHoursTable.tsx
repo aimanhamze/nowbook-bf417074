@@ -33,54 +33,79 @@ export default function WeeklyHoursTable({ availability, status, t }: Props) {
   // today first, then the remaining 6 days in order starting from tomorrow
   const orderedDows = Array.from({ length: 7 }, (_, i) => (todayDow + i) % 7);
 
+  const closedPill = (
+    <span className="rounded-full bg-muted/60 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+      {t("providerStatusClosed")}
+    </span>
+  );
+
   return (
-    <div className="glass-card rounded-2xl p-4">
-      {/* Today row */}
+    <div className="glass-card rounded-2xl p-2">
+      {/* Today row — elevated card with a live status dot and the day's
+          hours as a badge, so "can I go now?" is answered at a glance. */}
       <div
-        className={`flex items-center justify-between rounded-xl px-3 py-2.5 ${
-          status.isOpen ? "bg-green-500/10" : "bg-muted/40"
+        className={`flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 ring-1 ring-inset ${
+          status.isOpen
+            ? "bg-green-500/10 ring-green-500/20"
+            : "bg-muted/40 ring-black/5"
         }`}
       >
-        <span className="text-sm font-medium text-foreground">
-          {t("today")} · {t(DOW_KEYS[todayDow])}
-        </span>
+        <div className="flex items-center gap-2.5">
+          <span aria-hidden className="relative flex h-2 w-2 shrink-0">
+            {status.isOpen && (
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-60 motion-reduce:hidden" />
+            )}
+            <span
+              className={`relative inline-flex h-2 w-2 rounded-full ${
+                status.isOpen ? "bg-green-500" : "bg-muted-foreground/40"
+              }`}
+            />
+          </span>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold text-foreground">
+              {t("today")} · {t(DOW_KEYS[todayDow])}
+            </span>
+            <span
+              className={`text-[11px] font-medium ${
+                status.isOpen ? "text-green-700" : "text-muted-foreground"
+              }`}
+            >
+              {t(status.isOpen ? "providerStatusOpen" : "providerStatusClosed")}
+            </span>
+          </div>
+        </div>
         {status.todayHours ? (
           <span
             dir="ltr"
-            className={`text-sm font-medium ${status.isOpen ? "text-green-700" : "text-muted-foreground"}`}
+            className={`rounded-full bg-white/70 px-3 py-1 text-sm font-semibold tabular-nums ${
+              status.isOpen ? "text-green-700" : "text-muted-foreground"
+            }`}
           >
             {status.todayHours.open} - {status.todayHours.close}
           </span>
         ) : (
-          <span className="text-sm text-muted-foreground">
-            {t("providerStatusClosed")}
-          </span>
+          closedPill
         )}
       </div>
 
-      {/* Divider */}
-      <div className="my-2 h-px w-full bg-border/60" />
-
-      {/* Remaining 6 days */}
-      <div className="flex flex-col">
+      {/* Remaining 6 days — hairline-separated rows, tabular digits so the
+          times align into a clean column, closed days as muted pills. */}
+      <div className="flex flex-col divide-y divide-border/40 px-2 pt-1">
         {orderedDows.slice(1).map(dow => {
           const hours = getRowHours(availability, dow);
           return (
-            <div
-              key={dow}
-              className="flex items-center justify-between px-1 py-2"
-            >
-              <span className="text-sm text-muted-foreground">
+            <div key={dow} className="flex items-center justify-between px-1.5 py-2.5">
+              <span
+                className={`text-sm ${hours ? "font-medium text-foreground/80" : "text-muted-foreground"}`}
+              >
                 {t(DOW_KEYS[dow])}
               </span>
               {hours ? (
-                <span dir="ltr" className="text-sm text-foreground">
+                <span dir="ltr" className="text-sm tabular-nums text-foreground">
                   {hours.open} - {hours.close}
                 </span>
               ) : (
-                <span className="text-sm text-muted-foreground">
-                  {t("providerStatusClosed")}
-                </span>
+                closedPill
               )}
             </div>
           );
