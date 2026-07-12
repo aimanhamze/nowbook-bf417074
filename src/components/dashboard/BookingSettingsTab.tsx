@@ -25,8 +25,9 @@ const BOOKING_WINDOW_OPTIONS = [3, 7, 14, 30, 60, 90] as const;
 // matches the DB CHECK constraint (20260622000001 migration).
 const CANCELLATION_NOTICE_OPTIONS = [0, 1, 2, 3, 5, 12, 24, 48, 72] as const;
 // Display granularity of the customer's available-times grid. Range mirrors the
-// DB CHECK constraint (15,30,45,60) from the 20260630000001 migration.
-const SLOT_INTERVAL_OPTIONS = [15, 30, 45, 60] as const;
+// DB CHECK constraint (5,10,15,30,45,60) from the 20260630000001 +
+// 20260712000001 migrations.
+const SLOT_INTERVAL_OPTIONS = [5, 10, 15, 30, 45, 60] as const;
 
 // All controls save immediately and read straight from `profile.*` — no
 // react-hook-form, so the watch+setValue+reset combobox bug can't occur here.
