@@ -350,6 +350,62 @@ export function useRealAvailability(providerId: string | undefined) {
   // migration default → zero change for providers who never set it).
   const slotStep = slotIntervalQuery.data?.slot_interval_minutes || 15;
 
+  // ── Opt-in MONTHLY availability (added by 20260712000001 migration) ─────────
+  // Kept as SEPARATE queries (not folded into slotIntervalQuery) so that on a
+  // pre-migration DB — where these columns/table don't exist yet — this query
+  // erroring can NEVER break slotInterval or the weekly path. retry:false keeps
+  // that transient state quiet. supabase is cast to any because types.ts is
+  // regenerated only AFTER apply (same pattern the slot_interval column used).
+  // For every existing provider availability_mode is 'weekly', so this data is
+  // inert: resolveDayHours takes the weekly branch and ignores all of it.
+  const monthlySettingsQuery = useQuery({
+    queryKey: ["provider-monthly-settings", providerId],
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      if (!providerId) return null;
+      // Cast the table ref (convention here for columns not yet in the generated
+      // types.ts — see useProviderPhotos). Regenerating types after apply removes it.
+      const { data, error } = await supabase
+        .from("provider_profiles" as any)
+        .select("availability_mode, monthly_default_available, monthly_default_start, monthly_default_end")
+        .eq("id", providerId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as MonthlySettings | null;
+    },
+    enabled: !!providerId,
+  });
+
+  // Concrete settings, DEFAULTING TO WEEKLY when the row/columns are absent, so
+  // the weekly branch (today's behavior) is chosen for every existing provider
+  // and any pre-migration state. Defaults mirror the migration column defaults.
+  const monthlySettings: MonthlySettings = {
+    availability_mode:
+      monthlySettingsQuery.data?.availability_mode === "monthly" ? "monthly" : "weekly",
+    monthly_default_available: monthlySettingsQuery.data?.monthly_default_available ?? true,
+    monthly_default_start: monthlySettingsQuery.data?.monthly_default_start ?? "09:00",
+    monthly_default_end: monthlySettingsQuery.data?.monthly_default_end ?? "17:00",
+  };
+
+  // Per-date overrides for monthly mode (mirrors blockedDatesQuery). Only
+  // consulted when availability_mode==='monthly'; irrelevant to weekly providers.
+  const overridesQuery = useQuery({
+    queryKey: ["provider-date-overrides", providerId],
+    retry: false,
+    queryFn: async () => {
+      if (!providerId) return [];
+      // Table not in generated types.ts until regen — cast the ref (convention here).
+      const { data, error } = await supabase
+        .from("provider_date_overrides" as any)
+        .select("override_date, is_available, start_time, end_time, break_start, break_end")
+        .eq("provider_id", providerId);
+      if (error) throw error;
+      return (data || []) as unknown as DateOverrideRow[];
+    },
+    enabled: !!providerId,
+  });
+
   /**
    * Returns available time slots for private services.
    *
@@ -376,15 +432,19 @@ export function useRealAvailability(providerId: string | undefined) {
   const getAvailableSlots = (date: Date, requestedDuration?: number, capacity = 1, primaryServiceId?: string, latestStartTime?: string | null): string[] => {
     if (!providerId) return [];
 
-    const dow = date.getDay();
     const dateStr = toLocalDateStr(date);
 
-    if ((blockedDatesQuery.data || []).includes(dateStr)) return [];
-
-    // provider_availability is the single source of truth: every provider has a
-    // row per day. No row, or is_available=false → the day is closed.
-    const slot = (availabilityQuery.data || []).find(a => a.day_of_week === dow);
-    if (!slot || !slot.is_available) return [];
+    // Resolve this provider's open window for `date` via the SINGLE shared helper
+    // (blocked-check → mode branch → weekday lookup). For weekly providers this
+    // returns exactly what the old inline code did. null === closed.
+    const dayWindow = resolveDayHours(
+      date,
+      monthlySettings,
+      availabilityQuery.data || [],
+      blockedDatesQuery.data || [],
+      overridesQuery.data || [],
+    );
+    if (!dayWindow) return [];
 
     const services = servicesQuery.data || [];
 
@@ -412,12 +472,12 @@ export function useRealAvailability(providerId: string | undefined) {
     // neededDuration (which keeps its own 15-min fallback) so changing the
     // interval never changes how long a booking is or the overlap math below.
     const SLOT_STEP = slotStep;
-    const start = parseTime(slot.start_time);
-    const end = parseTime(slot.end_time);
+    const start = parseTime(dayWindow.start_time);
+    const end = parseTime(dayWindow.end_time);
     const neededDuration = requestedDuration || 15;
 
-    const breakStart = slot.break_start ? parseTime(slot.break_start) : null;
-    const breakEnd = slot.break_end ? parseTime(slot.break_end) : null;
+    const breakStart = dayWindow.break_start ? parseTime(dayWindow.break_start) : null;
+    const breakEnd = dayWindow.break_end ? parseTime(dayWindow.break_end) : null;
 
     const slotCapacity = capacity > 0 ? capacity : 1;
     // PARALLEL EXCEPTION (mirrors prevent_booking_conflicts Clause 1): a
@@ -462,23 +522,27 @@ export function useRealAvailability(providerId: string | undefined) {
   const getGroupSlotsWithCapacity = (date: Date, maxCapacity: number): SlotCapacity[] => {
     if (!providerId) return [];
 
-    const dow = date.getDay();
     const dateStr = toLocalDateStr(date);
 
-    if ((blockedDatesQuery.data || []).includes(dateStr)) return [];
-
-    // Single source of truth: no row, or is_available=false → the day is closed.
-    const slot = (availabilityQuery.data || []).find(a => a.day_of_week === dow);
-    if (!slot || !slot.is_available) return [];
+    // SAME shared helper as getAvailableSlots — one source of truth for "what are
+    // this provider's hours for date X" across both private and group flows.
+    const dayWindow = resolveDayHours(
+      date,
+      monthlySettings,
+      availabilityQuery.data || [],
+      blockedDatesQuery.data || [],
+      overridesQuery.data || [],
+    );
+    if (!dayWindow) return [];
 
     // Same display granularity as private slots (provider's slot_interval_minutes,
     // 15 fallback). The `+ 30` minimum-window check below is unchanged.
     const SLOT_STEP = slotStep;
-    const start = parseTime(slot.start_time);
-    const end = parseTime(slot.end_time);
+    const start = parseTime(dayWindow.start_time);
+    const end = parseTime(dayWindow.end_time);
 
-    const breakStart = slot.break_start ? parseTime(slot.break_start) : null;
-    const breakEnd = slot.break_end ? parseTime(slot.break_end) : null;
+    const breakStart = dayWindow.break_start ? parseTime(dayWindow.break_start) : null;
+    const breakEnd = dayWindow.break_end ? parseTime(dayWindow.break_end) : null;
 
     const bookingsForDate = (bookingsQuery.data || []).filter(b => b.booking_date === dateStr);
 
@@ -514,4 +578,106 @@ function toLocalDateStr(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+// ── Monthly-availability types + the shared date→hours resolver ───────────────
+
+/** Provider-level monthly settings, resolved with weekly defaults in the hook. */
+interface MonthlySettings {
+  availability_mode: "weekly" | "monthly";
+  monthly_default_available: boolean;
+  monthly_default_start: string;
+  monthly_default_end: string;
+}
+
+/** One row of provider_date_overrides (monthly per-date exception). */
+interface DateOverrideRow {
+  override_date: string;
+  is_available: boolean;
+  start_time: string;
+  end_time: string;
+  break_start: string | null;
+  break_end: string | null;
+}
+
+/** A single provider_availability weekday row (fields the resolver reads). */
+interface WeeklyRow {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_available: boolean;
+  break_start?: string | null;
+  break_end?: string | null;
+}
+
+/** The resolved open window for a date, or null when the day is closed. */
+interface DayWindow {
+  start_time: string;
+  end_time: string;
+  break_start: string | null;
+  break_end: string | null;
+}
+
+/**
+ * SINGLE source of truth for "what are this provider's hours for date X".
+ * Called by BOTH getAvailableSlots (private) and getGroupSlotsWithCapacity
+ * (group). Returns the day's open window, or null = closed. Everything after
+ * this (slot stepping, overlap, capacity, break, latest-start) is unchanged and
+ * lives in the callers.
+ *
+ * BLOCKED DATES ALWAYS WIN — checked FIRST, in BOTH modes, exactly as before.
+ *
+ * WEEKLY branch (settings.availability_mode !== 'monthly'; the default for every
+ * existing provider) is byte-for-byte the original inline logic: same blocked
+ * early-return, same `date.getDay()` weekday-row lookup, same
+ * `!slot || !slot.is_available → closed`, same start/end and
+ * `break ?? null` handling. When mode is weekly, `overrides`/monthly defaults
+ * are never read, so they cannot affect the result.
+ *
+ * MONTHLY branch is additive: an override for the date wins; otherwise the flat
+ * monthly default applies (or closed if the default is unavailable).
+ */
+function resolveDayHours(
+  date: Date,
+  settings: MonthlySettings,
+  weeklyRows: WeeklyRow[],
+  blockedDates: string[],
+  overrides: DateOverrideRow[],
+): DayWindow | null {
+  const dateStr = toLocalDateStr(date);
+
+  // Blocked dates close the day in BOTH modes, checked first — unchanged.
+  if (blockedDates.includes(dateStr)) return null;
+
+  if (settings.availability_mode === "monthly") {
+    const override = overrides.find(o => o.override_date === dateStr);
+    if (override) {
+      if (!override.is_available) return null;
+      return {
+        start_time: override.start_time,
+        end_time: override.end_time,
+        break_start: override.break_start ?? null,
+        break_end: override.break_end ?? null,
+      };
+    }
+    // No override for this date → flat monthly default.
+    if (!settings.monthly_default_available) return null;
+    return {
+      start_time: settings.monthly_default_start,
+      end_time: settings.monthly_default_end,
+      break_start: null,
+      break_end: null,
+    };
+  }
+
+  // WEEKLY (default): the original inline logic, unchanged.
+  const dow = date.getDay();
+  const slot = weeklyRows.find(a => a.day_of_week === dow);
+  if (!slot || !slot.is_available) return null;
+  return {
+    start_time: slot.start_time,
+    end_time: slot.end_time,
+    break_start: slot.break_start ?? null,
+    break_end: slot.break_end ?? null,
+  };
 }
