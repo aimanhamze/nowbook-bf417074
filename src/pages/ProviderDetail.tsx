@@ -3,6 +3,7 @@ import { categoryNames } from "@/lib/mock-data";
 import { useProviderById, usePublicProviderSchedule } from "@/hooks/useAllProviders";
 import { getProviderStatus, type ProviderStatus } from "@/lib/providerStatus";
 import WeeklyHoursTable from "@/components/provider-detail/WeeklyHoursTable";
+import MonthlyHoursTable from "@/components/provider-detail/MonthlyHoursTable";
 import WriteReviewSection from "@/components/reviews/WriteReviewSection";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -130,7 +131,8 @@ const ProviderDetail = () => {
   const { data: dbReviews } = useProviderReviews(id);
   const { isFavorite, toggleFavorite } = useFavorites();
   const { data: photos = [] } = usePublicProviderPhotos(id);
-  const { availability, blockedDates } = usePublicProviderSchedule(id);
+  const { availability, blockedDates, monthlySettings, overrides } = usePublicProviderSchedule(id);
+  const isMonthly = monthlySettings.availability_mode === "monthly";
   const liked = id ? isFavorite(id) : false;
 
   const [status, setStatus] = useState<ProviderStatus>(() =>
@@ -630,18 +632,35 @@ const ProviderDetail = () => {
           </motion.div>
       )}
 
-      {/* Weekly Hours */}
-      {status.hasSchedule && (
+      {/* Working Hours — MONTHLY providers get a date-based list (resolved per
+          date via the shared resolver); WEEKLY providers keep the weekday list
+          UNCHANGED. Monthly gates on mode (a monthly provider may have no weekly
+          rows, so status.hasSchedule can't gate it). */}
+      {isMonthly ? (
         <section className="mt-8 px-5">
           <SectionLabel className="mb-3">{t("workingHoursLabel")}</SectionLabel>
-          <WeeklyHoursTable
-            availability={availability}
+          <MonthlyHoursTable
+            monthlySettings={monthlySettings}
             blockedDates={blockedDates}
-            status={status}
+            overrides={overrides}
+            bookingWindowDays={provider.bookingWindowDays}
             lang={lang}
             t={t}
           />
         </section>
+      ) : (
+        status.hasSchedule && (
+          <section className="mt-8 px-5">
+            <SectionLabel className="mb-3">{t("workingHoursLabel")}</SectionLabel>
+            <WeeklyHoursTable
+              availability={availability}
+              blockedDates={blockedDates}
+              status={status}
+              lang={lang}
+              t={t}
+            />
+          </section>
+        )
       )}
 
       {/* Services */}
