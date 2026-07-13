@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -43,6 +44,8 @@ export function BookingSettingsTab() {
     updateBookingWindow,
     updateCancellationNoticeHours,
     updateSlotInterval,
+    updateAvailabilityMode,
+    updateMonthlyDefaults,
   } = useProviderProfile();
   const pendingCount = usePendingCount();
   const [pendingGuardOpen, setPendingGuardOpen] = useState(false);
@@ -62,6 +65,12 @@ export function BookingSettingsTab() {
   // Cast: column added by 20260630000001 migration; types.ts regenerated after apply.
   const slotInterval =
     (profile as { slot_interval_minutes?: number } | null)?.slot_interval_minutes ?? 15;
+  // Monthly availability (Phase 1 columns; types.ts already regenerated). Default
+  // 'weekly' keeps every existing provider on the fixed weekly pattern.
+  const availabilityMode = profile?.availability_mode === "monthly" ? "monthly" : "weekly";
+  const monthlyDefaultAvailable = profile?.monthly_default_available ?? true;
+  const monthlyDefaultStart = (profile?.monthly_default_start ?? "09:00").slice(0, 5);
+  const monthlyDefaultEnd = (profile?.monthly_default_end ?? "17:00").slice(0, 5);
 
   const cancellationOptionLabel = (h: number) =>
     h === 0
@@ -262,6 +271,94 @@ export function BookingSettingsTab() {
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      {/* Availability mode — weekly (default) vs monthly flat-default */}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+        <div>
+          <Label>{t("availabilityModeLabel")}</Label>
+          <p className="text-xs text-muted-foreground mt-1 mb-2">{t("availabilityModeHelp")}</p>
+          <Select
+            value={availabilityMode}
+            onValueChange={async (v) => {
+              try {
+                await updateAvailabilityMode.mutateAsync(v as "weekly" | "monthly");
+                toast.success(t("profileSaved"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Error");
+              }
+            }}
+            disabled={updateAvailabilityMode.isPending}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="weekly">{t("availabilityModeWeekly")}</SelectItem>
+              <SelectItem value="monthly">{t("availabilityModeMonthly")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Flat-default controls — only relevant in monthly mode */}
+        {availabilityMode === "monthly" && (
+          <div className="space-y-4 pt-3 border-t border-border">
+            <div className="flex items-start gap-3">
+              <Switch
+                checked={monthlyDefaultAvailable}
+                onCheckedChange={async (next) => {
+                  try {
+                    await updateMonthlyDefaults.mutateAsync({ monthly_default_available: next });
+                    toast.success(t("profileSaved"));
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Error");
+                  }
+                }}
+                disabled={updateMonthlyDefaults.isPending}
+              />
+              <div className="flex-1">
+                <Label className="text-sm font-medium">{t("monthlyDefaultAvailableLabel")}</Label>
+                <p className="text-xs text-muted-foreground mt-1">{t("monthlyDefaultAvailableHelp")}</p>
+              </div>
+            </div>
+
+            {/* Default hours — hidden when the default day is closed */}
+            {monthlyDefaultAvailable && (
+              <div>
+                <Label>{t("monthlyDefaultHoursLabel")}</Label>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <Input
+                    key={`monthly-start-${monthlyDefaultStart}`}
+                    type="time"
+                    className="h-9 text-sm flex-1"
+                    defaultValue={monthlyDefaultStart}
+                    onBlur={async (e) => {
+                      try {
+                        await updateMonthlyDefaults.mutateAsync({ monthly_default_start: e.target.value });
+                        toast.success(t("profileSaved"));
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Error");
+                      }
+                    }}
+                  />
+                  <span className="text-xs text-muted-foreground">–</span>
+                  <Input
+                    key={`monthly-end-${monthlyDefaultEnd}`}
+                    type="time"
+                    className="h-9 text-sm flex-1"
+                    defaultValue={monthlyDefaultEnd}
+                    onBlur={async (e) => {
+                      try {
+                        await updateMonthlyDefaults.mutateAsync({ monthly_default_end: e.target.value });
+                        toast.success(t("profileSaved"));
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Error");
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Pending-guard dialog — coupled to the require-approval turn-off */}

@@ -173,6 +173,49 @@ export function useProviderProfile() {
     },
   });
 
+  // ── Monthly availability (opt-in) ──────────────────────────────────────────
+  // availability_mode gates the customer slot resolver (resolveDayHours in
+  // useAllProviders). Default 'weekly' = today's behavior; 'monthly' uses the
+  // flat monthly_default_* window (and, from Phase 3, per-date overrides).
+  const updateAvailabilityMode = useMutation({
+    mutationFn: async (value: "weekly" | "monthly") => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ availability_mode: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      // Customer booking view reads mode via the provider-monthly-settings query.
+      queryClient.invalidateQueries({ queryKey: ["provider-monthly-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+    },
+  });
+
+  // Flat monthly default: partial update so the open/closed Switch and the two
+  // time inputs can each save independently (immediate-save, like Working Hours).
+  const updateMonthlyDefaults = useMutation({
+    mutationFn: async (values: {
+      monthly_default_available?: boolean;
+      monthly_default_start?: string;
+      monthly_default_end?: string;
+    }) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update(values)
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["provider-monthly-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+    },
+  });
+
   const updateWhatsAppTemplates = useMutation({
     mutationFn: async (values: { deposit_message_template?: string; reminder_message_template?: string }) => {
       if (!user) throw new Error("Not authenticated");
@@ -258,6 +301,8 @@ export function useProviderProfile() {
     updateBookingWindow,
     updateCancellationNoticeHours,
     updateSlotInterval,
+    updateAvailabilityMode,
+    updateMonthlyDefaults,
     updateWhatsAppTemplates,
     uploadCoverImage,
     uploadAvatarImage,

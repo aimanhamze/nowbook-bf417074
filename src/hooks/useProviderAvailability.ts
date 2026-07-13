@@ -70,6 +70,19 @@ export function useProviderAvailability() {
     enabled: !!profile,
   });
 
+  // Blocking/unblocking a date must refresh not just the provider's own list but
+  // also the customer-facing views that read blocked dates: the booking resolver
+  // and ProviderDetail pill (provider-blocked-dates-public) and the Home pills
+  // (all-provider-blocked-dates). Without these, a block only showed up after the
+  // 5-min staleTime. getProviderStatus itself is untouched — it just gets fresh
+  // blocked-date input sooner.
+  const invalidateBlocked = () => {
+    queryClient.invalidateQueries({ queryKey: ["provider-blocked-dates"] });
+    queryClient.invalidateQueries({ queryKey: ["provider-blocked-dates-public"] });
+    queryClient.invalidateQueries({ queryKey: ["all-provider-blocked-dates"] });
+    queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+  };
+
   const blockDate = useMutation({
     mutationFn: async (vals: { blocked_date: string; reason?: string }) => {
       if (!profile) throw new Error("No provider profile");
@@ -78,7 +91,7 @@ export function useProviderAvailability() {
         .insert({ provider_id: profile.id, ...vals });
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["provider-blocked-dates"] }),
+    onSuccess: invalidateBlocked,
   });
 
   const unblockDate = useMutation({
@@ -86,16 +99,83 @@ export function useProviderAvailability() {
       const { error } = await supabase.from("provider_blocked_dates").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["provider-blocked-dates"] }),
+    onSuccess: invalidateBlocked,
+  });
+
+  // ── Monthly per-date overrides (only used when availability_mode = 'monthly') ─
+  // Provider-side list, kept on a DISTINCT key from the customer resolver's
+  // ["provider-date-overrides", providerId] query so the two caches never collide
+  // (this one selects *). Mutations invalidate BOTH so customer availability
+  // updates live the moment a provider edits a day.
+  const dateOverridesQuery = useQuery({
+    queryKey: ["provider-date-overrides-manage", profile?.id],
+    queryFn: async () => {
+      if (!profile) return [];
+      const { data, error } = await supabase
+        .from("provider_date_overrides")
+        .select("*")
+        .eq("provider_id", profile.id)
+        .order("override_date");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!profile,
+  });
+
+  const invalidateOverrides = () => {
+    queryClient.invalidateQueries({ queryKey: ["provider-date-overrides-manage"] });
+    // Customer booking view reads overrides via this key (useAllProviders).
+    queryClient.invalidateQueries({ queryKey: ["provider-date-overrides"] });
+    queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+  };
+
+  const upsertDateOverride = useMutation({
+    mutationFn: async (o: {
+      override_date: string;
+      is_available: boolean;
+      start_time: string;
+      end_time: string;
+      break_start?: string | null;
+      break_end?: string | null;
+    }) => {
+      if (!profile) throw new Error("No provider profile");
+      const { error } = await supabase
+        .from("provider_date_overrides")
+        .upsert(
+          {
+            provider_id: profile.id,
+            override_date: o.override_date,
+            is_available: o.is_available,
+            start_time: o.start_time,
+            end_time: o.end_time,
+            break_start: o.break_start ?? null,
+            break_end: o.break_end ?? null,
+          },
+          { onConflict: "provider_id,override_date" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: invalidateOverrides,
+  });
+
+  const deleteDateOverride = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("provider_date_overrides").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidateOverrides,
   });
 
   return {
     availability: availabilityQuery.data || [],
     blockedDates: blockedDatesQuery.data || [],
+    dateOverrides: dateOverridesQuery.data || [],
     isLoading: availabilityQuery.isLoading,
     error: availabilityQuery.error,
     upsertAvailability,
     blockDate,
     unblockDate,
+    upsertDateOverride,
+    deleteDateOverride,
   };
 }
