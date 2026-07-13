@@ -298,6 +298,50 @@ export type Database = {
           },
         ]
       }
+      provider_date_overrides: {
+        Row: {
+          break_end: string | null
+          break_start: string | null
+          created_at: string
+          end_time: string
+          id: string
+          is_available: boolean
+          override_date: string
+          provider_id: string
+          start_time: string
+        }
+        Insert: {
+          break_end?: string | null
+          break_start?: string | null
+          created_at?: string
+          end_time?: string
+          id?: string
+          is_available?: boolean
+          override_date: string
+          provider_id: string
+          start_time?: string
+        }
+        Update: {
+          break_end?: string | null
+          break_start?: string | null
+          created_at?: string
+          end_time?: string
+          id?: string
+          is_available?: boolean
+          override_date?: string
+          provider_id?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_date_overrides_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       provider_photos: {
         Row: {
           caption: string | null
@@ -337,6 +381,7 @@ export type Database = {
         Row: {
           about: string | null
           address: string | null
+          availability_mode: string
           avatar_image: string | null
           average_rating: number | null
           booking_window_days: number | null
@@ -352,6 +397,9 @@ export type Database = {
           latitude: number | null
           longitude: number | null
           min_lead_time_minutes: number
+          monthly_default_available: boolean
+          monthly_default_end: string
+          monthly_default_start: string
           phone: string | null
           reminder_message_template: string | null
           requires_booking_approval: boolean
@@ -365,6 +413,7 @@ export type Database = {
         Insert: {
           about?: string | null
           address?: string | null
+          availability_mode?: string
           avatar_image?: string | null
           average_rating?: number | null
           booking_window_days?: number | null
@@ -380,6 +429,9 @@ export type Database = {
           latitude?: number | null
           longitude?: number | null
           min_lead_time_minutes?: number
+          monthly_default_available?: boolean
+          monthly_default_end?: string
+          monthly_default_start?: string
           phone?: string | null
           reminder_message_template?: string | null
           requires_booking_approval?: boolean
@@ -393,6 +445,7 @@ export type Database = {
         Update: {
           about?: string | null
           address?: string | null
+          availability_mode?: string
           avatar_image?: string | null
           average_rating?: number | null
           booking_window_days?: number | null
@@ -408,6 +461,9 @@ export type Database = {
           latitude?: number | null
           longitude?: number | null
           min_lead_time_minutes?: number
+          monthly_default_available?: boolean
+          monthly_default_end?: string
+          monthly_default_start?: string
           phone?: string | null
           reminder_message_template?: string | null
           requires_booking_approval?: boolean

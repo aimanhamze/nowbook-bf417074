@@ -9,6 +9,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderAvailability } from "@/hooks/useProviderAvailability";
+import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { MonthlyAvailabilityCalendar } from "@/components/dashboard/MonthlyAvailabilityCalendar";
 import { toast } from "sonner";
 
 const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
@@ -16,6 +18,10 @@ const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "frida
 export function AvailabilityTab() {
   const { t } = useLang();
   const { availability, blockedDates, upsertAvailability, blockDate, unblockDate } = useProviderAvailability();
+  const { profile } = useProviderProfile();
+  // Monthly mode swaps the weekly Working Hours card for the monthly calendar.
+  // Weekly providers (the default) get the exact same tab as before.
+  const isMonthly = profile?.availability_mode === "monthly";
   const [blockingDate, setBlockingDate] = useState<Date | undefined>();
   const [blockReason, setBlockReason] = useState("");
 
@@ -105,7 +111,11 @@ export function AvailabilityTab() {
     <div className="space-y-5">
       <h2 className="text-lg font-semibold">{t("availability")}</h2>
 
-      {/* Weekly schedule */}
+      {/* Monthly mode: calendar editor replaces the weekly Working Hours card. */}
+      {isMonthly && <MonthlyAvailabilityCalendar />}
+
+      {/* Weekly schedule — weekly mode only (unchanged for weekly providers) */}
+      {!isMonthly && (
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
         <h3 className="text-sm font-medium">{t("workingHoursLabel")}</h3>
         {DAY_KEYS.map((dayKey, dow) => {
@@ -192,6 +202,7 @@ export function AvailabilityTab() {
           );
         })}
       </div>
+      )}
 
       {/* Blocked dates */}
       <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
