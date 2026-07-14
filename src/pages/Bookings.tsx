@@ -1,4 +1,4 @@
-import { Calendar, Clock, Phone, Star, XCircle, CalendarPlus, History, MessageCircle } from "lucide-react";
+import { Calendar, Clock, Phone, Star, XCircle, CalendarPlus, History, MessageCircle, Info } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -53,15 +53,23 @@ const Bookings = () => {
     queryKey: ["bookings", user?.id, page],
     queryFn: async () => {
       if (!user) return { items: [], hasMore: false };
+      // Fetch BOTH the customer's own bookings (user_id = me) AND provider-created
+      // walk-ins linked to them by phone (linked_user_id = me, user_id NULL). The
+      // SELECT RLS policy already permits reading linked rows (view-only). The
+      // .or(...) group is AND-combined with the status filter by PostgREST.
       const { data, error } = await supabase
         .from("bookings")
         .select("*")
-        .eq("user_id", user.id)
+        .or(`user_id.eq.${user.id},linked_user_id.eq.${user.id}`)
         .in("status", ["confirmed", "pending", "cancelled"])
         .order("booking_date", { ascending: false })
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
       if (error) throw error;
-      return { items: (data || []) as Tables<"bookings">[], hasMore: (data || []).length === PAGE_SIZE };
+      // Dedupe by id — a row is either user_id=me or linked_user_id=me, never
+      // both, but guard so a booking can never render twice.
+      const rows = (data || []) as Tables<"bookings">[];
+      const items = Array.from(new Map(rows.map((b) => [b.id, b])).values());
+      return { items, hasMore: rows.length === PAGE_SIZE };
     },
     enabled: !!user,
   });
@@ -199,6 +207,10 @@ const Bookings = () => {
                     index={i}
                     variant={tab}
                     isNext={tab === "upcoming" && i === 0}
+                    // A row whose user_id isn't the current user is a provider-
+                    // created walk-in linked to them by phone: view-only (RLS
+                    // blocks update/delete), so owner actions are gated off.
+                    isLinkedWalkin={booking.user_id !== user.id}
                     getProviderName={getProviderName}
                     getServiceNames={getServiceNames}
                     providerPhone={allProviders.find((p) => p.id === booking.provider_id)?.phone ?? null}
@@ -317,11 +329,12 @@ function DateTile({ booking, variant, isNext }: { booking: Tables<"bookings">; v
   );
 }
 
-function BookingCard({ booking, index, variant, isNext, getProviderName, getServiceNames, providerPhone, showPrices, cancellationNoticeHours }: {
+function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProviderName, getServiceNames, providerPhone, showPrices, cancellationNoticeHours }: {
   booking: Tables<"bookings">;
   index: number;
   variant: CardVariant;
   isNext: boolean;
+  isLinkedWalkin: boolean;
   getProviderName: (id: string) => string;
   getServiceNames: (ids: string[]) => string;
   providerPhone: string | null;
@@ -340,8 +353,12 @@ function BookingCard({ booking, index, variant, isNext, getProviderName, getServ
   const isActive = !isPast && (booking.status === "confirmed" || booking.status === "pending");
   // Cutoff comes from THIS booking's provider. 0 = always cancellable while
   // active (no late-cancel block / call-to-cancel state).
-  const canCancel = isActive && (cancellationNoticeHours <= 0 || hoursUntilBooking > cancellationNoticeHours);
-  const canCallToCancel = isActive && cancellationNoticeHours > 0 && hoursUntilBooking <= cancellationNoticeHours;
+  // Linked walk-ins are view-only for the customer: the UPDATE RLS policy is
+  // user_id-only, so a self-cancel would fail. Suppress ALL cancel affordances
+  // (self-cancel AND the call-to-cancel window notice) for them — a hint below
+  // explains why. Reviews are unaffected (they insert with user_id = me).
+  const canCancel = !isLinkedWalkin && isActive && (cancellationNoticeHours <= 0 || hoursUntilBooking > cancellationNoticeHours);
+  const canCallToCancel = !isLinkedWalkin && isActive && cancellationNoticeHours > 0 && hoursUntilBooking <= cancellationNoticeHours;
   const canReview = isPast && booking.status === "confirmed" && !existingReview;
   // Cancel UI lives ONLY on the Upcoming tab. (canCancel/canCallToCancel are
   // already false for anything in History, but gate explicitly so History
@@ -476,6 +493,16 @@ function BookingCard({ booking, index, variant, isNext, getProviderName, getServ
                 </a>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Linked walk-in — provider created this booking (matched to the
+            customer by phone). It's view-only: no self-cancel (RLS blocks it),
+            so a subtle hint replaces the cancel affordance on the Upcoming tab. */}
+        {isUpcomingTab && isLinkedWalkin && isActive && (
+          <div className="mt-3 flex items-start gap-2 border-t border-border/40 pt-3 text-xs leading-relaxed text-muted-foreground">
+            <Info className="mt-px h-3.5 w-3.5 shrink-0 text-accent" />
+            <span>{t("bookedByProvider")}</span>
           </div>
         )}
 
