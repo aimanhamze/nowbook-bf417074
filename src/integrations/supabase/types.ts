@@ -788,6 +788,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      link_my_walkins: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "provider" | "user"
