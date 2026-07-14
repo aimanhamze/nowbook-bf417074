@@ -24,6 +24,7 @@ export type Database = {
           customer_phone: string | null
           guest_notes: string | null
           id: string
+          linked_user_id: string | null
           provider_id: string
           service_ids: string[]
           status: string
@@ -41,6 +42,7 @@ export type Database = {
           customer_phone?: string | null
           guest_notes?: string | null
           id?: string
+          linked_user_id?: string | null
           provider_id: string
           service_ids: string[]
           status?: string
@@ -58,6 +60,7 @@ export type Database = {
           customer_phone?: string | null
           guest_notes?: string | null
           id?: string
+          linked_user_id?: string | null
           provider_id?: string
           service_ids?: string[]
           status?: string
@@ -785,6 +788,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      link_my_walkins: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "provider" | "user"

@@ -218,6 +218,15 @@ const Auth = () => {
         .eq("user_id", user.id);
     }
 
+    // Retroactively link any prior walk-ins booked for this user's phone before
+    // they had an account (server-side; the client can't read unlinked walk-ins).
+    // Own-phone-only + self-only + idempotent, so it's safe to fire on every
+    // login and a harmless no-op for providers/admins/email-only accounts.
+    // Fire-and-forget: never block or fail login on it.
+    void supabase.rpc("link_my_walkins").then(({ error }) => {
+      if (error) console.error("link_my_walkins failed:", error.message);
+    });
+
     navigate("/");
   };
 
