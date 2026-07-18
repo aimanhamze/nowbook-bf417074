@@ -387,7 +387,13 @@ const BookAppointment = () => {
         },
       });
 
-      if (pushError && providerProfile?.user_id) {
+      if (pushError) {
+        console.warn("send-push invoke failed:", pushError.message);
+      }
+
+      // send-push is delivery-only — the provider's in-app row is written here
+      // unconditionally, whether or not the push itself was delivered.
+      if (providerProfile?.user_id) {
         await supabase.from("notifications").insert({
           user_id: providerProfile.user_id,
           title: providerNotifTitle,
