@@ -1,21 +1,24 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { format, isSameDay, parseISO, isAfter, isToday, getDay } from "date-fns";
+import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
 import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, useSaveTreatmentNote, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
+import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useProviderClassSchedule, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
-import { ForwardArrow } from "@/components/ui/directional-icon";
+import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { NewBookingSheet } from "@/components/dashboard/NewBookingSheet";
 import { DEFAULT_REMINDER_TEMPLATE } from "@/components/dashboard/BusinessProfileTab";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 function toWhatsAppUrl(phone: string): string {
@@ -97,6 +100,7 @@ function TreatmentNoteBox({ booking }: { booking: EnrichedBooking }) {
 }
 
 function BookingCard({ booking, index }: { booking: EnrichedBooking; index: number }) {
+  const { t } = useLang();
   const cancelBooking = useCancelBooking();
   const deleteBooking = useDeleteBooking();
   const approveBooking = useApproveBooking();
@@ -112,6 +116,9 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
   const isCancelled = booking.status === "cancelled";
   const isPending = booking.status === "pending";
   const isConfirmed = booking.status === "confirmed";
+  // A confirmed booking whose start time has passed is treated as completed:
+  // grayed out with a "הושלם" badge. Cancelled/pending keep their own state.
+  const isCompleted = isConfirmed && new Date(`${booking.booking_date}T${booking.booking_time}`).getTime() < Date.now();
 
   return (
     <motion.div
@@ -119,7 +126,7 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ delay: index * 0.04, duration: 0.25 }}
-      className="rounded-2xl border border-border bg-card p-4 space-y-3"
+      className={cn("rounded-2xl border border-border bg-card p-4 space-y-3", isCompleted && "grayscale-[0.3] opacity-90 bg-muted/15")}
     >
       <div className="flex items-center gap-3">
         <Avatar className="h-10 w-10 border-2 border-accent/20">
@@ -151,8 +158,8 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
             </div>
           )}
         </div>
-        <Badge variant="outline" className={`text-[10px] shrink-0 ${status.className}`}>
-          {status.label}
+        <Badge variant="outline" className={`text-[10px] shrink-0 ${isCompleted ? "bg-muted text-muted-foreground border-border" : status.className}`}>
+          {isCompleted ? t("completed") : status.label}
         </Badge>
       </div>
 
@@ -506,15 +513,548 @@ type CalendarItem =
   | { type: 'group'; time: string; bookings: EnrichedBooking[]; maxCapacity: number; serviceName: string }
   | { type: 'class_slot'; classEntry: ClassScheduleEntry; bookings: EnrichedBooking[] };
 
+type ViewMode = 'daily' | 'weekly' | 'monthly';
+
+// Build the ordered list of calendar items (private bookings, grouped classes, or
+// fitness class slots) for a single date. Shared by every view mode so the daily,
+// weekly and monthly screens all render bookings identically.
+function buildCalendarItems(
+  date: Date,
+  bookings: EnrichedBooking[],
+  schedule: ClassScheduleEntry[],
+  isFitnessStudio: boolean,
+  groupLabel: string,
+): CalendarItem[] {
+  const bookingsForDate = bookings
+    .filter((b) => isSameDay(parseISO(b.booking_date), date))
+    .sort((a, b) => a.booking_time.localeCompare(b.booking_time));
+
+  const items: CalendarItem[] = [];
+
+  if (isFitnessStudio) {
+    const dayOfWeek = getDay(date);
+    const dateStr = format(date, "yyyy-MM-dd");
+    const classesForDay = schedule.filter(c => c.day_of_week === dayOfWeek && c.is_active);
+
+    for (const classEntry of classesForDay) {
+      const classBookings = bookings.filter(
+        b => b.class_schedule_id === classEntry.id && b.booking_date === dateStr
+      );
+      items.push({ type: 'class_slot', classEntry, bookings: classBookings });
+    }
+
+    const orphanBookings = bookingsForDate.filter(b => !b.class_schedule_id);
+    for (const b of orphanBookings) {
+      items.push({ type: 'private', booking: b });
+    }
+
+    return items.sort((a, b) => {
+      const timeA = a.type === 'class_slot' ? a.classEntry.start_time : a.type === 'private' ? a.booking.booking_time : '';
+      const timeB = b.type === 'class_slot' ? b.classEntry.start_time : b.type === 'private' ? b.booking.booking_time : '';
+      return timeA.localeCompare(timeB);
+    });
+  }
+
+  const groupMap = new Map<string, EnrichedBooking[]>();
+
+  for (const b of bookingsForDate) {
+    if (b.is_group_service) {
+      const key = `${b.booking_time}::${b.service_ids[0]}`;
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key)!.push(b);
+    } else {
+      items.push({ type: 'private', booking: b });
+    }
+  }
+
+  for (const [, grpBookings] of groupMap) {
+    items.push({
+      type: 'group',
+      time: grpBookings[0].booking_time,
+      bookings: grpBookings,
+      maxCapacity: grpBookings[0].service_capacity,
+      serviceName: grpBookings[0].service_names[0] || groupLabel,
+    });
+  }
+
+  return items.sort((a, b) => {
+    const timeA = a.type === 'private' ? a.booking.booking_time : a.type === 'group' ? a.time : '';
+    const timeB = b.type === 'private' ? b.booking.booking_time : b.type === 'group' ? b.time : '';
+    return timeA.localeCompare(timeB);
+  });
+}
+
+// Normalised HH:MM start time for an item — used to slot items onto the daily timeline.
+function itemTime(item: CalendarItem): string {
+  if (item.type === 'private') return item.booking.booking_time.slice(0, 5);
+  if (item.type === 'group') return item.time.slice(0, 5);
+  return item.classEntry.start_time.slice(0, 5);
+}
+
+function timeToMin(t: string): number {
+  const [h, m] = t.slice(0, 5).split(":").map(Number);
+  return h * 60 + m;
+}
+
+function minToTime(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+// Slot labels from start (inclusive) to end (exclusive), stepping by the
+// provider's configured interval so the timeline matches the customer flow.
+function generateSlots(start: string, end: string, stepMinutes: number): string[] {
+  const s = timeToMin(start);
+  const e = timeToMin(end);
+  const step = stepMinutes > 0 ? stepMinutes : 15;
+  const out: string[] = [];
+  for (let t = s; t < e; t += step) out.push(minToTime(t));
+  return out;
+}
+
+// Renders a list of calendar items using the existing card components. Shared by all views.
+function CalendarItemsList({ items, reminderTemplate }: { items: CalendarItem[]; reminderTemplate: string }) {
+  return (
+    <AnimatePresence mode="popLayout">
+      <div className="space-y-3">
+        {items.map((item, i) =>
+          item.type === 'class_slot' ? (
+            <ClassSlotCard
+              key={`slot-${item.classEntry.id}`}
+              classEntry={item.classEntry}
+              bookings={item.bookings}
+              index={i}
+              reminderTemplate={reminderTemplate}
+            />
+          ) : item.type === 'group' ? (
+            <GroupClassCard
+              key={`group-${item.time}-${item.serviceName}`}
+              time={item.time}
+              bookings={item.bookings}
+              serviceName={item.serviceName}
+              maxCapacity={item.maxCapacity}
+              index={i}
+            />
+          ) : (
+            <BookingCard key={item.booking.id} booking={item.booking} index={i} />
+          )
+        )}
+      </div>
+    </AnimatePresence>
+  );
+}
+
+function NoServicesCard() {
+  const { t } = useLang();
+  const navigate = useNavigate();
+  return (
+    <div className="text-center py-10 px-5 rounded-2xl border border-accent/30 bg-accent/5">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10">
+        <Sparkles className="h-6 w-6 text-accent" />
+      </div>
+      <p className="text-sm font-medium text-foreground">{t("setupToTakeBookings")}</p>
+      <Button
+        className="mt-4 gap-1.5"
+        onClick={() => navigate("/dashboard", { state: { tab: "services" } })}
+      >
+        {t("setupAddServicesCta")}
+        <ForwardArrow className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+// Shared prev/next navigation header used by the daily and weekly views.
+function NavHeader({ title, prevLabel, nextLabel, onPrev, onNext, selectedDate, showNewBooking }: {
+  title: string;
+  prevLabel: string;
+  nextLabel: string;
+  onPrev: () => void;
+  onNext: () => void;
+  selectedDate: Date;
+  showNewBooking: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="outline" size="sm" className="h-8 px-2 text-xs gap-1 shrink-0" onClick={onPrev}>
+          <BackArrow className="h-3.5 w-3.5" />
+          {prevLabel}
+        </Button>
+        <h3 className="text-sm font-semibold text-center min-w-0 truncate flex-1">{title}</h3>
+        <Button variant="outline" size="sm" className="h-8 px-2 text-xs gap-1 shrink-0" onClick={onNext}>
+          {nextLabel}
+          <ForwardArrow className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      {showNewBooking && (
+        <div className="flex justify-end">
+          <NewBookingSheet selectedDate={selectedDate} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Display metadata for a booking block on the week grid.
+function blockInfo(item: CalendarItem): { time: string; name: string; sub: string; cls: string } {
+  if (item.type === 'group') {
+    const active = item.bookings.filter((b) => b.status !== 'cancelled').length;
+    return {
+      time: item.time.slice(0, 5),
+      name: item.serviceName,
+      sub: `${active}/${item.maxCapacity}`,
+      cls: "bg-blue-500/15 border-blue-300 text-blue-800",
+    };
+  }
+  if (item.type === 'class_slot') {
+    const active = item.bookings.filter((b) => b.status !== 'cancelled').length;
+    return {
+      time: item.classEntry.start_time.slice(0, 5),
+      name: item.classEntry.class_name,
+      sub: `${active}/${item.classEntry.max_capacity}`,
+      cls: "bg-accent/15 border-accent/30 text-accent",
+    };
+  }
+  const b = item.booking;
+  const cls = b.status === 'pending'
+    ? "bg-amber-500/15 border-amber-300 text-amber-800"
+    : b.status === 'cancelled'
+      ? "bg-red-500/10 border-red-200 text-red-700 line-through"
+      : "bg-emerald-500/15 border-emerald-300 text-emerald-800";
+  return {
+    time: b.booking_time.slice(0, 5),
+    name: b.customer_name || b.customer_phone || "לקוח",
+    sub: b.service_names.join(", "),
+    cls,
+  };
+}
+
+// True weekly calendar grid: 7 day columns (Sun–Sat) × hourly time axis, with each
+// booking placed as a block by its start time and service duration. Scrolls
+// horizontally on narrow screens. Full booking actions stay in daily/monthly views.
+function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminderTemplate, noServices, onPrev, onNext }: {
+  selectedDate: Date;
+  bookings: EnrichedBooking[];
+  schedule: ClassScheduleEntry[];
+  isFitnessStudio: boolean;
+  reminderTemplate: string;
+  noServices: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const { t, lang } = useLang();
+  const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
+  const { availability } = useProviderAvailability();
+  const { services } = useProviderServices();
+  const [selected, setSelected] = useState<CalendarItem | null>(null);
+
+  const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 });
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekEnd = days[6];
+  const title = `${format(weekStart, "d MMM", { locale: dateFnsLocale })} – ${format(weekEnd, "d MMM", { locale: dateFnsLocale })}`;
+
+  const durationMap = new Map(services.map((s) => [s.id, s.duration]));
+  const itemDuration = (it: CalendarItem): number => {
+    if (it.type === 'class_slot') return it.classEntry.duration_minutes || 15;
+    const ids = it.type === 'private' ? it.booking.service_ids : it.bookings[0].service_ids;
+    const total = (ids || []).reduce((sum, id) => sum + (durationMap.get(id) ?? 0), 0);
+    return total > 0 ? total : 15;
+  };
+  const rowKey = (item: CalendarItem): string =>
+    item.type === 'private' ? item.booking.id
+    : item.type === 'group' ? `group-${item.time}-${item.serviceName}`
+    : `slot-${item.classEntry.id}`;
+
+  // Per-day item lists for the whole week.
+  const itemsByDay = days.map((day) => buildCalendarItems(day, bookings, schedule, isFitnessStudio, t("groupClass")));
+
+  // Vertical window: span the provider's available hours, widened to include any
+  // booking that falls outside them. Snap to whole hours for clean grid lines.
+  let minStart = 24 * 60;
+  let maxEnd = 0;
+  for (const a of availability) {
+    if (!a.is_available) continue;
+    minStart = Math.min(minStart, timeToMin(a.start_time));
+    maxEnd = Math.max(maxEnd, timeToMin(a.end_time));
+  }
+  for (const items of itemsByDay) {
+    for (const it of items) {
+      const s = timeToMin(itemTime(it));
+      minStart = Math.min(minStart, s);
+      maxEnd = Math.max(maxEnd, s + itemDuration(it));
+    }
+  }
+  if (minStart >= maxEnd) { minStart = 8 * 60; maxEnd = 20 * 60; } // no data → default 08:00–20:00
+  const startHour = Math.floor(minStart / 60);
+  const endHour = Math.ceil(maxEnd / 60);
+  const windowStart = startHour * 60;
+  const hourCount = endHour - startHour;
+
+  const HOUR_H = 60; // px per hour
+  const pxPerMin = HOUR_H / 60;
+  const gridHeight = hourCount * HOUR_H;
+  const hours = Array.from({ length: hourCount + 1 }, (_, i) => startHour + i);
+
+  const GUTTER = 40;
+  const COL_MIN = 112;
+  const gridTemplateColumns = `${GUTTER}px repeat(7, minmax(${COL_MIN}px, 1fr))`;
+  const minWidth = GUTTER + 7 * COL_MIN;
+
+  return (
+    <div className="space-y-4">
+      <NavHeader
+        title={title}
+        prevLabel={t("previousWeek")}
+        nextLabel={t("nextWeek")}
+        onPrev={onPrev}
+        onNext={onNext}
+        selectedDate={selectedDate}
+        showNewBooking={!noServices}
+      />
+
+      {noServices ? (
+        <NoServicesCard />
+      ) : (
+        <div className="rounded-2xl border border-border bg-card overflow-x-auto">
+          <div style={{ minWidth }}>
+            {/* Day headers */}
+            <div className="grid border-b border-border" style={{ gridTemplateColumns }}>
+              <div className="border-e border-border" />
+              {days.map((day) => {
+                const highlight = isToday(day);
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={cn(
+                      "text-center py-1.5 border-e border-border last:border-e-0",
+                      highlight && "bg-accent/10",
+                    )}
+                  >
+                    <p className={cn("text-[11px] font-semibold leading-tight", highlight ? "text-accent" : "text-foreground")}>
+                      {format(day, "EEE", { locale: dateFnsLocale })}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">{format(day, "d/M")}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Time grid */}
+            <div className="grid" style={{ gridTemplateColumns }}>
+              {/* Hour gutter */}
+              <div className="relative border-e border-border" style={{ height: gridHeight }}>
+                {hours.map((h, i) => (
+                  <span
+                    key={h}
+                    className="absolute right-1 -translate-y-1/2 text-[9px] tabular-nums text-muted-foreground/70"
+                    style={{ top: i * HOUR_H }}
+                  >
+                    {String(h).padStart(2, "0")}:00
+                  </span>
+                ))}
+              </div>
+
+              {/* Day columns */}
+              {days.map((day, di) => {
+                const highlight = isToday(day);
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={cn("relative border-e border-border last:border-e-0", highlight && "bg-accent/[0.04]")}
+                    style={{ height: gridHeight }}
+                  >
+                    {/* Hour lines */}
+                    {hours.slice(1).map((h, i) => (
+                      <div
+                        key={h}
+                        className="absolute inset-x-0 border-t border-border/40"
+                        style={{ top: (i + 1) * HOUR_H }}
+                      />
+                    ))}
+                    {/* Booking blocks */}
+                    {itemsByDay[di].map((it) => {
+                      const start = timeToMin(itemTime(it));
+                      const top = (start - windowStart) * pxPerMin;
+                      const height = Math.max(itemDuration(it) * pxPerMin - 2, 15);
+                      const info = blockInfo(it);
+                      // Past (not cancelled) → grayed "completed" look.
+                      const isCancelled = it.type === 'private' && it.booking.status === 'cancelled';
+                      const isPast = !isCancelled && new Date(`${format(day, "yyyy-MM-dd")}T${itemTime(it)}`).getTime() < Date.now();
+                      return (
+                        <button
+                          key={rowKey(it)}
+                          type="button"
+                          onClick={() => setSelected(it)}
+                          className={cn(
+                            "absolute inset-x-0.5 rounded-md border px-1 py-0.5 overflow-hidden text-start",
+                            "transition-shadow hover:shadow-md hover:z-10 focus:outline-none focus:ring-2 focus:ring-accent/40",
+                            isPast ? "bg-muted/60 border-border/70 text-muted-foreground" : info.cls,
+                          )}
+                          style={{ top, height }}
+                          title={`${info.time} ${info.name}`}
+                        >
+                          <p className="text-[9px] font-semibold leading-tight truncate">
+                            {info.time} {info.name}
+                          </p>
+                          {height > 26 && info.sub && (
+                            <p className="text-[8px] leading-tight truncate opacity-80">{info.sub}</p>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tapping a block opens the full booking card with all actions. */}
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="max-w-sm p-4 gap-3">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {selected && format(
+                selected.type === 'private' ? parseISO(selected.booking.booking_date) : selectedDate,
+                "EEEE, d MMM",
+                { locale: dateFnsLocale },
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {selected && (
+            selected.type === 'class_slot' ? (
+              <ClassSlotCard classEntry={selected.classEntry} bookings={selected.bookings} index={0} reminderTemplate={reminderTemplate} />
+            ) : selected.type === 'group' ? (
+              <GroupClassCard time={selected.time} bookings={selected.bookings} serviceName={selected.serviceName} maxCapacity={selected.maxCapacity} index={0} />
+            ) : (
+              <BookingCard booking={selected.booking} index={0} />
+            )
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function DailyView({ selectedDate, bookings, schedule, isFitnessStudio, reminderTemplate, slotInterval, noServices, onPrev, onNext }: {
+  selectedDate: Date;
+  bookings: EnrichedBooking[];
+  schedule: ClassScheduleEntry[];
+  isFitnessStudio: boolean;
+  reminderTemplate: string;
+  slotInterval: number;
+  noServices: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const { t, lang } = useLang();
+  const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
+  const { availability } = useProviderAvailability();
+  const { services } = useProviderServices();
+
+  const items = buildCalendarItems(selectedDate, bookings, schedule, isFitnessStudio, t("groupClass"));
+
+  // Timeline window comes from the provider's weekly schedule for this weekday;
+  // fall back to a sensible default so the timeline still renders when unset.
+  const dayAvail = availability.find((a) => a.day_of_week === getDay(selectedDate) && a.is_available);
+  const startTime = dayAvail?.start_time ?? "09:00";
+  const endTime = dayAvail?.end_time ?? "21:00";
+
+  // Union of the generated 15-min grid and any actual booking times, so a booking
+  // that falls outside the availability window (or off-grid) is never hidden.
+  const itemsByTime = new Map<string, CalendarItem[]>();
+  for (const it of items) {
+    const key = itemTime(it);
+    if (!itemsByTime.has(key)) itemsByTime.set(key, []);
+    itemsByTime.get(key)!.push(it);
+  }
+  const rowTimes = Array.from(new Set<string>([...generateSlots(startTime, endTime, slotInterval), ...itemsByTime.keys()])).sort();
+
+  // A booking occupies every slot from its start until start + total service
+  // duration, so slots mid-service render as "continuation" rather than "פנוי".
+  const durationMap = new Map(services.map((s) => [s.id, s.duration]));
+  const itemDuration = (it: CalendarItem): number => {
+    if (it.type === 'class_slot') return it.classEntry.duration_minutes || 15;
+    const ids = it.type === 'private' ? it.booking.service_ids : it.bookings[0].service_ids;
+    const total = (ids || []).reduce((sum, id) => sum + (durationMap.get(id) ?? 0), 0);
+    return total > 0 ? total : 15;
+  };
+  // start (inclusive) → start + total duration (exclusive). The end minute is the
+  // first free slot: a 13:00 booking of 30 min occupies 13:00 + 13:15, and 13:30
+  // is free again.
+  const intervals = items.map((it) => {
+    const start = timeToMin(itemTime(it));
+    return { start, end: start + itemDuration(it) };
+  });
+
+  const title = format(selectedDate, "EEEE, d MMM", { locale: dateFnsLocale });
+
+  return (
+    <div className="space-y-4">
+      <NavHeader
+        title={title}
+        prevLabel={t("previousDay")}
+        nextLabel={t("nextDay")}
+        onPrev={onPrev}
+        onNext={onNext}
+        selectedDate={selectedDate}
+        showNewBooking={!noServices}
+      />
+
+      {noServices ? (
+        <NoServicesCard />
+      ) : (
+        <div className="space-y-2">
+          {rowTimes.map((time) => {
+            const rowItems = itemsByTime.get(time);
+            if (rowItems && rowItems.length > 0) {
+              return (
+                <div key={time} className="flex gap-2">
+                  <span className="text-[11px] font-medium text-muted-foreground/70 tabular-nums pt-4 w-10 shrink-0">{time}</span>
+                  <div className="flex-1 min-w-0">
+                    <CalendarItemsList items={rowItems} reminderTemplate={reminderTemplate} />
+                  </div>
+                </div>
+              );
+            }
+            // Slot falls inside an ongoing service (start <= slot < end). These
+            // mid-service slots render nothing at all — the booking's card and
+            // actions live on its first slot, and only truly free slots show פנוי.
+            const slotMin = timeToMin(time);
+            const covering = intervals.some((iv) => slotMin >= iv.start && slotMin < iv.end);
+            if (covering) return null;
+            return (
+              <div key={time} className="flex items-center gap-2">
+                <span className="text-[11px] font-medium text-muted-foreground/70 tabular-nums w-10 shrink-0">{time}</span>
+                <div className="flex-1 rounded-xl border border-dashed border-border/60 bg-secondary/20 px-3 py-2">
+                  <span className="text-xs text-muted-foreground/50">{t("freeSlot")}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const VIEW_MODE_KEY = "provider-calendar-view-mode";
+
 export function CalendarTab() {
   const { t, lang } = useLang();
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
-  const navigate = useNavigate();
   const { data: bookings = [], isLoading } = useProviderBookings();
   const { services, isLoading: servicesLoading } = useProviderServices();
   const { profile } = useProviderProfile();
   const { schedule } = useProviderClassSchedule();
   const isFitnessStudio = profile?.category === 'fitness_studio';
+  const reminderTemplate = profile?.reminder_message_template || DEFAULT_REMINDER_TEMPLATE;
+  // Display granularity for the daily timeline — same source of truth the customer
+  // booking flow reads (provider_profiles.slot_interval_minutes), so both match.
+  const slotInterval = (profile as { slot_interval_minutes?: number } | undefined)?.slot_interval_minutes || 15;
   // A provider with no services yet can never have bookings. Once services are
   // confirmed empty (not merely still loading), show a getting-started card
   // instead of the bare "no bookings" empty state. Gating on the resolved load
@@ -523,70 +1063,21 @@ export function CalendarTab() {
   const noServices = !servicesLoading && services.length === 0 && !isFitnessStudio;
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  const bookingsForDate = useMemo(() => {
-    return bookings
-      .filter((b) => isSameDay(parseISO(b.booking_date), selectedDate))
-      .sort((a, b) => a.booking_time.localeCompare(b.booking_time));
-  }, [bookings, selectedDate]);
+  // Selected view mode persists across sessions. Defaults to the monthly view so
+  // existing providers see the unchanged layout on first upgrade.
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem(VIEW_MODE_KEY) : null;
+    return saved === "daily" || saved === "weekly" || saved === "monthly" ? saved : "monthly";
+  });
+  useEffect(() => {
+    localStorage.setItem(VIEW_MODE_KEY, viewMode);
+  }, [viewMode]);
 
-  // Build calendar items: for fitness_studio use class slots, otherwise group/private bookings
-  const calendarItems = useMemo((): CalendarItem[] => {
-    const items: CalendarItem[] = [];
-
-    if (isFitnessStudio) {
-      // Show class schedule slots for this day_of_week, with any bookings attached
-      const dayOfWeek = getDay(selectedDate);
-      const dateStr = format(selectedDate, "yyyy-MM-dd");
-      const classesForDay = schedule.filter(c => c.day_of_week === dayOfWeek && c.is_active);
-
-      for (const classEntry of classesForDay) {
-        const classBookings = bookings.filter(
-          b => b.class_schedule_id === classEntry.id && b.booking_date === dateStr
-        );
-        items.push({ type: 'class_slot', classEntry, bookings: classBookings });
-      }
-
-      // Also surface any bookings without a class_schedule_id (walk-ins / old bookings)
-      const orphanBookings = bookingsForDate.filter(b => !b.class_schedule_id);
-      for (const b of orphanBookings) {
-        items.push({ type: 'private', booking: b });
-      }
-
-      return items.sort((a, b) => {
-        const timeA = a.type === 'class_slot' ? a.classEntry.start_time : a.type === 'private' ? a.booking.booking_time : '';
-        const timeB = b.type === 'class_slot' ? b.classEntry.start_time : b.type === 'private' ? b.booking.booking_time : '';
-        return timeA.localeCompare(timeB);
-      });
-    }
-
-    const groupMap = new Map<string, EnrichedBooking[]>();
-
-    for (const b of bookingsForDate) {
-      if (b.is_group_service) {
-        const key = `${b.booking_time}::${b.service_ids[0]}`;
-        if (!groupMap.has(key)) groupMap.set(key, []);
-        groupMap.get(key)!.push(b);
-      } else {
-        items.push({ type: 'private', booking: b });
-      }
-    }
-
-    for (const [, grpBookings] of groupMap) {
-      items.push({
-        type: 'group',
-        time: grpBookings[0].booking_time,
-        bookings: grpBookings,
-        maxCapacity: grpBookings[0].service_capacity,
-        serviceName: grpBookings[0].service_names[0] || t("groupClass"),
-      });
-    }
-
-    return items.sort((a, b) => {
-      const timeA = a.type === 'private' ? a.booking.booking_time : a.type === 'group' ? a.time : '';
-      const timeB = b.type === 'private' ? b.booking.booking_time : b.type === 'group' ? b.time : '';
-      return timeA.localeCompare(timeB);
-    });
-  }, [bookingsForDate, bookings, schedule, selectedDate, isFitnessStudio, t]);
+  // Monthly view items for the selected date (unchanged behaviour).
+  const calendarItems = useMemo(
+    () => buildCalendarItems(selectedDate, bookings, schedule, isFitnessStudio, t("groupClass")),
+    [selectedDate, bookings, schedule, isFitnessStudio, t],
+  );
 
   const datesWithBookings = useMemo(() => bookings.map((b) => parseISO(b.booking_date)), [bookings]);
 
@@ -598,6 +1089,12 @@ export function CalendarTab() {
     .reduce((sum, b) => sum + b.total_price, 0);
 
   const isSelectedToday = isToday(selectedDate);
+
+  const viewTabs: { mode: ViewMode; label: string }[] = [
+    { mode: "daily", label: t("dailyView") },
+    { mode: "weekly", label: t("weeklyView") },
+    { mode: "monthly", label: t("monthlyView") },
+  ];
 
   return (
     <div className="space-y-5">
@@ -617,99 +1114,107 @@ export function CalendarTab() {
         </div>
       </div>
 
-      {/* Calendar */}
-      <div className="rounded-2xl border border-border bg-card p-2">
-        <Calendar
-          mode="single"
-          selected={selectedDate}
-          onSelect={(d) => d && setSelectedDate(d)}
-          locale={dateFnsLocale}
-          className="pointer-events-auto"
-          modifiers={{ hasBooking: datesWithBookings }}
-          modifiersStyles={{
-            hasBooking: {
-              fontWeight: 700,
-              textDecoration: "underline",
-              textDecorationColor: "hsl(var(--accent))",
-              textUnderlineOffset: "3px",
-            },
-          }}
-        />
+      {/* View mode toggle */}
+      <div className="grid grid-cols-3 gap-1 rounded-2xl border border-border bg-card p-1">
+        {viewTabs.map(({ mode, label }) => (
+          <button
+            key={mode}
+            onClick={() => setViewMode(mode)}
+            className={cn(
+              "py-2 rounded-xl text-sm font-medium transition-colors",
+              viewMode === mode
+                ? "bg-accent text-accent-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-secondary",
+            )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Bookings for selected date */}
-      <div>
-        <div className="flex items-center justify-between mb-3 gap-2">
-          <h3 className="text-sm font-semibold min-w-0 truncate">
-            {isSelectedToday ? "📅 תורים להיום" : format(selectedDate, "EEEE, d MMM", { locale: dateFnsLocale })}
-          </h3>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-muted-foreground">
-              {calendarItems.length} {calendarItems.length === 1 ? "תור" : "תורים"}
-            </span>
-            {/* Hide the walk-in trigger until the provider has at least one
-                service — otherwise the sheet dead-ends on an empty step 1. The
-                getting-started card below is the single CTA in that state. */}
-            {!noServices && <NewBookingSheet selectedDate={selectedDate} />}
-          </div>
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-28 rounded-2xl bg-secondary animate-pulse" />
+          ))}
         </div>
+      ) : viewMode === "weekly" ? (
+        <WeeklyView
+          selectedDate={selectedDate}
+          bookings={bookings}
+          schedule={schedule}
+          isFitnessStudio={isFitnessStudio}
+          reminderTemplate={reminderTemplate}
+          noServices={noServices}
+          onPrev={() => setSelectedDate((d) => addDays(d, -7))}
+          onNext={() => setSelectedDate((d) => addDays(d, 7))}
+        />
+      ) : viewMode === "daily" ? (
+        <DailyView
+          selectedDate={selectedDate}
+          bookings={bookings}
+          schedule={schedule}
+          isFitnessStudio={isFitnessStudio}
+          reminderTemplate={reminderTemplate}
+          slotInterval={slotInterval}
+          noServices={noServices}
+          onPrev={() => setSelectedDate((d) => addDays(d, -1))}
+          onNext={() => setSelectedDate((d) => addDays(d, 1))}
+        />
+      ) : (
+        <>
+          {/* Monthly calendar */}
+          <div className="rounded-2xl border border-border bg-card p-2">
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={(d) => d && setSelectedDate(d)}
+              locale={dateFnsLocale}
+              className="pointer-events-auto"
+              modifiers={{ hasBooking: datesWithBookings }}
+              modifiersStyles={{
+                hasBooking: {
+                  fontWeight: 700,
+                  textDecoration: "underline",
+                  textDecorationColor: "hsl(var(--accent))",
+                  textUnderlineOffset: "3px",
+                },
+              }}
+            />
+          </div>
 
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2].map((i) => (
-              <div key={i} className="h-28 rounded-2xl bg-secondary animate-pulse" />
-            ))}
-          </div>
-        ) : noServices ? (
-          <div className="text-center py-10 px-5 rounded-2xl border border-accent/30 bg-accent/5">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10">
-              <Sparkles className="h-6 w-6 text-accent" />
+          {/* Bookings for selected date */}
+          <div>
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <h3 className="text-sm font-semibold min-w-0 truncate">
+                {isSelectedToday ? "📅 תורים להיום" : format(selectedDate, "EEEE, d MMM", { locale: dateFnsLocale })}
+              </h3>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-muted-foreground">
+                  {calendarItems.length} {calendarItems.length === 1 ? "תור" : "תורים"}
+                </span>
+                {/* Hide the walk-in trigger until the provider has at least one
+                    service — otherwise the sheet dead-ends on an empty step 1. The
+                    getting-started card below is the single CTA in that state. */}
+                {!noServices && <NewBookingSheet selectedDate={selectedDate} />}
+              </div>
             </div>
-            <p className="text-sm font-medium text-foreground">{t("setupToTakeBookings")}</p>
-            <Button
-              className="mt-4 gap-1.5"
-              onClick={() => navigate("/dashboard", { state: { tab: "services" } })}
-            >
-              {t("setupAddServicesCta")}
-              <ForwardArrow className="h-4 w-4" />
-            </Button>
+
+            {noServices ? (
+              <NoServicesCard />
+            ) : calendarItems.length === 0 ? (
+              <div className="text-center py-12 rounded-2xl border border-dashed border-border">
+                <CalendarIcon className="h-10 w-10 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {isFitnessStudio ? "אין שיעורים ביום זה" : t("noUpcomingBookings")}
+                </p>
+              </div>
+            ) : (
+              <CalendarItemsList items={calendarItems} reminderTemplate={reminderTemplate} />
+            )}
           </div>
-        ) : calendarItems.length === 0 ? (
-          <div className="text-center py-12 rounded-2xl border border-dashed border-border">
-            <CalendarIcon className="h-10 w-10 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">
-              {isFitnessStudio ? "אין שיעורים ביום זה" : t("noUpcomingBookings")}
-            </p>
-          </div>
-        ) : (
-          <AnimatePresence mode="popLayout">
-            <div className="space-y-3">
-              {calendarItems.map((item, i) =>
-                item.type === 'class_slot' ? (
-                  <ClassSlotCard
-                    key={`slot-${item.classEntry.id}`}
-                    classEntry={item.classEntry}
-                    bookings={item.bookings}
-                    index={i}
-                    reminderTemplate={profile?.reminder_message_template || DEFAULT_REMINDER_TEMPLATE}
-                  />
-                ) : item.type === 'group' ? (
-                  <GroupClassCard
-                    key={`group-${item.time}-${item.serviceName}`}
-                    time={item.time}
-                    bookings={item.bookings}
-                    serviceName={item.serviceName}
-                    maxCapacity={item.maxCapacity}
-                    index={i}
-                  />
-                ) : (
-                  <BookingCard key={item.booking.id} booking={item.booking} index={i} />
-                )
-              )}
-            </div>
-          </AnimatePresence>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }
