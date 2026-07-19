@@ -7,7 +7,7 @@ import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles,
 import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
-import { Fragment, useState, useEffect } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, parseISO, addDays, getDay } from "date-fns";
@@ -81,6 +81,13 @@ const BookAppointment = () => {
     const timerId = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timerId);
   }, []);
+
+  // The page div (not the window) is the scroll container, so its scrollTop
+  // survives step changes — reset it so every step opens at the top.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [step]);
 
   // Derive occurrence dates here (before early returns) so hooks are never conditional
   const _occurrenceDates = selectedClass
@@ -267,26 +274,6 @@ const BookAppointment = () => {
     const usable = isSameDayAsNow(date) ? raw.filter((s) => slotMins(s) > leadTimeCutoff) : raw;
     return usable.length > 0;
   };
-
-  // Selected-service banner shown at the top of steps 2 & 3. Flex order + text-start
-  // keep it RTL-correct (icon on the inline-start, price on the inline-end).
-  const serviceBanner = primaryService && (
-    <div className="mb-5 flex items-center gap-3 rounded-2xl border border-accent/20 bg-accent/[0.08] p-3.5 shadow-[0_6px_16px_-12px_hsl(var(--accent)/0.5)] backdrop-blur-md">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
-        {isGroupBooking ? <Users className="h-[18px] w-[18px]" /> : <Sparkles className="h-[18px] w-[18px]" />}
-      </div>
-      <div className="min-w-0 flex-1 text-start">
-        <p className="truncate text-sm font-bold text-foreground">{primaryService.name[lang]}</p>
-        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-          <Clock className="h-3 w-3 shrink-0" />
-          {totalDuration} {t("min")}
-        </p>
-      </div>
-      {provider.showPrices && total > 0 && (
-        <span className="shrink-0 text-base font-bold text-accent">₪{total}</span>
-      )}
-    </div>
-  );
 
   const effectiveDate = selectedSession
     ? selectedSession.session_date
@@ -522,6 +509,7 @@ const BookAppointment = () => {
       // sticky header sticks to it. Window-level sticky is broken here by the
       // global `html, body { overflow-x: hidden }` WebView backstop in index.css
       // (it turns body into the nearest scrollport, which never scrolls itself).
+      ref={scrollRef}
       className="relative h-[100dvh] overflow-y-auto overflow-x-clip pb-32"
       style={{ background: "var(--bg-atmosphere)" }}
     >
@@ -982,7 +970,6 @@ const BookAppointment = () => {
             >
               {hasScheduledSessions ? (
                 <div>
-                  {serviceBanner}
                   <SectionLabel className="mb-4">
                     <CalendarDays className="h-3.5 w-3.5" />
                     בחר מפגש
@@ -1053,7 +1040,6 @@ const BookAppointment = () => {
                 </div>
               ) : (
                 <div>
-                  {serviceBanner}
                   <SectionLabel className="mb-3">
                     <CalendarDays className="h-3.5 w-3.5" />
                     {t("selectDate")}
@@ -1320,10 +1306,23 @@ const BookAppointment = () => {
                 <div className="flex items-baseline justify-between mb-3">
                   {!isFitnessStudio ? (
                     <>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedServices.length} {selectedServices.length !== 1 ? t("serviceCount") : t("service")}
+                      <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                        {primaryService ? (
+                          <>
+                            <span className="font-semibold text-foreground/80">{primaryService.name[lang]}</span>
+                            {" · "}{totalDuration} {t("min")}
+                            {effectiveTime && (
+                              <>
+                                {" · "}
+                                <span dir="ltr" className="tabular-nums">{effectiveTime}</span>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          `${selectedServices.length} ${t("serviceCount")}`
+                        )}
                       </p>
-                      {provider.showPrices && total > 0 ? <p className="text-lg font-bold">₪{total}</p> : null}
+                      {provider.showPrices && total > 0 ? <p className="ms-3 shrink-0 text-lg font-bold">₪{total}</p> : null}
                     </>
                   ) : (
                     <p className="text-sm font-semibold">{selectedClass?.class_name}</p>
