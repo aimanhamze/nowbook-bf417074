@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format, addDays, startOfDay } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
 import { Plus, Clock, Users, CalendarDays, Check, CalendarX } from "lucide-react";
@@ -91,6 +91,13 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   useEffect(() => {
     setDateChosen(false);
   }, [serviceId]);
+
+  // The step body is its own scroll container — reset it so every step opens
+  // at the top instead of inheriting the previous step's scroll position.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, [step]);
 
   const activeServices = services.filter((s) => s.is_active !== false);
   const service = activeServices.find((s) => s.id === serviceId);
@@ -220,7 +227,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
         </div>
 
         {/* ── Scrollable step body ── */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5 pt-4">
+        <div ref={bodyRef} className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5 pt-4">
           <AnimatePresence mode="wait">
             {/* ── STEP 1: Service ── */}
             {step === 1 && (
