@@ -402,6 +402,39 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
           type: "booking_cancelled",
         });
       }
+
+      // Push the provider as well — additive to the bell row above, which is
+      // unchanged. Deliberately NOT awaited: the cancellation is already
+      // committed at this point, so a slow or failing push must never fail the
+      // mutation or surface an error to the customer. Errors are logged only.
+      // send-push resolves provider_profiles.id -> user_id itself, so this does
+      // not depend on the providerProfile lookup above.
+      void (async () => {
+        try {
+          const { data: customerProfile } = await supabase
+            .from("profiles")
+            .select("display_name")
+            .eq("user_id", user?.id ?? "")
+            .maybeSingle();
+          const customerName = customerProfile?.display_name || "לקוח";
+          const serviceName = getServiceNames(booking.service_ids);
+
+          const { error: pushError } = await supabase.functions.invoke("send-push", {
+            body: {
+              provider_id: booking.provider_id,
+              title: "בוטל תור ❌",
+              body: `${customerName} ביטל/ה את התור ל-${serviceName} בתאריך ${booking.booking_date} בשעה ${booking.booking_time}`,
+              url: "/calendar",
+              type: "booking_cancelled",
+            },
+          });
+          if (pushError) {
+            console.warn("send-push (cancellation) failed:", pushError.message);
+          }
+        } catch (err) {
+          console.warn("send-push (cancellation) threw:", err);
+        }
+      })();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
