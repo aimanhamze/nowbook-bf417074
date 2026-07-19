@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
 import { CustomerAutocomplete } from "@/components/dashboard/CustomerAutocomplete";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,9 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
 
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  // 4 steps: service → month calendar → time → customer info (same calendar +
+  // time-step pattern as the customer BookAppointment flow).
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [serviceId, setServiceId] = useState("");
   const [date, setDate] = useState<Date>(startOfDay(selectedDate));
   const [time, setTime] = useState("");
@@ -51,17 +54,24 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Calendar UI state: displayed month + whether a day was actively tapped
+  // (`date` always holds a value, so it can't signal that alone).
+  const [calMonth, setCalMonth] = useState<Date>(() => startOfDay(selectedDate));
+  const [dateChosen, setDateChosen] = useState(false);
 
   const startToday = startOfDay(new Date());
-  const dates = Array.from({ length: profile?.booking_window_days ?? 14 }, (_, i) => addDays(startToday, i));
+  // Same selectable range the old date strip had: today .. today + window - 1.
+  const windowEnd = addDays(startToday, (profile?.booking_window_days ?? 14) - 1);
 
-  // Reset the form each time the sheet opens; seed the date from the calendar's
-  // selection, clamped into the visible strip.
+  // Reset the form each time the sheet opens; the calendar opens on the month of
+  // the provider-calendar's selected day (clamped into the booking window).
   useEffect(() => {
     if (!open) return;
-    const seedStr = format(selectedDate, "yyyy-MM-dd");
-    const inRange = dates.some((d) => format(d, "yyyy-MM-dd") === seedStr);
-    setDate(inRange ? startOfDay(selectedDate) : startToday);
+    const seed = startOfDay(selectedDate);
+    const inRange = seed >= startToday && seed <= windowEnd;
+    setDate(inRange ? seed : startToday);
+    setCalMonth(inRange ? seed : startToday);
+    setDateChosen(false);
     setStep(1);
     setServiceId("");
     setTime("");
@@ -76,6 +86,12 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     setTime("");
   }, [serviceId, date]);
 
+  // Day availability depends on the service (duration/capacity), so switching
+  // service sends the provider back through the calendar.
+  useEffect(() => {
+    setDateChosen(false);
+  }, [serviceId]);
+
   const activeServices = services.filter((s) => s.is_active !== false);
   const service = activeServices.find((s) => s.id === serviceId);
   const isGroup = service?.service_type === "group";
@@ -87,18 +103,31 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     : [];
   const hasSlots = isGroup ? groupSlots.length > 0 : privateSlots.length > 0;
 
+  // A calendar day is tappable iff the EXISTING slot pipeline above (same
+  // functions, same arguments) yields a selectable slot for it — presentation
+  // only, so the calendar can never disagree with the time step.
+  const dayHasAvailability = (d: Date): boolean => {
+    if (!service) return false;
+    if (isGroup) {
+      return getGroupSlotsWithCapacity(d, service.max_capacity ?? 1).some((s) => !s.isFull);
+    }
+    return getAvailableSlots(d, duration, service.max_capacity ?? 1, service.id).length > 0;
+  };
+
   const canSubmit =
     !!service && !!time && name.trim().length > 0 && phone.trim().length > 0 && !submitting;
 
-  // Per-step gate: service → time → (name + phone handled by canSubmit on step 3).
-  const canProceed = step === 1 ? !!service : step === 2 ? !!time : true;
+  // Per-step gate: service → day → time → (name + phone handled by canSubmit on step 4).
+  const canProceed =
+    step === 1 ? !!service : step === 2 ? dateChosen : step === 3 ? !!time : true;
 
   const handleNext = () => {
     if (step === 1 && service) setStep(2);
-    else if (step === 2 && time) setStep(3);
+    else if (step === 2 && dateChosen) setStep(3);
+    else if (step === 3 && time) setStep(4);
   };
 
-  const handleBack = () => setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s));
+  const handleBack = () => setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4) : s));
 
   const handleCreate = async () => {
     if (!profile || !service) return;
@@ -144,7 +173,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     setOpen(false);
   };
 
-  const stepLabels = [t("selectServices"), t("selectDate"), t("walkInCustomerInfo")];
+  const stepLabels = [t("selectServices"), t("selectDate"), t("pickTime"), t("walkInCustomerInfo")];
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -171,7 +200,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
 
           <div className="mt-4 mb-1">
             <div className="mb-2 flex gap-1.5">
-              {[1, 2, 3].map((s) => (
+              {[1, 2, 3, 4].map((s) => (
                 <div
                   key={s}
                   className={cn(
@@ -184,7 +213,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-accent">{stepLabels[step - 1]}</p>
               <p className="text-[11px] font-medium text-muted-foreground tabular-nums">
-                {step} / 3
+                {step} / 4
               </p>
             </div>
           </div>
@@ -253,7 +282,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
               </motion.div>
             )}
 
-            {/* ── STEP 2: Date + Time ── */}
+            {/* ── STEP 2: Month calendar (shared with the customer flow) ── */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -262,39 +291,61 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                 exit={{ opacity: 0, x: -20 }}
                 transition={SPRING}
               >
-                {/* Date strip */}
-                <div className="mb-6">
-                  <SectionLabel className="mb-3">
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    {format(date, "MMMM yyyy", { locale: dateFnsLocale })}
-                  </SectionLabel>
-                  <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 scrollbar-none">
-                    {dates.map((d) => {
-                      const selected = format(d, "yyyy-MM-dd") === format(date, "yyyy-MM-dd");
-                      return (
-                        <button
-                          key={d.toISOString()}
-                          type="button"
-                          onClick={() => setDate(d)}
-                          className={cn(
-                            "flex min-w-[58px] flex-col items-center rounded-xl border py-2.5 px-2.5 transition-all active:scale-95",
-                            selected
-                              ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.45)]"
-                              : "border-border bg-card text-foreground"
-                          )}
-                        >
-                          <span className="text-[10px] font-medium uppercase">
-                            {format(d, "EEE", { locale: dateFnsLocale })}
-                          </span>
-                          <span className="text-lg font-bold tabular-nums">{format(d, "d")}</span>
-                          <span className="text-[10px]">{format(d, "MMM", { locale: dateFnsLocale })}</span>
-                        </button>
-                      );
-                    })}
+                <SectionLabel className="mb-3">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  {t("selectDate")}
+                </SectionLabel>
+                <div className="rounded-2xl border border-border bg-secondary/40 p-3">
+                  <BookingMonthCalendar
+                    month={calMonth}
+                    onMonthChange={setCalMonth}
+                    fromDate={startToday}
+                    toDate={windowEnd}
+                    dayHasAvailability={dayHasAvailability}
+                    selected={dateChosen ? date : undefined}
+                    onSelectDay={(day) => {
+                      setDate(day);
+                      setTime("");
+                      setDateChosen(true);
+                      setStep(3);
+                    }}
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── STEP 3: Time for the chosen day ── */}
+            {step === 3 && (
+              <motion.div
+                key="step3-time"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={SPRING}
+              >
+                {/* Chosen-day summary + back-to-calendar affordance */}
+                <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-3.5 shadow-sm">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-accent font-bold text-accent-foreground">
+                      <span className="text-base leading-none tabular-nums">{format(date, "d")}</span>
+                      <span className="text-[10px]">{format(date, "MMM", { locale: dateFnsLocale })}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold">{format(date, "EEEE", { locale: dateFnsLocale })}</p>
+                      <p className="text-xs text-muted-foreground">{format(date, "d MMMM yyyy", { locale: dateFnsLocale })}</p>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition-transform active:scale-95"
+                  >
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {t("changeDate")}
+                  </button>
                 </div>
 
-                {/* Time grid */}
+                {/* Time grid — unchanged slot computation */}
                 <div>
                   <SectionLabel className="mb-3">
                     <Clock className="h-3.5 w-3.5" />
@@ -354,10 +405,10 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
               </motion.div>
             )}
 
-            {/* ── STEP 3: Customer info ── */}
-            {step === 3 && (
+            {/* ── STEP 4: Customer info ── */}
+            {step === 4 && (
               <motion.div
-                key="step3"
+                key="step4"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
@@ -454,7 +505,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                 {t("back")}
               </Button>
             )}
-            {step < 3 ? (
+            {step < 4 ? (
               <Button
                 type="button"
                 onClick={handleNext}
