@@ -3,10 +3,11 @@ import { useProviderById, useRealAvailability } from "@/hooks/useAllProviders";
 import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import { useProviderClassScheduleById, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
 import type { Service } from "@/lib/mock-data";
-import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock } from "lucide-react";
-import { BackArrow } from "@/components/ui/directional-icon";
+import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck } from "lucide-react";
+import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import { useState, useEffect } from "react";
+import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
+import { Fragment, useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, parseISO, addDays, getDay } from "date-fns";
@@ -57,11 +58,17 @@ const BookAppointment = () => {
   const isFitnessStudio = provider?.category === "fitness_studio";
 
   // ── Standard flow state ──
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  // Standard (non-fitness) flow is 4 steps: services → day (month calendar) →
+  // time → confirm. The fitness flow keeps its 3 steps (confirm at 3).
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>("");
+  // Step-2 calendar UI state: displayed month + whether the customer actively
+  // tapped a day (selectedDate defaults to today, so it can't signal that alone).
+  const [calMonth, setCalMonth] = useState<Date>(() => new Date());
+  const [dateChosen, setDateChosen] = useState(false);
 
   // ── Fitness-studio flow state ──
   const [selectedClass, setSelectedClass] = useState<ClassScheduleEntry | null>(null);
@@ -179,6 +186,9 @@ const BookAppointment = () => {
     );
     setSelectedSessionId("");
     setSelectedTime("");
+    // Day availability depends on the service (duration/capacity), so a service
+    // change sends the customer back through the calendar.
+    setDateChosen(false);
   };
 
   const total = selectedServices.reduce((sum, s) => sum + s.price, 0);
@@ -226,7 +236,57 @@ const BookAppointment = () => {
   const allSlotsPassed = isToday && allSlotsRaw.length > 0 && availableSlots.length === 0;
   const allGroupSlotsPassed = isToday && groupSlotsRaw.length > 0 && availableGroupSlots.length === 0;
 
-  const dates = Array.from({ length: provider.bookingWindowDays ?? 14 }, (_, i) => addDays(new Date(), i));
+  // ── Step-2 month calendar (UI only — same availability source as before) ──
+  // The calendar's selectable range is IDENTICAL to the old horizontal strip:
+  // today .. today + bookingWindowDays - 1.
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const bookingWindowEnd = addDays(todayStart, (provider.bookingWindowDays ?? 14) - 1);
+
+  const slotMins = (s: string) => {
+    const [h, m] = s.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const isSameDayAsNow = (d: Date) =>
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+
+  // A day is tappable iff the EXISTING slot pipeline (getAvailableSlots /
+  // getGroupSlotsWithCapacity, plus the same today-only lead-time filter the
+  // time chips apply) yields at least one selectable slot for it. This is
+  // presentation only: the calendar greys out exactly the days whose time step
+  // would have been empty.
+  const dayHasAvailability = (date: Date): boolean => {
+    if (isGroupBooking) {
+      const open = getGroupSlotsWithCapacity(date, groupMaxCapacity).filter((s) => !s.isFull);
+      const usable = isSameDayAsNow(date) ? open.filter((s) => slotMins(s.time) > leadTimeCutoff) : open;
+      return usable.length > 0;
+    }
+    const raw = getAvailableSlots(date, totalDuration || 15, primaryService?.max_capacity ?? 1, primaryService?.id, primaryService?.latest_start_time);
+    const usable = isSameDayAsNow(date) ? raw.filter((s) => slotMins(s) > leadTimeCutoff) : raw;
+    return usable.length > 0;
+  };
+
+  // Selected-service banner shown at the top of steps 2 & 3. Flex order + text-start
+  // keep it RTL-correct (icon on the inline-start, price on the inline-end).
+  const serviceBanner = primaryService && (
+    <div className="mb-5 flex items-center gap-3 rounded-2xl border border-accent/20 bg-accent/[0.08] p-3.5 shadow-[0_6px_16px_-12px_hsl(var(--accent)/0.5)] backdrop-blur-md">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
+        {isGroupBooking ? <Users className="h-[18px] w-[18px]" /> : <Sparkles className="h-[18px] w-[18px]" />}
+      </div>
+      <div className="min-w-0 flex-1 text-start">
+        <p className="truncate text-sm font-bold text-foreground">{primaryService.name[lang]}</p>
+        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3 shrink-0" />
+          {totalDuration} {t("min")}
+        </p>
+      </div>
+      {provider.showPrices && total > 0 && (
+        <span className="shrink-0 text-base font-bold text-accent">₪{total}</span>
+      )}
+    </div>
+  );
 
   const effectiveDate = selectedSession
     ? selectedSession.session_date
@@ -251,15 +311,35 @@ const BookAppointment = () => {
   const occurrenceDates = _occurrenceDates;
   const occurrenceDateStrs = _occurrenceDateStrs;
 
-  // Standard flow canProceed / handleNext
+  // Standard flow canProceed / handleNext — 4 steps. When the service has
+  // scheduled sessions, the session card IS date+time, so the time step is
+  // skipped (2 → 4), exactly as the old flow went straight to confirm.
   const canProceed =
     (step === 1 && selectedServices.length > 0) ||
-    (step === 2 && (hasScheduledSessions ? !!selectedSessionId : !!selectedTime)) ||
-    step === 3;
+    (step === 2 && (hasScheduledSessions ? !!selectedSessionId : dateChosen)) ||
+    (step === 3 && !!selectedTime) ||
+    step === 4;
 
   const handleNext = () => {
     if (step === 1 && selectedServices.length > 0) setStep(2);
-    else if (step === 2 && effectiveTime) setStep(3);
+    else if (step === 2) {
+      if (hasScheduledSessions && selectedSessionId) setStep(4);
+      else if (dateChosen) setStep(3);
+    } else if (step === 3 && selectedTime) setStep(4);
+  };
+
+  const handleBack = () => {
+    if (step === 1) {
+      navigate(-1);
+      return;
+    }
+    // Session-based services skip the time step, so back from confirm returns
+    // to the session list.
+    if (!isFitnessStudio && hasScheduledSessions && step === 4) {
+      setStep(2);
+      return;
+    }
+    setStep((s) => (s - 1) as 1 | 2 | 3 | 4);
   };
 
   // Fitness flow canProceed / handleNext
@@ -424,10 +504,13 @@ const BookAppointment = () => {
   // ── Fitness-studio step labels ──
   const fitnessStepLabels = [t("pickClass"), t("selectOccurrence"), t("confirm")];
   // ── Standard step labels ──
-  const stepLabels = [t("selectServices"), t("selectDate"), t("confirm")];
+  const stepLabels = [t("selectServices"), t("selectDate"), t("pickTime"), t("confirm")];
 
   // Derived labels for current mode
   const activeStepLabels = isFitnessStudio ? fitnessStepLabels : stepLabels;
+  const activeStepIcons = isFitnessStudio
+    ? [Dumbbell, CalendarDays, Check]
+    : [Sparkles, CalendarDays, Clock, Check];
   const activeCanProceed = isFitnessStudio ? fitnessCanProceed : canProceed;
   const activeHandleNext = isFitnessStudio ? fitnessHandleNext : handleNext;
 
@@ -435,7 +518,11 @@ const BookAppointment = () => {
 
   return (
     <div
-      className="relative min-h-screen overflow-x-clip pb-32"
+      // h-[100dvh] + overflow-y-auto makes THIS div the scroll container, so the
+      // sticky header sticks to it. Window-level sticky is broken here by the
+      // global `html, body { overflow-x: hidden }` WebView backstop in index.css
+      // (it turns body into the nearest scrollport, which never scrolls itself).
+      className="relative h-[100dvh] overflow-y-auto overflow-x-clip pb-32"
       style={{ background: "var(--bg-atmosphere)" }}
     >
       <div
@@ -450,11 +537,16 @@ const BookAppointment = () => {
       />
 
       <div className="relative">
-        {/* ── Header ── */}
-        <header className="px-5 pt-10 pb-6">
+        {/* ── Sticky header + step indicator — stays visible while scrolling.
+            Background reproduces the TOP SLICE of --bg-atmosphere (0% stop
+            hsl(24 90% 94%) → interpolated ~21% point), so the pinned header is
+            indistinguishable from the unpinned page background. The ::after
+            strip fades scrolled content out softly just below it. ── */}
+        <div className="sticky top-0 z-40 mb-6 bg-gradient-to-b from-[hsl(24_90%_94%)] to-[hsl(34_54%_95%)] after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-5 after:bg-gradient-to-b after:from-[hsl(34_54%_95%)] after:to-transparent">
+        <header className="px-5 pt-10 pb-4">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => (step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3) : navigate(-1))}
+              onClick={handleBack}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95 shrink-0"
             >
               <BackArrow variant="arrow" className="h-5 w-5" />
@@ -463,22 +555,45 @@ const BookAppointment = () => {
           </div>
         </header>
 
-        {/* ── Step indicator ── */}
-        <div className="px-5 mb-6">
-          <div className="flex gap-1.5 mb-2">
-            {[1, 2, 3].map((s) => (
-              <div
-                key={s}
-                className={cn(
-                  "h-1.5 flex-1 rounded-full transition-colors duration-300",
-                  s <= step ? "bg-accent" : "bg-border"
-                )}
-              />
-            ))}
+        {/* ── Step indicator — icon nodes joined by connector lines ── */}
+        <div className="px-5 pb-4">
+          <div className="flex items-center">
+            {activeStepLabels.map((label, i) => {
+              const s = i + 1;
+              const Icon = activeStepIcons[i];
+              const isDone = s < step;
+              const isCurrent = s === step;
+              return (
+                <Fragment key={`${label}-${i}`}>
+                  {i > 0 && (
+                    <div
+                      className={cn(
+                        "mx-1.5 h-1 flex-1 rounded-full transition-colors duration-300",
+                        s <= step ? "bg-accent" : "bg-border"
+                      )}
+                    />
+                  )}
+                  <div
+                    aria-current={isCurrent ? "step" : undefined}
+                    className={cn(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-300",
+                      isCurrent
+                        ? "scale-110 bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.5)] ring-4 ring-accent/15"
+                        : isDone
+                        ? "bg-accent text-accent-foreground"
+                        : "bg-white/80 text-muted-foreground/50 ring-1 ring-border"
+                    )}
+                  >
+                    {isDone ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                  </div>
+                </Fragment>
+              );
+            })}
           </div>
-          <p className="text-xs font-semibold text-accent text-end">
+          <p className="mt-2.5 text-xs font-semibold text-accent text-end">
             {activeStepLabels[step - 1]}
           </p>
+        </div>
         </div>
 
         <AnimatePresence mode="wait">
@@ -767,7 +882,7 @@ const BookAppointment = () => {
               transition={SPRING}
               className="px-5"
             >
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 {provider.services.map((service, i) => {
                   const isSelected = !!selectedServices.find((s) => s.id === service.id);
                   const isGroup = service.service_type === "group";
@@ -781,15 +896,26 @@ const BookAppointment = () => {
                       transition={{ ...SPRING, delay: i * 0.06 }}
                       onClick={() => toggleService(service)}
                       className={cn(
-                        "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
+                        "flex w-full items-center gap-3.5 rounded-3xl border p-4 text-start transition-all active:scale-[0.98]",
                         isSelected
-                          ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
-                          : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] hover:border-accent/30"
+                          ? "border-accent/60 bg-accent/[0.08] ring-2 ring-accent/25 shadow-[0_10px_28px_-14px_hsl(var(--accent)/0.45)]"
+                          : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] backdrop-blur-md hover:border-accent/30"
                       )}
                     >
-                      <div className="text-right flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <p className="text-sm font-semibold">{service.name[lang]}</p>
+                      {/* Icon tile */}
+                      <div
+                        className={cn(
+                          "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-colors duration-300",
+                          isSelected ? "bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.5)]" : "bg-accent/10 text-accent"
+                        )}
+                      >
+                        {isGroup ? <Users className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+                      </div>
+
+                      {/* Details */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-[15px] font-bold leading-tight">{service.name[lang]}</p>
                           {isGroup && (
                             <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-semibold">
                               <Users className="h-2.5 w-2.5" /> {t("groupClass")}
@@ -797,11 +923,11 @@ const BookAppointment = () => {
                           )}
                         </div>
                         {service.latest_start_time && (
-                          <p className="text-[11px] text-orange-600 font-medium mb-1">
+                          <p className="mt-0.5 text-[11px] text-orange-600 font-medium">
                             {t("availableUntil").replace("{time}", service.latest_start_time.slice(0, 5))}
                           </p>
                         )}
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                           <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
                             <Clock className="h-3 w-3" />
                             {service.duration} {t("min")}
@@ -813,24 +939,30 @@ const BookAppointment = () => {
                             </span>
                           )}
                           {isGroup && service.max_capacity && (
-                            <span className="text-[10px] text-muted-foreground">
-                              · {t("maxCapacity")}: {service.max_capacity}
+                            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">
+                              <Users className="h-2.5 w-2.5" />
+                              {t("maxCapacity")}: {service.max_capacity}
                             </span>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 ms-3 shrink-0">
+
+                      {/* Price + selection indicator */}
+                      <div className="flex shrink-0 flex-col items-end gap-2">
                         {provider.showPrices && service.price > 0 && (
-                          <div className="text-end">
-                            <span className="text-xs text-accent">₪</span>
-                            <span className="text-base font-bold">{service.price}</span>
+                          <div className="text-end leading-none">
+                            <span className="text-xs font-semibold text-accent">₪</span>
+                            <span className="text-lg font-black tracking-tight">{service.price}</span>
                           </div>
                         )}
-                        {isSelected && (
-                          <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0">
-                            <Check className="h-3 w-3 text-accent-foreground" />
-                          </div>
-                        )}
+                        <div
+                          className={cn(
+                            "flex h-6 w-6 items-center justify-center rounded-full border-2 transition-all duration-300",
+                            isSelected ? "border-accent bg-accent" : "border-border bg-white/60"
+                          )}
+                        >
+                          {isSelected && <Check className="h-3.5 w-3.5 text-accent-foreground" />}
+                        </div>
                       </div>
                     </motion.button>
                   );
@@ -850,6 +982,7 @@ const BookAppointment = () => {
             >
               {hasScheduledSessions ? (
                 <div>
+                  {serviceBanner}
                   <SectionLabel className="mb-4">
                     <CalendarDays className="h-3.5 w-3.5" />
                     בחר מפגש
@@ -920,128 +1053,161 @@ const BookAppointment = () => {
                 </div>
               ) : (
                 <div>
-                  <div className="mb-6">
-                    <SectionLabel className="mb-3">
-                      <CalendarDays className="h-3.5 w-3.5" />
-                      {format(selectedDate, "MMMM yyyy", { locale: dateFnsLocale })}
-                    </SectionLabel>
-                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
-                      {dates.map((date) => {
-                        const isSelected = format(date, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
-                        return (
-                          <button
-                            key={date.toISOString()}
-                            onClick={() => { setSelectedDate(date); setSelectedTime(""); }}
-                            className={cn(
-                              "flex flex-col items-center min-w-[60px] py-2.5 px-3 rounded-xl border transition-all",
-                              isSelected
-                                ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.35)]"
-                                : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)]"
-                            )}
-                          >
-                            <span className="text-[10px] font-medium uppercase">{format(date, "EEE", { locale: dateFnsLocale })}</span>
-                            <span className="text-lg font-bold">{format(date, "d", { locale: dateFnsLocale })}</span>
-                            <span className="text-[10px]">{format(date, "MMM", { locale: dateFnsLocale })}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  {serviceBanner}
+                  <SectionLabel className="mb-3">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {t("selectDate")}
+                  </SectionLabel>
 
-                  <div>
-                    <SectionLabel className="mb-3">
-                      <Clock className="h-3.5 w-3.5" />
-                      {t("availableTimes")}
-                    </SectionLabel>
-
-                    {isGroupBooking ? (
-                      availableGroupSlots.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-2">
-                          {availableGroupSlots.map((slotInfo) => (
-                            <button
-                              key={slotInfo.time}
-                              onClick={() => !slotInfo.isFull && setSelectedTime(slotInfo.time)}
-                              disabled={slotInfo.isFull}
-                              className={cn(
-                                "py-3 px-1 rounded-2xl text-sm font-semibold transition-all active:scale-95 flex flex-col items-center gap-1 border",
-                                selectedTime === slotInfo.time
-                                  ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
-                                  : slotInfo.isFull
-                                  ? "border-transparent bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
-                                  : slotInfo.spotsLeft === 1
-                                  ? "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
-                                  : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)] hover:bg-white/80"
-                              )}
-                            >
-                              <span>{slotInfo.time}</span>
-                              <span className={cn(
-                                "text-[9px] leading-none flex items-center gap-1",
-                                selectedTime === slotInfo.time ? "text-accent-foreground/80"
-                                : slotInfo.isFull ? "text-muted-foreground"
-                                : slotInfo.spotsLeft === 1 ? "text-orange-600"
-                                : "text-emerald-600"
-                              )}>
-                                {slotInfo.isFull ? (
-                                  <>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />
-                                    {t("spotsFull")}
-                                  </>
-                                ) : slotInfo.spotsLeft === 1 ? (
-                                  <>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-                                    {t("lastSpot")}
-                                  </>
-                                ) : (
-                                  `${slotInfo.spotsLeft} ${t("spotsLeft")}`
-                                )}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="glass-card-md rounded-2xl p-8 text-center">
-                          <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-                          <p className="text-sm text-muted-foreground">
-                            {allGroupSlotsPassed ? t("noSlotsToday") : t("unavailable")}
-                          </p>
-                        </div>
-                      )
-                    ) : (
-                      availableSlots.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-2">
-                          {availableSlots.map((slot) => (
-                            <button
-                              key={slot}
-                              onClick={() => setSelectedTime(slot)}
-                              className={cn(
-                                "py-3 rounded-2xl text-sm font-semibold transition-all active:scale-95 border",
-                                selectedTime === slot
-                                  ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
-                                  : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)] hover:bg-white/80"
-                              )}
-                            >
-                              {slot}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="glass-card-md rounded-2xl p-8 text-center">
-                          <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-                          <p className="text-sm text-muted-foreground">
-                            {allSlotsPassed ? t("noSlotsToday") : t("unavailable")}
-                          </p>
-                        </div>
-                      )
-                    )}
+                  {/* Month calendar — same react-day-picker setup + design
+                      language as the provider's MonthlyAvailabilityCalendar
+                      (hidden built-in caption, RTL-aware custom nav). Days in
+                      the past, beyond the booking window, or without a single
+                      free slot are disabled; tapping a free day advances to
+                      the time step. */}
+                  <div className="rounded-3xl border border-white/60 bg-white/70 p-3 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] backdrop-blur-md">
+                    <BookingMonthCalendar
+                      month={calMonth}
+                      onMonthChange={setCalMonth}
+                      fromDate={todayStart}
+                      toDate={bookingWindowEnd}
+                      dayHasAvailability={dayHasAvailability}
+                      selected={dateChosen ? selectedDate : undefined}
+                      onSelectDay={(day) => {
+                        setSelectedDate(day);
+                        setSelectedTime("");
+                        setDateChosen(true);
+                        setStep(3);
+                      }}
+                    />
                   </div>
                 </div>
               )}
             </motion.div>
           )}
 
+          {/* Step 3 — pick a time for the chosen day */}
           {!isFitnessStudio && step === 3 && (
             <motion.div
-              key="step3"
+              key="step3-time"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={SPRING}
+              className="px-5"
+            >
+              {/* Chosen-day summary + back-to-calendar affordance */}
+              <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] backdrop-blur-md">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-accent font-bold text-accent-foreground">
+                    <span className="text-lg leading-none">{format(selectedDate, "d")}</span>
+                    <span className="text-[10px]">{format(selectedDate, "MMM", { locale: dateFnsLocale })}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold">{format(selectedDate, "EEEE", { locale: dateFnsLocale })}</p>
+                    <p className="text-xs text-muted-foreground">{format(selectedDate, "d MMMM yyyy", { locale: dateFnsLocale })}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition-transform active:scale-95"
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  {t("changeDate")}
+                </button>
+              </div>
+
+              <SectionLabel className="mb-3">
+                <Clock className="h-3.5 w-3.5" />
+                {t("availableTimes")}
+              </SectionLabel>
+
+              {isGroupBooking ? (
+                availableGroupSlots.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {availableGroupSlots.map((slotInfo) => (
+                      <button
+                        key={slotInfo.time}
+                        onClick={() => !slotInfo.isFull && setSelectedTime(slotInfo.time)}
+                        disabled={slotInfo.isFull}
+                        className={cn(
+                          "py-3.5 px-1 rounded-2xl text-sm font-semibold transition-all active:scale-95 flex flex-col items-center gap-1 border",
+                          selectedTime === slotInfo.time
+                            ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
+                            : slotInfo.isFull
+                            ? "border-transparent bg-muted text-muted-foreground opacity-60 cursor-not-allowed"
+                            : slotInfo.spotsLeft === 1
+                            ? "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+                            : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)] hover:bg-white/80"
+                        )}
+                      >
+                        <span>{slotInfo.time}</span>
+                        <span className={cn(
+                          "text-[9px] leading-none flex items-center gap-1",
+                          selectedTime === slotInfo.time ? "text-accent-foreground/80"
+                          : slotInfo.isFull ? "text-muted-foreground"
+                          : slotInfo.spotsLeft === 1 ? "text-orange-600"
+                          : "text-emerald-600"
+                        )}>
+                          {slotInfo.isFull ? (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />
+                              {t("spotsFull")}
+                            </>
+                          ) : slotInfo.spotsLeft === 1 ? (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+                              {t("lastSpot")}
+                            </>
+                          ) : (
+                            `${slotInfo.spotsLeft} ${t("spotsLeft")}`
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="glass-card-md rounded-2xl p-8 text-center">
+                    <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">
+                      {allGroupSlotsPassed ? t("noSlotsToday") : t("unavailable")}
+                    </p>
+                  </div>
+                )
+              ) : (
+                availableSlots.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {availableSlots.map((slot) => (
+                      <button
+                        key={slot}
+                        onClick={() => setSelectedTime(slot)}
+                        className={cn(
+                          "py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-95 border",
+                          selectedTime === slot
+                            ? "border-transparent bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)]"
+                            : "border-white/60 bg-white/70 text-foreground shadow-[0_4px_12px_-10px_rgba(120,70,30,0.18)] hover:bg-white/80"
+                        )}
+                      >
+                        {slot}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="glass-card-md rounded-2xl p-8 text-center">
+                    <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">
+                      {allSlotsPassed ? t("noSlotsToday") : t("unavailable")}
+                    </p>
+                  </div>
+                )
+              )}
+            </motion.div>
+          )}
+
+          {!isFitnessStudio && step === 4 && (
+            <motion.div
+              key="step4"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -1127,7 +1293,7 @@ const BookAppointment = () => {
 
         {/* ── Bottom bar ── */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/70 backdrop-blur-xl border-t border-white/40">
-          {step === 3 ? (
+          {step === (isFitnessStudio ? 3 : 4) ? (
             <div>
               <div className="flex items-baseline justify-between mb-3">
                 <p className="text-xs text-muted-foreground">{provider.name[lang]}</p>
@@ -1140,33 +1306,40 @@ const BookAppointment = () => {
               >
                 {loading ? (
                   <span className="w-4 h-4 rounded-full border-2 border-accent-foreground/30 border-t-accent-foreground animate-spin" />
-                ) : t("confirmBooking")}
+                ) : (
+                  <>
+                    <CalendarCheck className="h-5 w-5" />
+                    {t("confirmBooking")}
+                  </>
+                )}
               </button>
             </div>
           ) : (
-            <div className="flex items-center justify-between">
-              <div>
-                {!isFitnessStudio && (
-                  <>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedServices.length} {selectedServices.length !== 1 ? t("serviceCount") : t("service")}
-                    </p>
-                    {provider.showPrices && total > 0 ? <p className="text-lg font-bold">₪{total}</p> : null}
-                  </>
-                )}
-                {isFitnessStudio && selectedClass && (
-                  <p className="text-sm font-semibold">{selectedClass.class_name}</p>
-                )}
-              </div>
+            <div>
+              {(!isFitnessStudio || selectedClass) && (
+                <div className="flex items-baseline justify-between mb-3">
+                  {!isFitnessStudio ? (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedServices.length} {selectedServices.length !== 1 ? t("serviceCount") : t("service")}
+                      </p>
+                      {provider.showPrices && total > 0 ? <p className="text-lg font-bold">₪{total}</p> : null}
+                    </>
+                  ) : (
+                    <p className="text-sm font-semibold">{selectedClass?.class_name}</p>
+                  )}
+                </div>
+              )}
               <button
                 disabled={!activeCanProceed}
                 onClick={activeHandleNext}
                 className={cn(
-                  "px-8 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.97] bg-accent text-accent-foreground shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)]",
+                  "w-full rounded-2xl bg-accent text-accent-foreground py-4 text-base font-semibold shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)] transition-all active:scale-[0.98] flex items-center justify-center gap-2",
                   !activeCanProceed && "opacity-40 pointer-events-none shadow-none"
                 )}
               >
                 {t("continue")}
+                <ForwardArrow variant="arrow" className="h-4 w-4" />
               </button>
             </div>
           )}
