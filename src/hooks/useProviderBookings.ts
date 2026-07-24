@@ -12,6 +12,7 @@ export interface EnrichedBooking {
   total_price: number;
   status: string;
   treatment_notes: string | null;
+  customer_notes: string | null;
   created_at: string;
   updated_at: string;
   customer_name: string | null;
@@ -76,6 +77,7 @@ export function useProviderBookings() {
         return {
           ...b,
           treatment_notes: b.treatment_notes ?? null,
+          customer_notes: b.customer_notes ?? null,
           customer_name: b.customer_name || customer?.display_name || null,
           customer_phone: b.customer_phone || customer?.phone || null,
           customer_avatar: customer?.avatar_url || null,

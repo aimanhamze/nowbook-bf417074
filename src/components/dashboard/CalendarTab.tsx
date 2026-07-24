@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
@@ -174,6 +174,19 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
           <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground">{name}</span>
         ))}
       </div>
+
+      {/* Customer note — what the customer wrote when booking (if any) */}
+      {booking.customer_notes && (
+        <div className="rounded-lg border border-accent/20 bg-accent/5 p-2.5">
+          <div className="flex items-start gap-1.5">
+            <StickyNote className="h-3.5 w-3.5 text-accent shrink-0 mt-0.5" />
+            <p className="text-xs text-foreground/80 whitespace-pre-wrap break-words min-w-0">
+              <span className="font-medium text-accent">{t("customerWrote")}: </span>
+              {booking.customer_notes}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Approve / Reject row for pending bookings */}
       {isPending && (

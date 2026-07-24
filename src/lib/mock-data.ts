@@ -10,6 +10,8 @@ export interface Service {
   max_capacity?: number;
   scheduled_time?: string | null; // HH:MM — fixed time for group classes
   latest_start_time?: string | null; // HH:MM — customer cannot book after this time
+  customer_notes_enabled?: boolean; // provider opted to collect a note before booking
+  customer_notes_placeholder?: string | null; // guidance text shown in the customer's notes field
 }
 
 export interface Provider {

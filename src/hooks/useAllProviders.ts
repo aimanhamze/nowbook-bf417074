@@ -48,6 +48,8 @@ export interface DbService {
   max_capacity: number;
   scheduled_time: string | null;
   latest_start_time: string | null;
+  customer_notes_enabled?: boolean;
+  customer_notes_placeholder?: string | null;
 }
 
 export interface SlotCapacity {
@@ -89,6 +91,8 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCoun
       max_capacity: s.max_capacity ?? 1,
       scheduled_time: s.scheduled_time ?? null,
       latest_start_time: s.latest_start_time ?? null,
+      customer_notes_enabled: s.customer_notes_enabled ?? false,
+      customer_notes_placeholder: s.customer_notes_placeholder ?? null,
     })),
   };
 }

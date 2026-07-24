@@ -52,7 +52,13 @@ type EditState = {
   service_type: 'private' | 'group';
   max_capacity: number;
   latest_start_time: string;
+  customer_notes_enabled: boolean;
+  customer_notes_placeholder: string;
 };
+
+// Default guidance text shown to the customer when the provider enables notes
+// but leaves the placeholder field blank. Mirrors the DB column default.
+const DEFAULT_NOTES_PLACEHOLDER = "הוסף הערות לשירות...";
 
 type AddSessionState = {
   service_id: string;
@@ -106,6 +112,8 @@ export function ServicesTab() {
         // Group/class services keep their configured capacity.
         max_capacity: editing.service_type === 'group' ? editing.max_capacity : 1,
         latest_start_time: editing.latest_start_time || null,
+        customer_notes_enabled: editing.customer_notes_enabled,
+        customer_notes_placeholder: editing.customer_notes_placeholder.trim() || DEFAULT_NOTES_PLACEHOLDER,
       });
       toast.success(t("serviceSaved"));
       setEditing(null);
@@ -157,7 +165,7 @@ export function ServicesTab() {
     }
   };
 
-  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 1, latest_start_time: "" });
+  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 1, latest_start_time: "", customer_notes_enabled: false, customer_notes_placeholder: "" });
 
   const openEdit = (svc: typeof services[number]) => setEditing({
     id: svc.id,
@@ -167,6 +175,8 @@ export function ServicesTab() {
     service_type: (svc.service_type as 'private' | 'group') || 'private',
     max_capacity: svc.max_capacity ?? 1,
     latest_start_time: (svc as { latest_start_time?: string | null }).latest_start_time?.slice(0, 5) ?? "",
+    customer_notes_enabled: (svc as { customer_notes_enabled?: boolean }).customer_notes_enabled ?? false,
+    customer_notes_placeholder: (svc as { customer_notes_placeholder?: string | null }).customer_notes_placeholder ?? "",
   });
 
   const openAddSession = (svc: typeof services[number]) => {
@@ -323,6 +333,52 @@ export function ServicesTab() {
                   onChange={e => setEditing({ ...editing, latest_start_time: e.target.value })}
                 />
                 <p className="text-xs text-muted-foreground mt-1">{t("latestStartTimeHelper")}</p>
+              </div>
+
+              {/* Customer notes toggle — when on, the customer is shown an optional
+                  notes step in the booking flow with the guidance text below. */}
+              <div className="rounded-xl border border-border p-3 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setEditing({ ...editing, customer_notes_enabled: !editing.customer_notes_enabled })}
+                  className="flex w-full items-start justify-between gap-3 text-start"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{t("customerNotesEnabled")}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t("customerNotesEnabledHelp")}</p>
+                  </div>
+                  <span
+                    className={cn(
+                      "relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                      editing.customer_notes_enabled ? "bg-accent" : "bg-muted-foreground/25"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",
+                        editing.customer_notes_enabled ? "translate-x-[1.375rem]" : "translate-x-0.5"
+                      )}
+                    />
+                  </span>
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {editing.customer_notes_enabled && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <Label>{t("customerNotesPlaceholder")}</Label>
+                      <Input
+                        value={editing.customer_notes_placeholder}
+                        placeholder={DEFAULT_NOTES_PLACEHOLDER}
+                        onChange={e => setEditing({ ...editing, customer_notes_placeholder: e.target.value })}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           )}
