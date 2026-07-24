@@ -21,6 +21,7 @@ export type Database = {
           class_schedule_id: string | null
           created_at: string
           customer_name: string | null
+          customer_notes: string | null
           customer_phone: string | null
           guest_notes: string | null
           id: string
@@ -39,6 +40,7 @@ export type Database = {
           class_schedule_id?: string | null
           created_at?: string
           customer_name?: string | null
+          customer_notes?: string | null
           customer_phone?: string | null
           guest_notes?: string | null
           id?: string
@@ -57,6 +59,7 @@ export type Database = {
           class_schedule_id?: string | null
           created_at?: string
           customer_name?: string | null
+          customer_notes?: string | null
           customer_phone?: string | null
           guest_notes?: string | null
           id?: string
@@ -482,6 +485,8 @@ export type Database = {
       provider_services: {
         Row: {
           created_at: string
+          customer_notes_enabled: boolean | null
+          customer_notes_placeholder: string | null
           duration: number
           id: string
           is_active: boolean
@@ -498,6 +503,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          customer_notes_enabled?: boolean | null
+          customer_notes_placeholder?: string | null
           duration?: number
           id?: string
           is_active?: boolean
@@ -514,6 +521,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          customer_notes_enabled?: boolean | null
+          customer_notes_placeholder?: string | null
           duration?: number
           id?: string
           is_active?: boolean

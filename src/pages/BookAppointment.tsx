@@ -3,7 +3,7 @@ import { useProviderById, useRealAvailability } from "@/hooks/useAllProviders";
 import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import { useProviderClassScheduleById, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
 import type { Service } from "@/lib/mock-data";
-import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck } from "lucide-react";
+import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote } from "lucide-react";
 import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
@@ -60,11 +60,14 @@ const BookAppointment = () => {
   // ── Standard flow state ──
   // Standard (non-fitness) flow is 4 steps: services → day (month calendar) →
   // time → confirm. The fitness flow keeps its 3 steps (confirm at 3).
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  // Standard flow grows to 5 steps when the selected service collects a customer
+  // note (services → day → time → notes → confirm). Without notes it stays 4.
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>("");
+  const [customerNotes, setCustomerNotes] = useState<string>("");
   // Step-2 calendar UI state: displayed month + whether the customer actively
   // tapped a day (selectedDate defaults to today, so it can't signal that alone).
   const [calMonth, setCalMonth] = useState<Date>(() => new Date());
@@ -193,6 +196,7 @@ const BookAppointment = () => {
     );
     setSelectedSessionId("");
     setSelectedTime("");
+    setCustomerNotes("");
     // Day availability depends on the service (duration/capacity), so a service
     // change sends the customer back through the calendar.
     setDateChosen(false);
@@ -202,6 +206,13 @@ const BookAppointment = () => {
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
 
   const primaryService = selectedServices[0];
+  // The optional notes step only exists in the standard flow, and only when the
+  // chosen service opted in. When active it sits between time (3) and confirm,
+  // pushing confirm from step 4 to step 5.
+  const notesEnabled = !isFitnessStudio && !!primaryService?.customer_notes_enabled;
+  const standardConfirmStep: 4 | 5 = notesEnabled ? 5 : 4;
+  const notesPlaceholder =
+    primaryService?.customer_notes_placeholder || "הוסף הערות לשירות...";
   const isGroupBooking = primaryService?.service_type === "group";
   const groupMaxCapacity = primaryService?.max_capacity ?? 1;
 
@@ -305,14 +316,25 @@ const BookAppointment = () => {
     (step === 1 && selectedServices.length > 0) ||
     (step === 2 && (hasScheduledSessions ? !!selectedSessionId : dateChosen)) ||
     (step === 3 && !!selectedTime) ||
-    step === 4;
+    // Notes step (only reachable when notesEnabled) — always proceedable since
+    // the note is optional. Confirm steps show a confirm button, not "continue".
+    (step === 4 && notesEnabled) ||
+    step === standardConfirmStep;
 
   const handleNext = () => {
     if (step === 1 && selectedServices.length > 0) setStep(2);
     else if (step === 2) {
+      // Session-based services fold date+time into the session card, so they
+      // jump past the time step to step 4 (notes when enabled, else confirm).
       if (hasScheduledSessions && selectedSessionId) setStep(4);
       else if (dateChosen) setStep(3);
-    } else if (step === 3 && selectedTime) setStep(4);
+    } else if (step === 3 && selectedTime) {
+      // Time → notes (step 4) when enabled, otherwise straight to confirm (also
+      // step 4). Either way the next screen is step 4.
+      setStep(4);
+    } else if (step === 4 && notesEnabled) {
+      setStep(5); // notes → confirm
+    }
   };
 
   const handleBack = () => {
@@ -320,13 +342,14 @@ const BookAppointment = () => {
       navigate(-1);
       return;
     }
-    // Session-based services skip the time step, so back from confirm returns
-    // to the session list.
+    // Session-based services skip the time step, so stepping back from the
+    // screen that immediately follows the session list (step 4 — notes or
+    // confirm) returns to the session list rather than the empty time step.
     if (!isFitnessStudio && hasScheduledSessions && step === 4) {
       setStep(2);
       return;
     }
-    setStep((s) => (s - 1) as 1 | 2 | 3 | 4);
+    setStep((s) => (s - 1) as 1 | 2 | 3 | 4 | 5);
   };
 
   // Fitness flow canProceed / handleNext
@@ -383,6 +406,11 @@ const BookAppointment = () => {
       } else {
         insertPayload.service_ids = selectedServices.map((s) => s.id);
         insertPayload.total_price = total;
+        // Persist the optional customer note (only ever collected in the standard
+        // flow when the service opted in). Empty / whitespace-only → null.
+        if (notesEnabled) {
+          insertPayload.customer_notes = customerNotes.trim() || null;
+        }
       }
 
       const { error } = await supabase.from("bookings").insert(insertPayload);
@@ -490,13 +518,17 @@ const BookAppointment = () => {
 
   // ── Fitness-studio step labels ──
   const fitnessStepLabels = [t("pickClass"), t("selectOccurrence"), t("confirm")];
-  // ── Standard step labels ──
-  const stepLabels = [t("selectServices"), t("selectDate"), t("pickTime"), t("confirm")];
+  // ── Standard step labels ── (5-step variant inserts the notes step)
+  const stepLabels = notesEnabled
+    ? [t("selectServices"), t("selectDate"), t("pickTime"), t("customerNotes"), t("confirm")]
+    : [t("selectServices"), t("selectDate"), t("pickTime"), t("confirm")];
 
   // Derived labels for current mode
   const activeStepLabels = isFitnessStudio ? fitnessStepLabels : stepLabels;
   const activeStepIcons = isFitnessStudio
     ? [Dumbbell, CalendarDays, Check]
+    : notesEnabled
+    ? [Sparkles, CalendarDays, Clock, StickyNote, Check]
     : [Sparkles, CalendarDays, Clock, Check];
   const activeCanProceed = isFitnessStudio ? fitnessCanProceed : canProceed;
   const activeHandleNext = isFitnessStudio ? fitnessHandleNext : handleNext;
@@ -1191,7 +1223,39 @@ const BookAppointment = () => {
             </motion.div>
           )}
 
-          {!isFitnessStudio && step === 4 && (
+          {/* Notes step — optional, only when the service opted in. Sits between
+              time (step 3) and confirm (step 5). */}
+          {!isFitnessStudio && notesEnabled && step === 4 && (
+            <motion.div
+              key="step-notes"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={SPRING}
+              className="px-5"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <SectionLabel>
+                  <StickyNote className="h-3.5 w-3.5" />
+                  {t("customerNotes")}
+                </SectionLabel>
+                <span className="text-xs text-muted-foreground">{t("notesOptional")}</span>
+              </div>
+              <div className="rounded-3xl border border-white/60 bg-white/70 p-4 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] backdrop-blur-md">
+                <textarea
+                  autoFocus
+                  value={customerNotes}
+                  onChange={(e) => setCustomerNotes(e.target.value)}
+                  placeholder={notesPlaceholder}
+                  rows={4}
+                  maxLength={500}
+                  className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+                />
+              </div>
+            </motion.div>
+          )}
+
+          {!isFitnessStudio && step === standardConfirmStep && (
             <motion.div
               key="step4"
               initial={{ opacity: 0, x: 20 }}
@@ -1250,6 +1314,22 @@ const BookAppointment = () => {
                 </div>
               </motion.div>
 
+              {/* Customer note recap — shows what the customer typed on the notes step */}
+              {notesEnabled && customerNotes.trim() && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ ...SPRING, delay: 0.16 }}
+                  className="glass-card rounded-2xl p-4"
+                >
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <StickyNote className="h-3.5 w-3.5 text-accent" />
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">{t("customerNotes")}</p>
+                  </div>
+                  <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">{customerNotes.trim()}</p>
+                </motion.div>
+              )}
+
               {/* Group notice */}
               {isGroupBooking && (
                 <motion.div
@@ -1279,7 +1359,7 @@ const BookAppointment = () => {
 
         {/* ── Bottom bar ── */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/70 backdrop-blur-xl border-t border-white/40">
-          {step === (isFitnessStudio ? 3 : 4) ? (
+          {step === (isFitnessStudio ? 3 : standardConfirmStep) ? (
             <div>
               <div className="flex items-baseline justify-between mb-3">
                 <p className="text-xs text-muted-foreground">{provider.name[lang]}</p>

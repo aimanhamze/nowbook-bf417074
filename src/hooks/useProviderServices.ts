@@ -56,6 +56,8 @@ export function useProviderServices() {
       max_capacity: number;
       scheduled_time?: string | null;
       latest_start_time?: string | null;
+      customer_notes_enabled?: boolean;
+      customer_notes_placeholder?: string | null;
     }) => {
       if (!profile) throw new Error("No provider profile");
       const isFitness = profile.category === 'fitness_studio';
@@ -74,6 +76,12 @@ export function useProviderServices() {
           : Math.max(1, service.max_capacity || 1),
         scheduled_time: service.scheduled_time || null,
         latest_start_time: service.latest_start_time || null,
+        customer_notes_enabled: service.customer_notes_enabled ?? false,
+        // Only persist placeholder text when notes are enabled; otherwise clear
+        // it so a disabled service never carries a stale guidance string.
+        customer_notes_placeholder: service.customer_notes_enabled
+          ? (service.customer_notes_placeholder?.trim() || null)
+          : null,
       };
       if (service.id) {
         const { error } = await supabase

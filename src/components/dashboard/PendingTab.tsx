@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { CheckCircle2, XCircle, Phone, MessageCircle, Clock, CalendarDays, ClipboardList } from "lucide-react";
+import { CheckCircle2, XCircle, Phone, MessageCircle, Clock, CalendarDays, ClipboardList, StickyNote } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -146,6 +146,19 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
         <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{formattedDate}</span>
         <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{booking.booking_time}</span>
       </div>
+
+      {/* Customer note — what the customer wrote when booking (if any) */}
+      {booking.customer_notes && (
+        <div className="rounded-lg border border-amber-200 bg-white/60 p-2.5">
+          <div className="flex items-start gap-1.5">
+            <StickyNote className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-foreground/80 whitespace-pre-wrap break-words min-w-0">
+              <span className="font-medium text-amber-700">{t("customerWrote")}: </span>
+              {booking.customer_notes}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Approve / Reject */}
       <div className="flex gap-2">
