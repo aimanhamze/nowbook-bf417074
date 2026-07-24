@@ -28,6 +28,7 @@ export type Database = {
           linked_user_id: string | null
           provider_id: string
           service_ids: string[]
+          staff_id: string | null
           status: string
           total_price: number
           treatment_notes: string | null
@@ -47,6 +48,7 @@ export type Database = {
           linked_user_id?: string | null
           provider_id: string
           service_ids: string[]
+          staff_id?: string | null
           status?: string
           total_price: number
           treatment_notes?: string | null
@@ -66,6 +68,7 @@ export type Database = {
           linked_user_id?: string | null
           provider_id?: string
           service_ids?: string[]
+          staff_id?: string | null
           status?: string
           total_price?: number
           treatment_notes?: string | null
@@ -86,6 +89,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "provider_profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_staff_id_provider_id_fkey"
+            columns: ["staff_id", "provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_staff"
+            referencedColumns: ["id", "provider_id"]
           },
         ]
       }
@@ -412,6 +422,7 @@ export type Database = {
           show_prices: boolean
           slot_interval_minutes: number
           social_links: Json | null
+          staff_enabled: boolean
           treatment_notes_enabled: boolean
           updated_at: string
           user_id: string
@@ -444,6 +455,7 @@ export type Database = {
           show_prices?: boolean
           slot_interval_minutes?: number
           social_links?: Json | null
+          staff_enabled?: boolean
           treatment_notes_enabled?: boolean
           updated_at?: string
           user_id: string
@@ -476,6 +488,7 @@ export type Database = {
           show_prices?: boolean
           slot_interval_minutes?: number
           social_links?: Json | null
+          staff_enabled?: boolean
           treatment_notes_enabled?: boolean
           updated_at?: string
           user_id?: string
@@ -585,6 +598,41 @@ export type Database = {
             columns: ["service_id"]
             isOneToOne: false
             referencedRelation: "provider_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_staff: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          name: string
+          provider_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          provider_id: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          provider_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_staff_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
             referencedColumns: ["id"]
           },
         ]
