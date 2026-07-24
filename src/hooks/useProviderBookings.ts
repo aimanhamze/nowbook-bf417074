@@ -274,6 +274,52 @@ export function useRejectBooking() {
   });
 }
 
+export function useRescheduleBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ bookingId, newDate, newTime }: { bookingId: string; newDate: string; newTime: string }) => {
+      const { data: booking } = await supabase
+        .from("bookings")
+        .select("user_id, provider_id")
+        .eq("id", bookingId)
+        .single();
+
+      // Move the booking — only the timing changes. Status is deliberately left
+      // untouched: a confirmed booking stays confirmed (per spec), and a pending
+      // request stays pending (rescheduling must not silently approve it). The
+      // prevent_booking_conflicts trigger validates the new slot and raises on
+      // overlap (surfaced to the caller as a "slot taken" error).
+      const { error } = await supabase
+        .from("bookings")
+        .update({ booking_date: newDate, booking_time: newTime })
+        .eq("id", bookingId);
+      if (error) throw error;
+
+      // Notify the customer. Walk-in bookings (user_id NULL) have no account to
+      // notify — skip, exactly like the walk-in create flow.
+      if (booking?.user_id) {
+        const { data: provider } = await supabase
+          .from("provider_profiles")
+          .select("business_name")
+          .eq("id", booking.provider_id)
+          .single();
+
+        await supabase.from("notifications").insert({
+          user_id: booking.user_id,
+          title: "התור שלך שונה! 📅",
+          body: `התור ב-${provider?.business_name || "העסק"} שונה. התאריך החדש: ${newDate} בשעה ${newTime}`,
+          url: "/bookings",
+          type: "booking_confirmed",
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-public"] });
+    },
+  });
+}
+
 export function useSaveTreatmentNote() {
   const queryClient = useQueryClient();
   return useMutation({

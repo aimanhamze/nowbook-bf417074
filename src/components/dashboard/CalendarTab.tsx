@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
@@ -14,6 +14,7 @@ import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useProviderClassSchedule, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
 import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { NewBookingSheet } from "@/components/dashboard/NewBookingSheet";
+import { RescheduleSheet } from "@/components/dashboard/RescheduleSheet";
 import { DEFAULT_REMINDER_TEMPLATE } from "@/components/dashboard/BusinessProfileTab";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -202,6 +203,19 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
             {rejectBooking.isPending ? "דוחה..." : "דחה תור"}
           </Button>
         </div>
+      )}
+
+      {/* Reschedule — confirmed, not-yet-started bookings only */}
+      {isConfirmed && !isCompleted && (
+        <RescheduleSheet
+          booking={booking}
+          trigger={
+            <Button variant="outline" size="sm" className="w-full text-xs h-8 text-accent border-accent/30 hover:bg-accent/5">
+              <CalendarClock className="h-3.5 w-3.5 mr-1" />
+              {t("reschedule")}
+            </Button>
+          }
+        />
       )}
 
       <div className="flex gap-2 pt-1">
