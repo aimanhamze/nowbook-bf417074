@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { CheckCircle2, XCircle, Phone, MessageCircle, Clock, CalendarDays, ClipboardList, CalendarClock } from "lucide-react";
+import { CheckCircle2, XCircle, Phone, MessageCircle, Clock, CalendarDays, ClipboardList } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderBookings, useApproveBooking, useRejectBooking, usePendingCount, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
-import { RescheduleSheet } from "@/components/dashboard/RescheduleSheet";
 import { DEFAULT_DEPOSIT_TEMPLATE } from "@/components/dashboard/BusinessProfileTab";
 
 // Re-exported from the hooks module (relocated so BottomNav can consume the
@@ -201,21 +200,6 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
           {rejectBooking.isPending ? "דוחה..." : "דחה תור"}
         </Button>
       </div>
-
-      {/* Reschedule — move the requested slot before approving */}
-      <RescheduleSheet
-        booking={booking}
-        trigger={
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-xs h-9 text-accent border-accent/30 bg-white hover:bg-accent/5"
-          >
-            <CalendarClock className="h-3.5 w-3.5 mr-1" />
-            {t("reschedule")}
-          </Button>
-        }
-      />
 
       {/* WhatsApp deposit request — only when the provider opted in */}
       {depositEnabled && booking.customer_phone && (

@@ -285,8 +285,8 @@ export function useRescheduleBooking() {
         .single();
 
       // Move the booking — only the timing changes. Status is deliberately left
-      // untouched: a confirmed booking stays confirmed (per spec), and a pending
-      // request stays pending (rescheduling must not silently approve it). The
+      // untouched: reschedule is offered on confirmed bookings only, so this
+      // keeps them confirmed (per spec) and never alters a booking's state. The
       // prevent_booking_conflicts trigger validates the new slot and raises on
       // overlap (surfaced to the caller as a "slot taken" error).
       const { error } = await supabase
