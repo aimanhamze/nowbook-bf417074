@@ -822,6 +822,7 @@ export type Database = {
           booking_date: string
           booking_time: string
           service_ids: string[]
+          staff_id: string
         }[]
       }
       get_slot_capacity: {

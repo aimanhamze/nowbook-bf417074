@@ -314,7 +314,11 @@ export function useAllProviderSchedules() {
 // and NewBookingSheet) so every bookable day's conflicts are covered.
 const AVAILABILITY_WINDOW_DAYS = 60;
 
-export function useRealAvailability(providerId: string | undefined) {
+// selectedStaffId (multi-staff Phase 3): OPTIONAL staff filter for the private
+// slot builder. Omitted / null → NO filtering, byte-identical to the pre-staff
+// behavior — every existing caller passes one argument and is unaffected. The
+// customer staff picker (Phase 4) will thread the chosen provider_staff.id.
+export function useRealAvailability(providerId: string | undefined, selectedStaffId?: string | null) {
   // Local date window [today, today + AVAILABILITY_WINDOW_DAYS]. Use LOCAL date
   // strings (toLocalDateStr, NOT toISOString) so the window matches how
   // booking_date is stored/compared and the queryKey stays stable within a day.
@@ -516,6 +520,27 @@ export function useRealAvailability(providerId: string | undefined) {
     const bookedIntervals: { start: number; end: number; serviceId: string | undefined }[] = [];
     (bookingsQuery.data || [])
       .filter(b => b.booking_date === dateStr)
+      // STAFF LANES (mirrors the trigger's `b.staff_id IS NOT DISTINCT FROM
+      // NEW.staff_id` in clauses 5+7, added in the same PR — 20260724000002):
+      // with a staff member selected, drop only bookings assigned to a
+      // DIFFERENT staff member; keep same-staff bookings AND NULL-staff
+      // bookings. Keeping NULL-staff rows is DELIBERATELY STRICTER than the
+      // trigger (which puts NULL in its own lane, so a NULL-staff booking and
+      // a staff-A booking may coexist): a NULL-staff booking predates staff
+      // assignment and must block EVERY staff member's display — treating it
+      // as "its own lane" would show every barber free at a genuinely booked
+      // time. Over-blocking is the safe direction: the client may hide a slot
+      // the trigger would accept, never offer one it would reject. With no
+      // staff selected (undefined/null) nothing is filtered — identical to
+      // today for non-staff providers and for staff providers pre-selection.
+      // Cast: the RPC's staff_id column lands in generated types only after
+      // the 20260724000002 migration is applied + types regen (repo
+      // convention for pre-regen columns, see slot_interval_minutes above).
+      .filter(b => {
+        if (!selectedStaffId) return true;
+        const bookingStaffId = (b as { staff_id?: string | null }).staff_id;
+        return bookingStaffId == null || bookingStaffId === selectedStaffId;
+      })
       .forEach(b => {
         const bookingStart = parseTime(b.booking_time);
         const totalDuration = (b.service_ids || []).reduce((sum: number, sid: string) => {
@@ -581,6 +606,10 @@ export function useRealAvailability(providerId: string | undefined) {
   };
 
   /** Returns ALL time slots with capacity info for group services */
+  // DELIBERATELY STAFF-FREE (multi-staff v1): group capacity is a pooled shop
+  // resource — the trigger's group branch has no staff predicate and group
+  // services are excluded from staff selection, so selectedStaffId is ignored
+  // here on purpose. Do not add a staff filter without changing the trigger.
   const getGroupSlotsWithCapacity = (date: Date, maxCapacity: number): SlotCapacity[] => {
     if (!providerId) return [];
 
