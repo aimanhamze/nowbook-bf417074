@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { assignOverlapColumns } from "@/lib/weeklyOverlap";
 
 function toWhatsAppUrl(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -810,6 +811,23 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
   // Per-day item lists for the whole week.
   const itemsByDay = days.map((day) => buildCalendarItems(day, bookings, schedule, isFitnessStudio, t("groupClass")));
 
+  // Side-by-side layout for time-overlapping items (simultaneous staff
+  // bookings, parallel services, legacy double-books). Items that overlap
+  // nothing get { col: 0, cols: 1 } → full column width, geometrically
+  // identical to the previous constant inset — so days without overlaps
+  // render exactly as before.
+  const layoutByDay = itemsByDay.map((items) =>
+    assignOverlapColumns(
+      items.map((it) => {
+        const start = timeToMin(itemTime(it));
+        return { start, end: start + itemDuration(it) };
+      }),
+    ),
+  );
+  // Widest concurrency this week — used to widen day columns so sub-columns
+  // stay readable (the grid already scrolls horizontally).
+  const weekMaxCols = Math.max(1, ...layoutByDay.flat().map((s) => s.cols));
+
   // Vertical window: span the provider's available hours, widened to include any
   // booking that falls outside them. Snap to whole hours for clean grid lines.
   let minStart = 24 * 60;
@@ -838,7 +856,10 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
   const hours = Array.from({ length: hourCount + 1 }, (_, i) => startHour + i);
 
   const GUTTER = 40;
-  const COL_MIN = 112;
+  // Base day-column width, widened when bookings run side by side so each
+  // sub-column keeps enough room for its label. weekMaxCols is 1 whenever
+  // nothing overlaps → exactly the old 112px.
+  const COL_MIN = 112 + (weekMaxCols - 1) * 48;
   const gridTemplateColumns = `${GUTTER}px repeat(7, minmax(${COL_MIN}px, 1fr))`;
   const minWidth = GUTTER + 7 * COL_MIN;
 
@@ -914,11 +935,18 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
                       />
                     ))}
                     {/* Booking blocks */}
-                    {itemsByDay[di].map((it) => {
+                    {itemsByDay[di].map((it, ii) => {
                       const start = timeToMin(itemTime(it));
                       const top = (start - windowStart) * pxPerMin;
                       const height = Math.max(itemDuration(it) * pxPerMin - 2, 15);
                       const info = blockInfo(it);
+                      // Horizontal placement: sub-column within the item's
+                      // overlap cluster. { col: 0, cols: 1 } (no overlap)
+                      // yields insetInlineStart 2px + width 100% - 4px — the
+                      // exact geometry the old `inset-x-0.5` class produced.
+                      // Logical property → sub-column 0 hugs the start edge in
+                      // RTL and LTR alike, no branching.
+                      const { col, cols } = layoutByDay[di][ii];
                       // Past (not cancelled) → grayed "completed" look.
                       const isCancelled = it.type === 'private' && it.booking.status === 'cancelled';
                       const isPast = !isCancelled && new Date(`${format(day, "yyyy-MM-dd")}T${itemTime(it)}`).getTime() < Date.now();
@@ -928,11 +956,16 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
                           type="button"
                           onClick={() => setSelected(it)}
                           className={cn(
-                            "absolute inset-x-0.5 rounded-md border px-1 py-0.5 overflow-hidden text-start",
+                            "absolute rounded-md border px-1 py-0.5 overflow-hidden text-start",
                             "transition-shadow hover:shadow-md hover:z-10 focus:outline-none focus:ring-2 focus:ring-accent/40",
                             isPast ? "bg-muted/60 border-border/70 text-muted-foreground" : info.cls,
                           )}
-                          style={{ top, height }}
+                          style={{
+                            top,
+                            height,
+                            insetInlineStart: `calc(${(col / cols) * 100}% + 2px)`,
+                            width: `calc(${100 / cols}% - 4px)`,
+                          }}
                           title={`${info.time} ${info.name}`}
                         >
                           <p className="text-[9px] font-semibold leading-tight truncate">
