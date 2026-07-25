@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote, UserRound } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
@@ -10,6 +10,7 @@ import { useLang } from "@/contexts/LangContext";
 import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, useSaveTreatmentNote, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
+import { useProviderActiveStaff } from "@/hooks/useProviderStaff";
 import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useProviderClassSchedule, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
 import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
@@ -173,6 +174,14 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
         {booking.service_names.map((name, i) => (
           <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground">{name}</span>
         ))}
+        {/* Multi-staff: who serves this booking. Absent when staff_id is NULL
+            (non-staff providers, group/class, legacy) — card unchanged. */}
+        {booking.staff_name && (
+          <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-accent/10 text-accent font-medium">
+            <UserRound className="h-3 w-3" />
+            {booking.staff_name}
+          </span>
+        )}
       </div>
 
       {/* Customer note — what the customer wrote when booking (if any) */}
@@ -753,7 +762,11 @@ function blockInfo(item: CalendarItem): { time: string; name: string; sub: strin
   return {
     time: b.booking_time.slice(0, 5),
     name: b.customer_name || b.customer_phone || "לקוח",
-    sub: b.service_names.join(", "),
+    // Weekly-grid blocks are tiny — the staff name rides in the sub line
+    // after the services (only present when the booking has one).
+    sub: b.staff_name
+      ? `${b.service_names.join(", ")} · ${b.staff_name}`
+      : b.service_names.join(", "),
     cls,
   };
 }
@@ -1090,6 +1103,33 @@ export function CalendarTab() {
   const noServices = !servicesLoading && services.length === 0 && !isFitnessStudio;
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
+  // ── Multi-staff filter (Phase 6, display only) ──
+  // Options come from the ACTIVE staff list (you don't filter by a deactivated
+  // member); names ON bookings resolve from the full set inside
+  // useProviderBookings. The staff query is enabled-gated on staff_enabled, so
+  // non-staff providers fire nothing and never see the control.
+  const staffEnabled = profile?.staff_enabled === true;
+  const { activeStaff } = useProviderActiveStaff(profile?.id, staffEnabled);
+  const [staffFilter, setStaffFilter] = useState<string>("all");
+  // If the filtered member disappears from the active list (deactivated in
+  // another tab), fall back to "all" rather than showing an empty calendar.
+  const effectiveStaffFilter =
+    staffFilter !== "all" && !activeStaff.some((s) => s.id === staffFilter)
+      ? "all"
+      : staffFilter;
+  const showStaffFilter = staffEnabled && activeStaff.length > 0;
+  // Everything below (stats, all three views, dates-with-bookings) renders from
+  // the filtered list. "All" is the default and shows everyone — including
+  // NULL-staff bookings (group/class/legacy), which belong to no one member and
+  // are therefore hidden when a specific member is selected.
+  const visibleBookings = useMemo(
+    () =>
+      effectiveStaffFilter === "all"
+        ? bookings
+        : bookings.filter((b) => b.staff_id === effectiveStaffFilter),
+    [bookings, effectiveStaffFilter],
+  );
+
   // Selected view mode persists across sessions. Defaults to the monthly view so
   // existing providers see the unchanged layout on first upgrade.
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -1100,15 +1140,17 @@ export function CalendarTab() {
     localStorage.setItem(VIEW_MODE_KEY, viewMode);
   }, [viewMode]);
 
-  // Monthly view items for the selected date (unchanged behaviour).
+  // Monthly view items for the selected date (unchanged behaviour; with the
+  // staff filter on "all" — every non-staff provider — visibleBookings IS the
+  // full bookings array).
   const calendarItems = useMemo(
-    () => buildCalendarItems(selectedDate, bookings, schedule, isFitnessStudio, t("groupClass")),
-    [selectedDate, bookings, schedule, isFitnessStudio, t],
+    () => buildCalendarItems(selectedDate, visibleBookings, schedule, isFitnessStudio, t("groupClass")),
+    [selectedDate, visibleBookings, schedule, isFitnessStudio, t],
   );
 
-  const datesWithBookings = useMemo(() => bookings.map((b) => parseISO(b.booking_date)), [bookings]);
+  const datesWithBookings = useMemo(() => visibleBookings.map((b) => parseISO(b.booking_date)), [visibleBookings]);
 
-  const activeBookings = bookings.filter(b => b.status !== 'cancelled');
+  const activeBookings = visibleBookings.filter(b => b.status !== 'cancelled');
   const todayBookings = activeBookings.filter((b) => isToday(parseISO(b.booking_date))).length;
   const upcomingBookings = activeBookings.filter((b) => isAfter(parseISO(b.booking_date), new Date())).length;
   const todayRevenue = activeBookings
@@ -1141,6 +1183,53 @@ export function CalendarTab() {
         </div>
       </div>
 
+      {/* Staff filter — only for staff-enabled providers with active staff.
+          Horizontal chip row: "All staff" + one chip per active member (with
+          the same initial-letter tile the pickers use). Filters every view. */}
+      {showStaffFilter && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => setStaffFilter("all")}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-all active:scale-95",
+              effectiveStaffFilter === "all"
+                ? "border-transparent bg-accent text-accent-foreground shadow-sm"
+                : "border-border bg-card text-muted-foreground hover:border-accent/40"
+            )}
+          >
+            <Users className="h-3.5 w-3.5" />
+            {t("allStaff")}
+          </button>
+          {activeStaff.map((member) => {
+            const selected = effectiveStaffFilter === member.id;
+            return (
+              <button
+                key={member.id}
+                type="button"
+                onClick={() => setStaffFilter(member.id)}
+                className={cn(
+                  "flex shrink-0 items-center gap-1.5 rounded-full border py-1.5 ps-1.5 pe-3.5 text-xs font-semibold transition-all active:scale-95",
+                  selected
+                    ? "border-transparent bg-accent text-accent-foreground shadow-sm"
+                    : "border-border bg-card text-muted-foreground hover:border-accent/40"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-black",
+                    selected ? "bg-accent-foreground/20 text-accent-foreground" : "bg-accent/10 text-accent"
+                  )}
+                >
+                  {member.name.trim().charAt(0)}
+                </span>
+                {member.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* View mode toggle */}
       <div className="grid grid-cols-3 gap-1 rounded-2xl border border-border bg-card p-1">
         {viewTabs.map(({ mode, label }) => (
@@ -1168,7 +1257,7 @@ export function CalendarTab() {
       ) : viewMode === "weekly" ? (
         <WeeklyView
           selectedDate={selectedDate}
-          bookings={bookings}
+          bookings={visibleBookings}
           schedule={schedule}
           isFitnessStudio={isFitnessStudio}
           reminderTemplate={reminderTemplate}
@@ -1179,7 +1268,7 @@ export function CalendarTab() {
       ) : viewMode === "daily" ? (
         <DailyView
           selectedDate={selectedDate}
-          bookings={bookings}
+          bookings={visibleBookings}
           schedule={schedule}
           isFitnessStudio={isFitnessStudio}
           reminderTemplate={reminderTemplate}

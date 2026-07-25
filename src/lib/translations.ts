@@ -606,6 +606,7 @@ export const translations = {
     pickStaff: "בחירת איש צוות",
     staffMemberLabel: "איש צוות",
     withStaff: "עם {name}",
+    allStaff: "כל הצוות",
   },
   ar: {
     appName: "Ehjezly",
@@ -1212,6 +1213,7 @@ export const translations = {
     pickStaff: "اختيار عضو الطاقم",
     staffMemberLabel: "عضو الطاقم",
     withStaff: "مع {name}",
+    allStaff: "كل الطاقم",
   },
   en: {
     appName: "Ehjezly",
@@ -1818,6 +1820,7 @@ export const translations = {
     pickStaff: "Choose staff member",
     staffMemberLabel: "Staff member",
     withStaff: "With {name}",
+    allStaff: "All staff",
   },
 } as const;
 
