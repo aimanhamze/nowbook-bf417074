@@ -32,6 +32,9 @@ export interface Provider {
   showPrices: boolean;
   cancellationNoticeHours: number;
   phone: string | null;
+  // Multi-staff (Phase 4): when true, the booking flow inserts a "choose staff
+  // member" step for private services. False for every provider by default.
+  staffEnabled: boolean;
 }
 
 export const categories = [

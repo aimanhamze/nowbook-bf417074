@@ -1,4 +1,4 @@
-import { Calendar, Clock, Phone, Star, XCircle, CalendarPlus, History, MessageCircle, Info } from "lucide-react";
+import { Calendar, Clock, Phone, Star, XCircle, CalendarPlus, History, MessageCircle, Info, UserRound } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -76,6 +76,30 @@ const Bookings = () => {
 
   const bookings = bookingsData?.items;
   const hasMore = bookingsData?.hasMore ?? false;
+
+  // Multi-staff (Phase 4): batch-resolve staff names for the loaded page so a
+  // booking can show "with {staff name}". One IN() query per page — mirrors the
+  // provider/service name enrichment pattern (no per-card queries). Bookings
+  // without staff_id (all pre-staff and non-staff-provider rows) skip this
+  // entirely: the query is disabled when the page has no staff ids.
+  const staffIds = [...new Set((bookings ?? []).map((b) => b.staff_id).filter(Boolean))] as string[];
+  const { data: staffNamesById = {} } = useQuery<Record<string, string>>({
+    queryKey: ["booking-staff-names", staffIds],
+    staleTime: 5 * 60 * 1000,
+    enabled: staffIds.length > 0,
+    queryFn: async () => {
+      // provider_staff is public-read; inactive staff still resolve (history
+      // must keep showing who served the booking after a deactivation).
+      const { data, error } = await supabase
+        .from("provider_staff")
+        .select("id, name")
+        .in("id", staffIds);
+      if (error) return {};
+      return Object.fromEntries((data || []).map((s) => [s.id, s.name]));
+    },
+  });
+  const getStaffName = (staffId: string | null) =>
+    staffId ? staffNamesById[staffId] ?? null : null;
 
   const getProviderName = (providerId: string) => {
     const p = allProviders.find((p) => p.id === providerId);
@@ -213,6 +237,7 @@ const Bookings = () => {
                     isLinkedWalkin={booking.user_id !== user.id}
                     getProviderName={getProviderName}
                     getServiceNames={getServiceNames}
+                    staffName={getStaffName(booking.staff_id)}
                     providerPhone={allProviders.find((p) => p.id === booking.provider_id)?.phone ?? null}
                     showPrices={allProviders.find((p) => p.id === booking.provider_id)?.showPrices ?? true}
                     cancellationNoticeHours={
@@ -329,7 +354,7 @@ function DateTile({ booking, variant, isNext }: { booking: Tables<"bookings">; v
   );
 }
 
-function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProviderName, getServiceNames, providerPhone, showPrices, cancellationNoticeHours }: {
+function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProviderName, getServiceNames, staffName, providerPhone, showPrices, cancellationNoticeHours }: {
   booking: Tables<"bookings">;
   index: number;
   variant: CardVariant;
@@ -337,6 +362,7 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
   isLinkedWalkin: boolean;
   getProviderName: (id: string) => string;
   getServiceNames: (ids: string[]) => string;
+  staffName: string | null;
   providerPhone: string | null;
   showPrices: boolean;
   cancellationNoticeHours: number;
@@ -468,6 +494,15 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
             <p className="mt-1 text-xs text-muted-foreground truncate">
               {getServiceNames(booking.service_ids)}
             </p>
+
+            {/* Multi-staff: who serves this booking. Absent on every booking
+                without staff_id — those cards render exactly as before. */}
+            {staffName && (
+              <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-foreground/70 truncate">
+                <UserRound className="h-3 w-3 text-accent shrink-0" />
+                {t("withStaff").replace("{name}", staffName)}
+              </p>
+            )}
 
             <div className="mt-auto flex items-center justify-between gap-2 pt-2">
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70">

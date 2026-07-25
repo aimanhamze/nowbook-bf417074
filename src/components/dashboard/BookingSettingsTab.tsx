@@ -18,6 +18,7 @@ import {
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { usePendingCount } from "@/components/dashboard/PendingTab";
+import { StaffSection } from "@/components/dashboard/StaffSection";
 import { toast } from "sonner";
 
 const LEAD_TIME_OPTIONS = [15, 30, 60, 120, 240, 1440] as const;
@@ -361,6 +362,10 @@ export function BookingSettingsTab() {
           </div>
         )}
       </div>
+
+      {/* Multi-staff: team management + the staff_enabled toggle (Phase 2).
+          Inert for customers — nothing customer-facing reads staff yet. */}
+      <StaffSection />
 
       {/* Pending-guard dialog — coupled to the require-approval turn-off */}
       <AlertDialog open={pendingGuardOpen} onOpenChange={setPendingGuardOpen}>

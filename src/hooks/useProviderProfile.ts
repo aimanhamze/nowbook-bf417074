@@ -109,6 +109,29 @@ export function useProviderProfile() {
     },
   });
 
+  // Multi-staff Phase 2. The false→true transition is guarded DB-side
+  // (trg_enforce_staff_enable_no_future_bookings): it raises
+  // STAFF_ENABLE_BLOCKED_BY_FUTURE_BOOKINGS (P0001) while future
+  // confirmed/pending bookings exist. The error propagates out of mutateAsync
+  // for the UI to match on; the cache is only touched on success, so a blocked
+  // toggle never shows as "on". Turning the flag OFF is never guarded.
+  const updateStaffEnabled = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ staff_enabled: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      // Customer surfaces will read the flag via useAllProviders in later
+      // phases; invalidating now matches the other customer-visible flags.
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+    },
+  });
+
   const updateMinLeadTime = useMutation({
     mutationFn: async (value: number) => {
       if (!user) throw new Error("Not authenticated");
@@ -297,6 +320,7 @@ export function useProviderProfile() {
     updateTreatmentNotesEnabled,
     updateShowPrices,
     updateDepositRequestEnabled,
+    updateStaffEnabled,
     updateMinLeadTime,
     updateBookingWindow,
     updateCancellationNoticeHours,

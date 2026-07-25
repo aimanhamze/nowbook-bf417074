@@ -1,9 +1,10 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useProviderById, useRealAvailability } from "@/hooks/useAllProviders";
+import { useProviderActiveStaff } from "@/hooks/useProviderStaff";
 import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import { useProviderClassScheduleById, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
 import type { Service } from "@/lib/mock-data";
-import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote } from "lucide-react";
+import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote, UserRound } from "lucide-react";
 import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
@@ -49,7 +50,14 @@ const BookAppointment = () => {
   const { user, isProvider } = useAuth();
   const queryClient = useQueryClient();
   const { provider, isLoading: providerLoading } = useProviderById(id);
-  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(id);
+  // Multi-staff (Phase 4): the chosen staff member narrows availability. Only
+  // ever set from the staff step (which only renders for staff-enabled
+  // providers + private services), so for everyone else this stays "" and
+  // useRealAvailability behaves exactly as before. The staff list query itself
+  // is gated on provider.staffEnabled — non-staff providers never fire it.
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("");
+  const { activeStaff, isLoading: staffLoading } = useProviderActiveStaff(id, provider?.staffEnabled === true);
+  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(id, selectedStaffId || undefined);
   const { data: allSessions = [], isLoading: sessionsLoading } = useProviderSessionsById(id);
   const { data: classSchedule = [], isLoading: scheduleLoading } = useProviderClassScheduleById(id);
 
@@ -61,8 +69,10 @@ const BookAppointment = () => {
   // Standard (non-fitness) flow is 4 steps: services → day (month calendar) →
   // time → confirm. The fitness flow keeps its 3 steps (confirm at 3).
   // Standard flow grows to 5 steps when the selected service collects a customer
-  // note (services → day → time → notes → confirm). Without notes it stays 4.
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  // note (services → day → time → notes → confirm), and by one more when the
+  // provider is staff-enabled (services → staff → day → time → [notes] →
+  // confirm, max 6). Step numbers are derived below (calendarStep/timeStep/…).
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -198,7 +208,10 @@ const BookAppointment = () => {
     setSelectedTime("");
     setCustomerNotes("");
     // Day availability depends on the service (duration/capacity), so a service
-    // change sends the customer back through the calendar.
+    // change sends the customer back through the calendar. The staff choice is
+    // reset too: whether the staff step even exists depends on the service
+    // (private vs group vs session-based).
+    setSelectedStaffId("");
     setDateChosen(false);
   };
 
@@ -207,10 +220,8 @@ const BookAppointment = () => {
 
   const primaryService = selectedServices[0];
   // The optional notes step only exists in the standard flow, and only when the
-  // chosen service opted in. When active it sits between time (3) and confirm,
-  // pushing confirm from step 4 to step 5.
+  // chosen service opted in. When active it sits between time and confirm.
   const notesEnabled = !isFitnessStudio && !!primaryService?.customer_notes_enabled;
-  const standardConfirmStep: 4 | 5 = notesEnabled ? 5 : 4;
   const notesPlaceholder =
     primaryService?.customer_notes_placeholder || "הוסף הערות לשירות...";
   const isGroupBooking = primaryService?.service_type === "group";
@@ -221,6 +232,32 @@ const BookAppointment = () => {
     : [];
   const hasScheduledSessions = serviceSessions.length > 0;
   const selectedSession = allSessions.find((s) => s.id === selectedSessionId);
+
+  // ── Multi-staff step (Phase 4) ──
+  // The "choose staff member" step exists ONLY when ALL of: standard flow,
+  // provider opted in, the chosen service is PRIVATE (group capacity is pooled
+  // shop-wide — matches the trigger's staff-blind group branch), the service is
+  // not session-based (a session is a fixed one-off event, not a per-staff
+  // slot), and the provider has at least one ACTIVE staff member. Zero active
+  // staff → the step is skipped gracefully and the booking inserts staff_id
+  // NULL, exactly like a non-staff provider — never dead-end the customer.
+  const staffStepEnabled =
+    !isFitnessStudio &&
+    provider.staffEnabled &&
+    !!primaryService &&
+    !isGroupBooking &&
+    !hasScheduledSessions &&
+    activeStaff.length > 0;
+  const selectedStaff = activeStaff.find((s) => s.id === selectedStaffId);
+
+  // Standard-flow step numbers. Without the staff step these collapse to
+  // exactly the pre-staff values (calendar 2, time 3, notes 4, confirm 4/5) —
+  // non-staff providers keep today's flow untouched. With it, everything after
+  // service selection shifts by one (staff 2, calendar 3, time 4, confirm 5/6).
+  const calendarStep = staffStepEnabled ? 3 : 2;
+  const timeStep = staffStepEnabled ? 4 : 3;
+  const notesStep = timeStep + 1; // only reachable when notesEnabled
+  const standardConfirmStep = (notesEnabled ? notesStep + 1 : timeStep + 1) as 4 | 5 | 6;
 
   const minLeadTimeMinutes = provider.minLeadTimeMinutes;
   const isToday =
@@ -309,31 +346,39 @@ const BookAppointment = () => {
   const occurrenceDates = _occurrenceDates;
   const occurrenceDateStrs = _occurrenceDateStrs;
 
-  // Standard flow canProceed / handleNext — 4 steps. When the service has
-  // scheduled sessions, the session card IS date+time, so the time step is
-  // skipped (2 → 4), exactly as the old flow went straight to confirm.
+  // Standard flow canProceed / handleNext, expressed in the DERIVED step
+  // numbers so the same code drives both variants (with/without the staff
+  // step). When the service has scheduled sessions, the session card IS
+  // date+time, so the time step is skipped (2 → 4), exactly as before —
+  // session services never have a staff step, so their numbering is unshifted.
   const canProceed =
-    (step === 1 && selectedServices.length > 0) ||
-    (step === 2 && (hasScheduledSessions ? !!selectedSessionId : dateChosen)) ||
-    (step === 3 && !!selectedTime) ||
+    // While a staff-enabled provider's staff list is still loading we don't yet
+    // know whether the staff step exists — hold the continue button for that
+    // (tiny) window instead of guessing. Non-staff providers never hit this.
+    (step === 1 && selectedServices.length > 0 && !(provider.staffEnabled && staffLoading)) ||
+    (staffStepEnabled && step === 2 && !!selectedStaffId) ||
+    (step === calendarStep && (hasScheduledSessions ? !!selectedSessionId : dateChosen)) ||
+    (step === timeStep && !!selectedTime) ||
     // Notes step (only reachable when notesEnabled) — always proceedable since
     // the note is optional. Confirm steps show a confirm button, not "continue".
-    (step === 4 && notesEnabled) ||
+    (notesEnabled && step === notesStep) ||
     step === standardConfirmStep;
 
   const handleNext = () => {
-    if (step === 1 && selectedServices.length > 0) setStep(2);
-    else if (step === 2) {
+    if (step === 1 && selectedServices.length > 0) {
+      setStep(2); // staff step when enabled, else calendar — both are step 2
+    } else if (staffStepEnabled && step === 2) {
+      if (selectedStaffId) setStep(3);
+    } else if (step === calendarStep) {
       // Session-based services fold date+time into the session card, so they
       // jump past the time step to step 4 (notes when enabled, else confirm).
       if (hasScheduledSessions && selectedSessionId) setStep(4);
-      else if (dateChosen) setStep(3);
-    } else if (step === 3 && selectedTime) {
-      // Time → notes (step 4) when enabled, otherwise straight to confirm (also
-      // step 4). Either way the next screen is step 4.
-      setStep(4);
-    } else if (step === 4 && notesEnabled) {
-      setStep(5); // notes → confirm
+      else if (dateChosen) setStep(timeStep as 3 | 4);
+    } else if (step === timeStep && selectedTime) {
+      // Time → notes when enabled, otherwise confirm — both are the next step.
+      setStep((timeStep + 1) as 4 | 5);
+    } else if (notesEnabled && step === notesStep) {
+      setStep(standardConfirmStep); // notes → confirm
     }
   };
 
@@ -345,11 +390,12 @@ const BookAppointment = () => {
     // Session-based services skip the time step, so stepping back from the
     // screen that immediately follows the session list (step 4 — notes or
     // confirm) returns to the session list rather than the empty time step.
+    // (Session services never have a staff step, so these are literal numbers.)
     if (!isFitnessStudio && hasScheduledSessions && step === 4) {
       setStep(2);
       return;
     }
-    setStep((s) => (s - 1) as 1 | 2 | 3 | 4 | 5);
+    setStep((s) => (s - 1) as 1 | 2 | 3 | 4 | 5 | 6);
   };
 
   // Fitness flow canProceed / handleNext
@@ -410,6 +456,12 @@ const BookAppointment = () => {
         // flow when the service opted in). Empty / whitespace-only → null.
         if (notesEnabled) {
           insertPayload.customer_notes = customerNotes.trim() || null;
+        }
+        // Multi-staff: only when the staff step was part of THIS flow. Group,
+        // session-based, zero-active-staff, and non-staff providers all omit
+        // the column → staff_id NULL, identical to pre-staff bookings.
+        if (staffStepEnabled && selectedStaffId) {
+          insertPayload.staff_id = selectedStaffId;
         }
       }
 
@@ -518,18 +570,30 @@ const BookAppointment = () => {
 
   // ── Fitness-studio step labels ──
   const fitnessStepLabels = [t("pickClass"), t("selectOccurrence"), t("confirm")];
-  // ── Standard step labels ── (5-step variant inserts the notes step)
-  const stepLabels = notesEnabled
-    ? [t("selectServices"), t("selectDate"), t("pickTime"), t("customerNotes"), t("confirm")]
-    : [t("selectServices"), t("selectDate"), t("pickTime"), t("confirm")];
+  // ── Standard step labels ── assembled from the same conditions that shape
+  // the step machine: the staff step slides in after services, the notes step
+  // before confirm. Without either, this is exactly the original 4-step list.
+  const stepLabels = [
+    t("selectServices"),
+    ...(staffStepEnabled ? [t("pickStaff")] : []),
+    t("selectDate"),
+    t("pickTime"),
+    ...(notesEnabled ? [t("customerNotes")] : []),
+    t("confirm"),
+  ];
 
   // Derived labels for current mode
   const activeStepLabels = isFitnessStudio ? fitnessStepLabels : stepLabels;
   const activeStepIcons = isFitnessStudio
     ? [Dumbbell, CalendarDays, Check]
-    : notesEnabled
-    ? [Sparkles, CalendarDays, Clock, StickyNote, Check]
-    : [Sparkles, CalendarDays, Clock, Check];
+    : [
+        Sparkles,
+        ...(staffStepEnabled ? [UserRound] : []),
+        CalendarDays,
+        Clock,
+        ...(notesEnabled ? [StickyNote] : []),
+        Check,
+      ];
   const activeCanProceed = isFitnessStudio ? fitnessCanProceed : canProceed;
   const activeHandleNext = isFitnessStudio ? fitnessHandleNext : handleNext;
 
@@ -991,7 +1055,81 @@ const BookAppointment = () => {
             </motion.div>
           )}
 
-          {!isFitnessStudio && step === 2 && (
+          {/* Staff step — "who will take care of you". Exists only for
+              staff-enabled providers + private, non-session services. Tapping a
+              staff member selects AND advances (same gesture as tapping a day
+              on the calendar). Re-picking a different member resets the chosen
+              date/time — availability is per-staff. */}
+          {!isFitnessStudio && staffStepEnabled && step === 2 && (
+            <motion.div
+              key="step-staff"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={SPRING}
+              className="px-5"
+            >
+              <SectionLabel className="mb-4">
+                <UserRound className="h-3.5 w-3.5" />
+                {t("pickStaff")}
+              </SectionLabel>
+              <div className="flex flex-col gap-3">
+                {activeStaff.map((member, i) => {
+                  const isSelected = selectedStaffId === member.id;
+                  return (
+                    <motion.button
+                      key={member.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ ...SPRING, delay: i * 0.06 }}
+                      onClick={() => {
+                        if (member.id !== selectedStaffId) {
+                          // New staff member → their calendar differs; the
+                          // previously picked day/time may not exist for them.
+                          setSelectedTime("");
+                          setDateChosen(false);
+                        }
+                        setSelectedStaffId(member.id);
+                        setStep(3);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-3.5 rounded-3xl border p-4 text-start transition-all active:scale-[0.98]",
+                        isSelected
+                          ? "border-accent/60 bg-accent/[0.08] ring-2 ring-accent/25 shadow-[0_10px_28px_-14px_hsl(var(--accent)/0.45)]"
+                          : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] backdrop-blur-md hover:border-accent/30"
+                      )}
+                    >
+                      {/* Initial-letter tile — the staff twist on the app's
+                          icon-tile language used by the service cards. */}
+                      <div
+                        className={cn(
+                          "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-lg font-black transition-colors duration-300",
+                          isSelected
+                            ? "bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.5)]"
+                            : "bg-accent/10 text-accent"
+                        )}
+                      >
+                        {member.name.trim().charAt(0)}
+                      </div>
+                      <p className="min-w-0 flex-1 truncate text-[15px] font-bold leading-tight">
+                        {member.name}
+                      </p>
+                      <div
+                        className={cn(
+                          "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300",
+                          isSelected ? "border-accent bg-accent" : "border-border bg-white/60"
+                        )}
+                      >
+                        {isSelected && <Check className="h-3.5 w-3.5 text-accent-foreground" />}
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {!isFitnessStudio && step === calendarStep && (
             <motion.div
               key="step2"
               initial={{ opacity: 0, x: 20 }}
@@ -1095,7 +1233,7 @@ const BookAppointment = () => {
                         setSelectedDate(day);
                         setSelectedTime("");
                         setDateChosen(true);
-                        setStep(3);
+                        setStep(timeStep as 3 | 4);
                       }}
                     />
                   </div>
@@ -1104,8 +1242,8 @@ const BookAppointment = () => {
             </motion.div>
           )}
 
-          {/* Step 3 — pick a time for the chosen day */}
-          {!isFitnessStudio && step === 3 && (
+          {/* Time step — pick a time for the chosen day */}
+          {!isFitnessStudio && step === timeStep && (
             <motion.div
               key="step3-time"
               initial={{ opacity: 0, x: 20 }}
@@ -1128,7 +1266,7 @@ const BookAppointment = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(calendarStep as 2 | 3)}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition-transform active:scale-95"
                 >
                   <CalendarDays className="h-3.5 w-3.5" />
@@ -1224,8 +1362,8 @@ const BookAppointment = () => {
           )}
 
           {/* Notes step — optional, only when the service opted in. Sits between
-              time (step 3) and confirm (step 5). */}
-          {!isFitnessStudio && notesEnabled && step === 4 && (
+              the time step and confirm. */}
+          {!isFitnessStudio && notesEnabled && step === notesStep && (
             <motion.div
               key="step-notes"
               initial={{ opacity: 0, x: 20 }}
@@ -1293,6 +1431,18 @@ const BookAppointment = () => {
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{t("provider")}</p>
                   <p className="text-sm font-semibold">{provider.name[lang]}</p>
                 </div>
+                {staffStepEnabled && selectedStaff && (
+                  <>
+                    <div className="h-px bg-border/40" />
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{t("staffMemberLabel")}</p>
+                      <p className="text-sm font-semibold flex items-center gap-1.5">
+                        <UserRound className="h-3.5 w-3.5 text-accent" />
+                        {selectedStaff.name}
+                      </p>
+                    </div>
+                  </>
+                )}
                 <div className="h-px bg-border/40" />
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">{t("services")}</p>

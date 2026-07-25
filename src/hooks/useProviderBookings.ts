@@ -23,6 +23,10 @@ export interface EnrichedBooking {
   service_capacity: number;
   class_schedule_id: string | null;
   class_name: string | null;
+  // Multi-staff (Phase 6): which staff member serves this booking. NULL for
+  // non-staff providers, group/class bookings, and everything pre-staff.
+  staff_id: string | null;
+  staff_name: string | null;
 }
 
 export function useProviderBookings() {
@@ -68,6 +72,16 @@ export function useProviderBookings() {
         : { data: [] };
       const classMap = new Map((classRows || []).map((c) => [c.id, c.class_name as string]));
 
+      // Batch-fetch staff names (same pattern as classMap). Deliberately NOT
+      // filtered to is_active: a deactivated staff member must still be named
+      // on their past/existing bookings. Non-staff providers have staff_id
+      // NULL on every row → no query fired.
+      const staffIds = [...new Set(bookings.map((b) => b.staff_id).filter(Boolean))] as string[];
+      const { data: staffRows } = staffIds.length > 0
+        ? await supabase.from("provider_staff").select("id, name").in("id", staffIds)
+        : { data: [] };
+      const staffMap = new Map((staffRows || []).map((s) => [s.id, s.name as string]));
+
       return bookings.map((b): EnrichedBooking => {
         // Walk-in: user_id is null → profileMap lookup is skipped (no account).
         const customer = b.user_id ? profileMap.get(b.user_id) : undefined;
@@ -86,6 +100,8 @@ export function useProviderBookings() {
           service_capacity: primaryService?.max_capacity ?? 1,
           class_schedule_id: b.class_schedule_id ?? null,
           class_name: b.class_schedule_id ? (classMap.get(b.class_schedule_id) ?? null) : null,
+          staff_id: b.staff_id ?? null,
+          staff_name: b.staff_id ? (staffMap.get(b.staff_id) ?? null) : null,
         };
       });
     },
