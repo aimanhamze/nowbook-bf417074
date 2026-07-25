@@ -603,6 +603,9 @@ export const translations = {
     deactivateStaffConfirmBody: "איש הצוות יוסתר מרשימות חדשות, אך תורים קודמים ישמרו את הרישום שלו. אפשר להפעיל מחדש בכל עת.",
     staffDeactivated: "איש הצוות הושבת",
     staffReactivated: "איש הצוות הופעל מחדש",
+    pickStaff: "בחירת איש צוות",
+    staffMemberLabel: "איש צוות",
+    withStaff: "עם {name}",
   },
   ar: {
     appName: "Ehjezly",
@@ -1206,6 +1209,9 @@ export const translations = {
     deactivateStaffConfirmBody: "سيتم إخفاء عضو الطاقم من القوائم الجديدة، لكن الحجوزات السابقة ستحتفظ بسجله. يمكن إعادة التفعيل في أي وقت.",
     staffDeactivated: "تم تعطيل عضو الطاقم",
     staffReactivated: "تمت إعادة تفعيل عضو الطاقم",
+    pickStaff: "اختيار عضو الطاقم",
+    staffMemberLabel: "عضو الطاقم",
+    withStaff: "مع {name}",
   },
   en: {
     appName: "Ehjezly",
@@ -1809,6 +1815,9 @@ export const translations = {
     deactivateStaffConfirmBody: "The staff member will be hidden from new lists, but past bookings keep their record. You can reactivate them at any time.",
     staffDeactivated: "Staff member deactivated",
     staffReactivated: "Staff member reactivated",
+    pickStaff: "Choose staff member",
+    staffMemberLabel: "Staff member",
+    withStaff: "With {name}",
   },
 } as const;
 

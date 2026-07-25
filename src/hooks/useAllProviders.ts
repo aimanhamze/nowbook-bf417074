@@ -34,6 +34,9 @@ export interface DbProvider {
   // Customer self-cancel cutoff in hours (added by 20260622000001 migration;
   // typed here so it's available before types.ts is regenerated).
   cancellation_notice_hours?: number;
+  // Multi-staff opt-in flag (added by 20260724000001 migration; same
+  // typed-here-before-regen convention as cancellation_notice_hours).
+  staff_enabled?: boolean;
 }
 
 export interface DbService {
@@ -82,6 +85,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCoun
     showPrices: dbp.show_prices ?? true,
     cancellationNoticeHours: dbp.cancellation_notice_hours ?? 5,
     phone: dbp.phone ?? null,
+    staffEnabled: dbp.staff_enabled ?? false,
     services: services.filter(s => s.is_active).map(s => ({
       id: s.id,
       name: { he: s.name, ar: s.name, en: s.name },

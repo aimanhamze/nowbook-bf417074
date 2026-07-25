@@ -86,3 +86,28 @@ export function useProviderStaff() {
     setStaffActive,
   };
 }
+
+// Customer-side read of a provider's ACTIVE staff (Phase 4 booking flow).
+// provider_staff has public SELECT RLS, so this works pre-auth like the other
+// "-public" queries. `enabled` should be provider.staffEnabled so NON-staff
+// providers never fire this query at all.
+export function useProviderActiveStaff(providerId: string | undefined, enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["provider-staff-public", providerId],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      if (!providerId) return [];
+      const { data, error } = await supabase
+        .from("provider_staff")
+        .select("id, name, display_order")
+        .eq("provider_id", providerId)
+        .eq("is_active", true)
+        .order("display_order")
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!providerId && enabled,
+  });
+  return { activeStaff: query.data || [], isLoading: query.isLoading };
+}
