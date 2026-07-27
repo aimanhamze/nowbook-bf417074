@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, createContext, useContext, type CSSProperties } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
 import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote, UserRound } from "lucide-react";
@@ -23,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { assignOverlapColumns } from "@/lib/weeklyOverlap";
+import { DEFAULT_SERVICE_COLOR, normalizeColor, withAlpha, darken } from "@/lib/serviceColors";
+import type { DayContentProps } from "react-day-picker";
 
 function toWhatsAppUrl(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -43,6 +45,33 @@ function buildReminderMessage(booking: EnrichedBooking, template: string): strin
     date,
     time: booking.booking_time,
   });
+}
+
+// ── Service color coding ───────────────────────────────────────────────────
+// A single resolver, provided by CalendarTab, answers "what color is this
+// item?" for every view. It returns null whenever the provider's master switch
+// (provider_profiles.service_colors_enabled) is off — and every consumer treats
+// null as "render exactly as before", so the feature is invisible until opted
+// into. Passed by context rather than props because the views nest three deep
+// (CalendarTab → WeeklyView → Dialog → BookingCard).
+type ItemColorResolver = (item: CalendarItem) => string | null;
+
+const ItemColorContext = createContext<ItemColorResolver>(() => null);
+
+function useItemColorResolver(): ItemColorResolver {
+  return useContext(ItemColorContext);
+}
+
+// Inline styles for a booking card: 4px accent edge on the leading side plus a
+// very light tint of the same color. Logical border (not physical `left`) so
+// the stripe hugs the start edge in RTL Hebrew/Arabic and LTR English alike.
+function cardColorStyle(color: string | null, tinted: boolean): CSSProperties | undefined {
+  if (!color) return undefined;
+  return {
+    borderInlineStartWidth: 4,
+    borderInlineStartColor: color,
+    ...(tinted ? { backgroundColor: withAlpha(color, 0.07) } : {}),
+  };
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -102,7 +131,7 @@ function TreatmentNoteBox({ booking }: { booking: EnrichedBooking }) {
   );
 }
 
-function BookingCard({ booking, index }: { booking: EnrichedBooking; index: number }) {
+function BookingCard({ booking, index, color = null }: { booking: EnrichedBooking; index: number; color?: string | null }) {
   const { t } = useLang();
   const cancelBooking = useCancelBooking();
   const deleteBooking = useDeleteBooking();
@@ -130,6 +159,9 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
       exit={{ opacity: 0, y: -8 }}
       transition={{ delay: index * 0.04, duration: 0.25 }}
       className={cn("rounded-2xl border border-border bg-card p-4 space-y-3", isCompleted && "grayscale-[0.3] opacity-90 bg-muted/15")}
+      // Completed bookings keep their gray wash — only the edge is tinted, so
+      // "past" still reads as past even with colors on.
+      style={cardColorStyle(color, !isCompleted)}
     >
       <div className="flex items-center gap-3">
         <Avatar className="h-10 w-10 border-2 border-accent/20">
@@ -288,12 +320,13 @@ function BookingCard({ booking, index }: { booking: EnrichedBooking; index: numb
   );
 }
 
-function GroupClassCard({ time, bookings, serviceName, maxCapacity, index }: {
+function GroupClassCard({ time, bookings, serviceName, maxCapacity, index, color = null }: {
   time: string;
   bookings: EnrichedBooking[];
   serviceName: string;
   maxCapacity: number;
   index: number;
+  color?: string | null;
 }) {
   const { t } = useLang();
   const [expanded, setExpanded] = useState(false);
@@ -310,6 +343,7 @@ function GroupClassCard({ time, bookings, serviceName, maxCapacity, index }: {
       exit={{ opacity: 0, y: -8 }}
       transition={{ delay: index * 0.04, duration: 0.25 }}
       className="rounded-2xl border border-blue-200 bg-card p-4 space-y-3"
+      style={cardColorStyle(color, true)}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -419,11 +453,12 @@ function GroupClassCard({ time, bookings, serviceName, maxCapacity, index }: {
   );
 }
 
-function ClassSlotCard({ classEntry, bookings, index, reminderTemplate }: {
+function ClassSlotCard({ classEntry, bookings, index, reminderTemplate, color = null }: {
   classEntry: ClassScheduleEntry;
   bookings: EnrichedBooking[];
   index: number;
   reminderTemplate: string;
+  color?: string | null;
 }) {
   const { t } = useLang();
   const [expanded, setExpanded] = useState(false);
@@ -440,6 +475,7 @@ function ClassSlotCard({ classEntry, bookings, index, reminderTemplate }: {
       exit={{ opacity: 0, y: -8 }}
       transition={{ delay: index * 0.04, duration: 0.25 }}
       className="rounded-2xl border border-accent/30 bg-card p-4 space-y-3"
+      style={cardColorStyle(color, true)}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
@@ -652,6 +688,7 @@ function generateSlots(start: string, end: string, stepMinutes: number): string[
 
 // Renders a list of calendar items using the existing card components. Shared by all views.
 function CalendarItemsList({ items, reminderTemplate }: { items: CalendarItem[]; reminderTemplate: string }) {
+  const colorOf = useItemColorResolver();
   return (
     <AnimatePresence mode="popLayout">
       <div className="space-y-3">
@@ -663,6 +700,7 @@ function CalendarItemsList({ items, reminderTemplate }: { items: CalendarItem[];
               bookings={item.bookings}
               index={i}
               reminderTemplate={reminderTemplate}
+              color={colorOf(item)}
             />
           ) : item.type === 'group' ? (
             <GroupClassCard
@@ -672,9 +710,10 @@ function CalendarItemsList({ items, reminderTemplate }: { items: CalendarItem[];
               serviceName={item.serviceName}
               maxCapacity={item.maxCapacity}
               index={i}
+              color={colorOf(item)}
             />
           ) : (
-            <BookingCard key={item.booking.id} booking={item.booking} index={i} />
+            <BookingCard key={item.booking.id} booking={item.booking} index={i} color={colorOf(item)} />
           )
         )}
       </div>
@@ -789,6 +828,7 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
   const { availability } = useProviderAvailability();
   const { services } = useProviderServices();
+  const colorOf = useItemColorResolver();
   const [selected, setSelected] = useState<CalendarItem | null>(null);
 
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 });
@@ -950,6 +990,11 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
                       // Past (not cancelled) → grayed "completed" look.
                       const isCancelled = it.type === 'private' && it.booking.status === 'cancelled';
                       const isPast = !isCancelled && new Date(`${format(day, "yyyy-MM-dd")}T${itemTime(it)}`).getTime() < Date.now();
+                      // Service color, when enabled, replaces the status palette
+                      // on the chip: light fill + darker text of the same hue.
+                      // The gray "past" treatment still wins, so completed
+                      // bookings stay visually done.
+                      const color = isPast ? null : colorOf(it);
                       return (
                         <button
                           key={rowKey(it)}
@@ -958,13 +1003,24 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
                           className={cn(
                             "absolute rounded-md border px-1 py-0.5 overflow-hidden text-start",
                             "transition-shadow hover:shadow-md hover:z-10 focus:outline-none focus:ring-2 focus:ring-accent/40",
-                            isPast ? "bg-muted/60 border-border/70 text-muted-foreground" : info.cls,
+                            isPast
+                              ? "bg-muted/60 border-border/70 text-muted-foreground"
+                              : color
+                                ? isCancelled && "line-through opacity-70"
+                                : info.cls,
                           )}
                           style={{
                             top,
                             height,
                             insetInlineStart: `calc(${(col / cols) * 100}% + 2px)`,
                             width: `calc(${100 / cols}% - 4px)`,
+                            ...(color
+                              ? {
+                                  backgroundColor: withAlpha(color, 0.18),
+                                  borderColor: withAlpha(color, 0.55),
+                                  color: darken(color, 0.45),
+                                }
+                              : {}),
                           }}
                           title={`${info.time} ${info.name}`}
                         >
@@ -999,11 +1055,11 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
           </DialogHeader>
           {selected && (
             selected.type === 'class_slot' ? (
-              <ClassSlotCard classEntry={selected.classEntry} bookings={selected.bookings} index={0} reminderTemplate={reminderTemplate} />
+              <ClassSlotCard classEntry={selected.classEntry} bookings={selected.bookings} index={0} reminderTemplate={reminderTemplate} color={colorOf(selected)} />
             ) : selected.type === 'group' ? (
-              <GroupClassCard time={selected.time} bookings={selected.bookings} serviceName={selected.serviceName} maxCapacity={selected.maxCapacity} index={0} />
+              <GroupClassCard time={selected.time} bookings={selected.bookings} serviceName={selected.serviceName} maxCapacity={selected.maxCapacity} index={0} color={colorOf(selected)} />
             ) : (
-              <BookingCard booking={selected.booking} index={0} />
+              <BookingCard booking={selected.booking} index={0} color={colorOf(selected)} />
             )
           )}
         </DialogContent>
@@ -1183,6 +1239,82 @@ export function CalendarTab() {
 
   const datesWithBookings = useMemo(() => visibleBookings.map((b) => parseISO(b.booking_date)), [visibleBookings]);
 
+  // ── Service color coding ──
+  // Off by default: while service_colors_enabled is false every resolver below
+  // returns null / an empty map and all three views render exactly as before.
+  const colorsEnabled = profile?.service_colors_enabled ?? false;
+  const serviceColorMap = useMemo(
+    () => new Map(services.map((s) => [s.id, normalizeColor(s.color)])),
+    [services],
+  );
+  const classColorMap = useMemo(
+    () => new Map(schedule.map((c) => [c.id, normalizeColor(c.color)])),
+    [schedule],
+  );
+  // A booking's color comes from its class (fitness) or its FIRST service — a
+  // multi-service booking is one card, so it gets one color. Services deleted
+  // since the booking was made are absent from the map and fall back to the
+  // same orange the DB defaults to.
+  const bookingColor = useCallback(
+    (b: EnrichedBooking): string => {
+      if (b.class_schedule_id) return classColorMap.get(b.class_schedule_id) ?? DEFAULT_SERVICE_COLOR;
+      const firstServiceId = b.service_ids?.[0];
+      return (firstServiceId && serviceColorMap.get(firstServiceId)) || DEFAULT_SERVICE_COLOR;
+    },
+    [classColorMap, serviceColorMap],
+  );
+  const colorOf = useCallback<ItemColorResolver>(
+    (item) => {
+      if (!colorsEnabled) return null;
+      if (item.type === 'class_slot') {
+        return classColorMap.get(item.classEntry.id) ?? normalizeColor(item.classEntry.color);
+      }
+      return bookingColor(item.type === 'private' ? item.booking : item.bookings[0]);
+    },
+    [colorsEnabled, classColorMap, bookingColor],
+  );
+
+  // Monthly view: distinct service colors per calendar day, rendered as dots
+  // under the date. Capped at 4 so a busy day doesn't overflow the cell.
+  const dotColorsByDate = useMemo(() => {
+    const map = new Map<string, string[]>();
+    if (!colorsEnabled) return map;
+    for (const b of visibleBookings) {
+      if (b.status === 'cancelled') continue;
+      const color = bookingColor(b);
+      const existing = map.get(b.booking_date);
+      if (!existing) {
+        map.set(b.booking_date, [color]);
+      } else if (existing.length < 4 && !existing.includes(color)) {
+        existing.push(color);
+      }
+    }
+    return map;
+  }, [colorsEnabled, visibleBookings, bookingColor]);
+
+  // Custom day cell (number + dots) only while colors are on — otherwise the
+  // Calendar keeps react-day-picker's stock DayContent.
+  const calendarComponents = useMemo(() => {
+    if (!colorsEnabled) return undefined;
+    const DayWithDots = ({ date }: DayContentProps) => {
+      const colors = dotColorsByDate.get(format(date, "yyyy-MM-dd")) ?? [];
+      return (
+        <span className="relative flex h-full w-full items-center justify-center">
+          {/* Same locale-formatted numeral react-day-picker renders by default */}
+          <span>{format(date, "d", { locale: dateFnsLocale })}</span>
+          {colors.length > 0 && (
+            <span className="absolute bottom-0.5 left-1/2 flex -translate-x-1/2 gap-0.5">
+              {colors.map((c) => (
+                <span key={c} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: c }} />
+              ))}
+            </span>
+          )}
+        </span>
+      );
+    };
+    return { DayContent: DayWithDots };
+  }, [colorsEnabled, dotColorsByDate, dateFnsLocale]);
+
   const activeBookings = visibleBookings.filter(b => b.status !== 'cancelled');
   const todayBookings = activeBookings.filter((b) => isToday(parseISO(b.booking_date))).length;
   const upcomingBookings = activeBookings.filter((b) => isAfter(parseISO(b.booking_date), new Date())).length;
@@ -1199,6 +1331,7 @@ export function CalendarTab() {
   ];
 
   return (
+    <ItemColorContext.Provider value={colorOf}>
     <div className="space-y-5">
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
@@ -1320,6 +1453,7 @@ export function CalendarTab() {
               onSelect={(d) => d && setSelectedDate(d)}
               locale={dateFnsLocale}
               className="pointer-events-auto"
+              components={calendarComponents}
               modifiers={{ hasBooking: datesWithBookings }}
               modifiersStyles={{
                 hasBooking: {
@@ -1365,5 +1499,6 @@ export function CalendarTab() {
         </>
       )}
     </div>
+    </ItemColorContext.Provider>
   );
 }

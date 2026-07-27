@@ -607,6 +607,12 @@ export const translations = {
     staffMemberLabel: "איש צוות",
     withStaff: "עם {name}",
     allStaff: "כל הצוות",
+
+    // Service color coding (master toggle + per-service picker)
+    serviceColors: "צבעים לפי שירות",
+    serviceColorsHelper: "הצג כל שירות בצבע שונה ביומן",
+    serviceColor: "צבע השירות",
+    chooseColor: "בחר צבע",
   },
   ar: {
     appName: "Ehjezly",
@@ -1214,6 +1220,12 @@ export const translations = {
     staffMemberLabel: "عضو الطاقم",
     withStaff: "مع {name}",
     allStaff: "كل الطاقم",
+
+    // Service color coding (master toggle + per-service picker)
+    serviceColors: "ألوان حسب الخدمة",
+    serviceColorsHelper: "عرض كل خدمة بلون مختلف في التقويم",
+    serviceColor: "لون الخدمة",
+    chooseColor: "اختر لوناً",
   },
   en: {
     appName: "Ehjezly",
@@ -1821,6 +1833,12 @@ export const translations = {
     staffMemberLabel: "Staff member",
     withStaff: "With {name}",
     allStaff: "All staff",
+
+    // Service color coding (master toggle + per-service picker)
+    serviceColors: "Service Colors",
+    serviceColorsHelper: "Show each service in a different color in the calendar",
+    serviceColor: "Service Color",
+    chooseColor: "Choose Color",
   },
 } as const;
 

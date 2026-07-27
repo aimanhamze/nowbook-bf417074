@@ -6,6 +6,9 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Pencil, Trash2, Users, Lock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { ServiceColorPicker } from "@/components/dashboard/ServiceColorPicker";
+import { DEFAULT_SERVICE_COLOR, normalizeColor } from "@/lib/serviceColors";
 
 const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 const DURATION_OPTIONS = [30, 45, 60, 90] as const;
@@ -17,6 +20,7 @@ const DEFAULT_FORM: ClassScheduleInsert = {
   class_name: "",
   class_type: "group",
   max_capacity: 10,
+  color: DEFAULT_SERVICE_COLOR,
 };
 
 interface ClassFormProps {
@@ -25,9 +29,10 @@ interface ClassFormProps {
   onCancel: () => void;
   isSaving: boolean;
   participantCount?: number;
+  showColorPicker: boolean;
 }
 
-function ClassForm({ initial, onSave, onCancel, isSaving, participantCount = 0 }: ClassFormProps) {
+function ClassForm({ initial, onSave, onCancel, isSaving, participantCount = 0, showColorPicker }: ClassFormProps) {
   const { t } = useLang();
   const [form, setForm] = useState<ClassScheduleInsert & { id?: string }>(initial);
   const isEdit = !!form.id;
@@ -161,6 +166,11 @@ function ClassForm({ initial, onSave, onCancel, isSaving, participantCount = 0 }
         )}
       </div>
 
+      {/* Calendar color — gated on the provider's master colors switch */}
+      {showColorPicker && (
+        <ServiceColorPicker value={form.color} onChange={(color) => set("color", color)} />
+      )}
+
       {/* Actions */}
       <div className="flex gap-2 pt-1">
         <button
@@ -185,9 +195,10 @@ interface ClassCardProps {
   entry: ClassScheduleEntry;
   onEdit: () => void;
   onDelete: () => void;
+  showColor: boolean;
 }
 
-function ClassCard({ entry, onEdit, onDelete }: ClassCardProps) {
+function ClassCard({ entry, onEdit, onDelete, showColor }: ClassCardProps) {
   const { t } = useLang();
   const isGroup = entry.class_type === "group";
 
@@ -195,6 +206,13 @@ function ClassCard({ entry, onEdit, onDelete }: ClassCardProps) {
     <div className="flex items-center gap-3 p-3 rounded-xl bg-white/70 border border-white/60 shadow-sm">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
+          {showColor && (
+            <span
+              className="h-3 w-3 shrink-0 rounded-full"
+              style={{ backgroundColor: normalizeColor(entry.color) }}
+              aria-hidden
+            />
+          )}
           <p className="text-sm font-semibold truncate">{entry.class_name}</p>
           <span className={cn(
             "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold shrink-0",
@@ -230,6 +248,8 @@ function ClassCard({ entry, onEdit, onDelete }: ClassCardProps) {
 export function WeeklyScheduleTab() {
   const { t } = useLang();
   const { schedule, isLoading, addClass, updateClass, deleteClass } = useProviderClassSchedule();
+  const { profile } = useProviderProfile();
+  const serviceColorsEnabled = profile?.service_colors_enabled ?? false;
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<(ClassScheduleEntry & { participantCount?: number }) | null>(null);
 
@@ -326,6 +346,7 @@ export function WeeklyScheduleTab() {
             onSave={handleAdd}
             onCancel={() => setShowForm(false)}
             isSaving={addClass.isPending}
+            showColorPicker={serviceColorsEnabled}
           />
         )}
 
@@ -340,11 +361,13 @@ export function WeeklyScheduleTab() {
               class_name: editingEntry.class_name,
               class_type: editingEntry.class_type,
               max_capacity: editingEntry.max_capacity,
+              color: normalizeColor(editingEntry.color),
             }}
             onSave={handleAdd}
             onCancel={() => setEditingEntry(null)}
             isSaving={updateClass.isPending}
             participantCount={editingEntry.participantCount}
+            showColorPicker={serviceColorsEnabled}
           />
         )}
       </AnimatePresence>
@@ -372,6 +395,7 @@ export function WeeklyScheduleTab() {
                 entry={entry}
                 onEdit={() => handleEditClick(entry)}
                 onDelete={() => handleDelete(entry)}
+                showColor={serviceColorsEnabled}
               />
             ))}
           </div>

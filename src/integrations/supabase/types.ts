@@ -268,6 +268,7 @@ export type Database = {
         Row: {
           class_name: string
           class_type: string
+          color: string
           created_at: string | null
           day_of_week: number
           duration_minutes: number
@@ -281,6 +282,7 @@ export type Database = {
         Insert: {
           class_name: string
           class_type: string
+          color?: string
           created_at?: string | null
           day_of_week: number
           duration_minutes?: number
@@ -294,6 +296,7 @@ export type Database = {
         Update: {
           class_name?: string
           class_type?: string
+          color?: string
           created_at?: string | null
           day_of_week?: number
           duration_minutes?: number
@@ -419,6 +422,7 @@ export type Database = {
           phone: string | null
           reminder_message_template: string | null
           requires_booking_approval: boolean
+          service_colors_enabled: boolean
           show_prices: boolean
           slot_interval_minutes: number
           social_links: Json | null
@@ -452,6 +456,7 @@ export type Database = {
           phone?: string | null
           reminder_message_template?: string | null
           requires_booking_approval?: boolean
+          service_colors_enabled?: boolean
           show_prices?: boolean
           slot_interval_minutes?: number
           social_links?: Json | null
@@ -485,6 +490,7 @@ export type Database = {
           phone?: string | null
           reminder_message_template?: string | null
           requires_booking_approval?: boolean
+          service_colors_enabled?: boolean
           show_prices?: boolean
           slot_interval_minutes?: number
           social_links?: Json | null
@@ -497,6 +503,7 @@ export type Database = {
       }
       provider_services: {
         Row: {
+          color: string
           created_at: string
           customer_notes_enabled: boolean | null
           customer_notes_placeholder: string | null
@@ -515,6 +522,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          color?: string
           created_at?: string
           customer_notes_enabled?: boolean | null
           customer_notes_placeholder?: string | null
@@ -533,6 +541,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          color?: string
           created_at?: string
           customer_notes_enabled?: boolean | null
           customer_notes_placeholder?: string | null

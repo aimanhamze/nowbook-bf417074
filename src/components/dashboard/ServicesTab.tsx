@@ -26,6 +26,8 @@ import { useProviderServices } from "@/hooks/useProviderServices";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderSessions } from "@/hooks/useProviderSessions";
 import { ParallelServicesSheet } from "@/components/dashboard/ParallelServicesSheet";
+import { ServiceColorPicker } from "@/components/dashboard/ServiceColorPicker";
+import { DEFAULT_SERVICE_COLOR, normalizeColor } from "@/lib/serviceColors";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -54,6 +56,7 @@ type EditState = {
   latest_start_time: string;
   customer_notes_enabled: boolean;
   customer_notes_placeholder: string;
+  color: string;
 };
 
 // Default guidance text shown to the customer when the provider enables notes
@@ -71,6 +74,7 @@ export function ServicesTab() {
   const { t } = useLang();
   const { profile } = useProviderProfile();
   const isFitness = profile?.category === 'fitness_studio';
+  const serviceColorsEnabled = profile?.service_colors_enabled ?? false;
   const { services, isLoading, upsertService, deleteService } = useProviderServices();
   const { sessions, addSession, deleteSession } = useProviderSessions();
   const [editing, setEditing] = useState<EditState | null>(null);
@@ -165,7 +169,7 @@ export function ServicesTab() {
     }
   };
 
-  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 1, latest_start_time: "", customer_notes_enabled: false, customer_notes_placeholder: "" });
+  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 1, latest_start_time: "", customer_notes_enabled: false, customer_notes_placeholder: "", color: DEFAULT_SERVICE_COLOR });
 
   const openEdit = (svc: typeof services[number]) => setEditing({
     id: svc.id,
@@ -177,6 +181,7 @@ export function ServicesTab() {
     latest_start_time: (svc as { latest_start_time?: string | null }).latest_start_time?.slice(0, 5) ?? "",
     customer_notes_enabled: (svc as { customer_notes_enabled?: boolean }).customer_notes_enabled ?? false,
     customer_notes_placeholder: (svc as { customer_notes_placeholder?: string | null }).customer_notes_placeholder ?? "",
+    color: normalizeColor(svc.color),
   });
 
   const openAddSession = (svc: typeof services[number]) => {
@@ -335,6 +340,17 @@ export function ServicesTab() {
                 <p className="text-xs text-muted-foreground mt-1">{t("latestStartTimeHelper")}</p>
               </div>
 
+              {/* Calendar color — only offered while the provider's master
+                  "service colors" switch is on. The stored value is untouched
+                  when the switch is off, so turning it back on restores it. */}
+              {serviceColorsEnabled && (
+                <ServiceColorPicker
+                  value={editing.color}
+                  onChange={(color) => setEditing({ ...editing, color })}
+                  className="rounded-xl border border-border p-3"
+                />
+              )}
+
               {/* Customer notes toggle — when on, the customer is shown an optional
                   notes step in the booking flow with the guidance text below. */}
               <div className="rounded-xl border border-border p-3 space-y-3">
@@ -468,6 +484,14 @@ export function ServicesTab() {
                 <div className="flex items-center justify-between px-4 py-3">
                   <div>
                     <div className="flex items-center gap-2">
+                      {/* Assigned calendar color — mirrors what the calendar shows */}
+                      {serviceColorsEnabled && (
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: normalizeColor(svc.color) }}
+                          aria-hidden
+                        />
+                      )}
                       <p className="font-medium text-sm">{svc.name}</p>
                       {isGroup ? (
                         <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
