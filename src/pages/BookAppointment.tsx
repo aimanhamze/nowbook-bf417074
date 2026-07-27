@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useProviderById, useRealAvailability } from "@/hooks/useAllProviders";
+import { useProviderById, useRealAvailability, usePublicProviderSchedule } from "@/hooks/useAllProviders";
 import { useProviderActiveStaff } from "@/hooks/useProviderStaff";
 import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import { useProviderClassScheduleById, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
@@ -28,15 +28,21 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const SPRING = { duration: 0.5, ease: [0.16, 1, 0.3, 1] } as const;
 
-// Returns up to `weeksAhead` upcoming dates (from today) whose day-of-week matches
-function getUpcomingDates(dayOfWeek: number, weeksAhead = 6, windowDays = 90): Date[] {
+// Returns up to `weeksAhead` upcoming dates (from today) whose day-of-week matches.
+//
+// `excludeDates` holds LOCAL "yyyy-MM-dd" strings (provider_blocked_dates) that must
+// never be offered. A skipped date does NOT consume one of the `weeksAhead` slots —
+// the walk keeps going and pulls the next matching date in. That matters for the
+// step-1 "next occurrence" card, which asks for weeksAhead=1: filtering AFTER
+// generation would leave it with zero dates instead of the next non-blocked one.
+function getUpcomingDates(dayOfWeek: number, weeksAhead = 6, windowDays = 90, excludeDates?: Set<string>): Date[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const results: Date[] = [];
   for (let i = 0; i <= windowDays; i++) {
     const d = addDays(today, i);
     if (getDay(d) === dayOfWeek && results.length < weeksAhead) {
-      results.push(d);
+      if (!excludeDates?.has(format(d, "yyyy-MM-dd"))) results.push(d);
     }
     if (results.length >= weeksAhead) break;
   }
@@ -60,6 +66,18 @@ const BookAppointment = () => {
   const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(id, selectedStaffId || undefined);
   const { data: allSessions = [], isLoading: sessionsLoading } = useProviderSessionsById(id);
   const { data: classSchedule = [], isLoading: scheduleLoading } = useProviderClassScheduleById(id);
+  // Blocked dates for the FITNESS class path. The class flow builds its dates from
+  // provider_class_schedule.day_of_week alone (getUpcomingDates) and never goes
+  // through resolveDayHours, so provider_blocked_dates was never consulted and a
+  // blocked date stayed bookable. usePublicProviderSchedule reuses the EXACT query
+  // keys useRealAvailability already mounts on the line above, so React Query
+  // dedupes it — no extra round-trip. ONLY `blockedDates` is read: weekly
+  // availability and monthly overrides are deliberately NOT applied to classes here.
+  const { blockedDates } = usePublicProviderSchedule(id);
+  // PostgREST returns a `date` column as a plain "YYYY-MM-DD" string, which is the
+  // same local-calendar format format(d, "yyyy-MM-dd") / toLocalDateStr produce and
+  // the same strings resolveDayHours compares against on the private/group paths.
+  const blockedDateSet = new Set(blockedDates);
 
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
 
@@ -102,9 +120,10 @@ const BookAppointment = () => {
     scrollRef.current?.scrollTo({ top: 0 });
   }, [step]);
 
-  // Derive occurrence dates here (before early returns) so hooks are never conditional
+  // Derive occurrence dates here (before early returns) so hooks are never conditional.
+  // blockedDateSet removes dates the provider blocked — see getUpcomingDates.
   const _occurrenceDates = selectedClass
-    ? getUpcomingDates(selectedClass.day_of_week, 6, provider?.bookingWindowDays ?? 42)
+    ? getUpcomingDates(selectedClass.day_of_week, 6, provider?.bookingWindowDays ?? 42, blockedDateSet)
     : [];
   const _occurrenceDateStrs = _occurrenceDates.map((d) => format(d, "yyyy-MM-dd"));
 
@@ -128,11 +147,12 @@ const BookAppointment = () => {
     enabled: !!selectedClass && _occurrenceDateStrs.length > 0,
   });
 
-  // Step 1: live booking counts for the next upcoming occurrence of each class
+  // Step 1: live booking counts for the next upcoming occurrence of each class.
+  // blockedDateSet makes this the next NON-blocked occurrence.
   const _nextOccMap: Record<string, string> = {};
   if (isFitnessStudio) {
     classSchedule.forEach(cls => {
-      const next = getUpcomingDates(cls.day_of_week, 1, provider?.bookingWindowDays ?? 14)[0];
+      const next = getUpcomingDates(cls.day_of_week, 1, provider?.bookingWindowDays ?? 14, blockedDateSet)[0];
       if (next) _nextOccMap[cls.id] = format(next, "yyyy-MM-dd");
     });
   }
