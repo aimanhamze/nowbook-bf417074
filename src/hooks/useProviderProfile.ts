@@ -132,6 +132,23 @@ export function useProviderProfile() {
     },
   });
 
+  // Master switch for service color coding. Purely cosmetic: it decides whether
+  // the calendar reads the per-service `color` columns at all. Turning it off
+  // never clears the stored colors, so flipping it back on restores them.
+  const updateServiceColorsEnabled = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ service_colors_enabled: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+    },
+  });
+
   const updateMinLeadTime = useMutation({
     mutationFn: async (value: number) => {
       if (!user) throw new Error("Not authenticated");
@@ -321,6 +338,7 @@ export function useProviderProfile() {
     updateShowPrices,
     updateDepositRequestEnabled,
     updateStaffEnabled,
+    updateServiceColorsEnabled,
     updateMinLeadTime,
     updateBookingWindow,
     updateCancellationNoticeHours,

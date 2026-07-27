@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
+import { normalizeColor } from "@/lib/serviceColors";
 
 export interface ClassScheduleEntry {
   id: string;
@@ -12,6 +13,7 @@ export interface ClassScheduleEntry {
   class_type: "private" | "group";
   max_capacity: number;
   is_active: boolean;
+  color: string;       // calendar display color (hex), default '#f97316'
   created_at: string | null;
   updated_at: string | null;
 }
@@ -23,6 +25,7 @@ export interface ClassScheduleInsert {
   class_name: string;
   class_type: "private" | "group";
   max_capacity: number;
+  color: string;
 }
 
 export function useProviderClassSchedule() {
@@ -53,6 +56,7 @@ export function useProviderClassSchedule() {
       const { error } = await supabase.from("provider_class_schedule").insert({
         provider_id: profile.id,
         ...entry,
+        color: normalizeColor(entry.color),
       });
       if (error) throw error;
     },
@@ -63,7 +67,7 @@ export function useProviderClassSchedule() {
     mutationFn: async ({ id, ...updates }: Partial<ClassScheduleInsert> & { id: string }) => {
       const { error } = await supabase
         .from("provider_class_schedule")
-        .update(updates)
+        .update(updates.color ? { ...updates, color: normalizeColor(updates.color) } : updates)
         .eq("id", id);
       if (error) throw error;
     },
