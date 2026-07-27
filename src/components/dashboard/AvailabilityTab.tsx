@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { format } from "date-fns";
-import { CalendarOff, X, Coffee } from "lucide-react";
+import { format, parseISO, startOfMonth, startOfToday, addMonths, subMonths, isAfter } from "date-fns";
+import { he, ar, enUS } from "date-fns/locale";
+import { CalendarOff, X, Coffee, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,12 +12,13 @@ import { useLang } from "@/contexts/LangContext";
 import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { MonthlyAvailabilityCalendar } from "@/components/dashboard/MonthlyAvailabilityCalendar";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 
 export function AvailabilityTab() {
-  const { t } = useLang();
+  const { t, isRtl, lang } = useLang();
   const { availability, blockedDates, upsertAvailability, blockDate, unblockDate } = useProviderAvailability();
   const { profile } = useProviderProfile();
   // Monthly mode swaps the weekly Working Hours card for the monthly calendar.
@@ -25,7 +27,40 @@ export function AvailabilityTab() {
   const [blockingDate, setBlockingDate] = useState<Date | undefined>();
   const [blockReason, setBlockReason] = useState("");
 
+  // Same language→locale selection the other two calendars use
+  // (MonthlyAvailabilityCalendar, BookingMonthCalendar) so month names and
+  // weekday headers follow the app language instead of defaulting to English.
+  const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
+
+  // Controlled month, needed because we hide react-day-picker's built-in caption
+  // and render our own nav row — its absolute left/right nav buttons don't flip
+  // in RTL. Nav is bounded below at the current month (every earlier day is
+  // disabled anyway); there's deliberately no upper bound, so a provider can
+  // still block a date any distance in the future, exactly as before.
+  const blockToday = startOfToday();
+  const [blockMonth, setBlockMonth] = useState<Date>(() => startOfToday());
+  const canGoPrevMonth = isAfter(startOfMonth(blockMonth), startOfMonth(blockToday));
+
+  // Already-blocked days, tinted in the picker so the provider can see at a
+  // glance what's taken (blocking the same date twice hits the
+  // unique(provider_id, blocked_date) constraint). Visual only — not disabled.
+  const blockedParsed = blockedDates.map(bd => parseISO(bd.blocked_date.slice(0, 10)));
+
+  // Matches the nav buttons on the other two calendars, sized down for the popover.
+  const navBtn =
+    "inline-flex h-9 w-9 items-center justify-center rounded-xl bg-card text-foreground " +
+    "shadow-sm ring-1 ring-border transition-all active:scale-95 " +
+    "hover:bg-accent hover:text-accent-foreground disabled:opacity-30 disabled:pointer-events-none " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+
   const getSlot = (dow: number) => availability.find(a => a.day_of_week === dow);
+
+  // Management list only shows today + future blocked dates (past ones stay in
+  // the DB — MonthlyAvailabilityCalendar reads the same blockedDates from
+  // useProviderAvailability() and still needs past rows to render/edit the
+  // currently-displayed month, so we filter here rather than in the hook).
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const upcomingBlockedDates = blockedDates.filter(bd => bd.blocked_date.slice(0, 10) >= todayStr);
 
   const handleToggle = async (dow: number, checked: boolean) => {
     const existing = getSlot(dow);
@@ -215,31 +250,101 @@ export function AvailabilityTab() {
               {t("blockDate")}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent className="w-[19.5rem] rounded-2xl p-0" align="start">
+            {/* Own caption row instead of react-day-picker's: its nav buttons are
+                absolutely positioned left/right and its chevrons are hardcoded,
+                so they point the wrong way in RTL. `dir` flips the weekday
+                header + day grid; `locale` localizes month and weekday names. */}
+            <div className="flex items-center justify-between px-3 pt-3">
+              <button
+                type="button"
+                aria-label={t("prevMonthAria")}
+                disabled={!canGoPrevMonth}
+                onClick={() => setBlockMonth(subMonths(blockMonth, 1))}
+                className={navBtn}
+              >
+                {isRtl ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              </button>
+              <span className="text-sm font-bold text-foreground">
+                {format(blockMonth, "MMMM yyyy", { locale: dateFnsLocale })}
+              </span>
+              <button
+                type="button"
+                aria-label={t("nextMonthAria")}
+                onClick={() => setBlockMonth(addMonths(blockMonth, 1))}
+                className={navBtn}
+              >
+                {isRtl ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </button>
+            </div>
+
             <Calendar
               mode="single"
+              month={blockMonth}
+              onMonthChange={setBlockMonth}
+              dir={isRtl ? "rtl" : "ltr"}
+              locale={dateFnsLocale}
               selected={blockingDate}
               onSelect={setBlockingDate}
-              className="pointer-events-auto"
-              disabled={(date) => date < new Date()}
+              disabled={(date) => date < blockToday}
+              modifiers={{ blocked: blockedParsed }}
+              modifiersClassNames={{
+                blocked: "bg-destructive/10 text-destructive line-through hover:bg-destructive/10",
+              }}
+              classNames={{
+                caption: "hidden",
+                months: "w-full",
+                month: "w-full space-y-3",
+                table: "w-full border-collapse",
+                head_row: "flex w-full",
+                head_cell:
+                  "text-muted-foreground font-semibold text-[0.72rem] uppercase tracking-wide w-full py-2",
+                row: "flex w-full mt-1.5",
+                cell: "relative w-full p-0.5 text-center",
+                day: cn(
+                  "h-11 w-full rounded-xl text-sm font-medium text-foreground",
+                  "inline-flex items-center justify-center transition-all",
+                  "hover:bg-secondary active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+                ),
+                // `!` is load-bearing: react-day-picker concatenates `day` and
+                // `day_selected` onto one element, and Tailwind emits
+                // hover:bg-secondary / text-foreground AFTER their accent
+                // counterparts. At equal specificity the later rule won, so the
+                // just-clicked day (cursor still resting on it, and hover sticks
+                // on touch) rendered white-on-near-white. Important pins the
+                // selected state regardless of stylesheet order.
+                day_selected:
+                  "!bg-accent !text-accent-foreground font-bold shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.4)] hover:!bg-accent hover:!text-accent-foreground",
+                day_today: "ring-1 ring-inset ring-accent/50 font-bold !text-accent",
+                day_disabled: "text-muted-foreground/30 pointer-events-none hover:bg-transparent",
+                day_outside: "text-muted-foreground/25",
+                day_hidden: "invisible",
+              }}
+              className="pointer-events-auto p-3 pt-1"
             />
+
             {blockingDate && (
-              <div className="p-3 border-t space-y-2">
+              <div className="space-y-2.5 border-t border-border bg-secondary/40 p-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {format(blockingDate, "EEEE, d MMMM yyyy", { locale: dateFnsLocale })}
+                </p>
                 <Input
                   placeholder={t("reason")}
                   value={blockReason}
                   onChange={e => setBlockReason(e.target.value)}
-                  className="h-8 text-sm"
+                  className="h-9 rounded-xl text-sm"
                 />
-                <Button size="sm" className="w-full" onClick={handleBlockDate}>{t("save")}</Button>
+                <Button size="sm" className="w-full rounded-xl font-semibold" onClick={handleBlockDate}>
+                  {t("save")}
+                </Button>
               </div>
             )}
           </PopoverContent>
         </Popover>
 
-        {blockedDates.length > 0 && (
+        {upcomingBlockedDates.length > 0 && (
           <div className="space-y-1.5">
-            {blockedDates.map(bd => (
+            {upcomingBlockedDates.map(bd => (
               <div key={bd.id} className="flex items-center justify-between rounded-lg bg-secondary px-3 py-2 text-sm">
                 <div>
                   <span className="font-medium">{format(new Date(bd.blocked_date), "MMM d, yyyy")}</span>
