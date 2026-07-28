@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -72,7 +73,7 @@ type AddSessionState = {
 
 export function ServicesTab() {
   const { t } = useLang();
-  const { profile } = useProviderProfile();
+  const { profile, updateServiceColorsEnabled } = useProviderProfile();
   const isFitness = profile?.category === 'fitness_studio';
   const serviceColorsEnabled = profile?.service_colors_enabled ?? false;
   const { services, isLoading, upsertService, deleteService } = useProviderServices();
@@ -204,6 +205,36 @@ export function ServicesTab() {
           <Plus className="h-4 w-4" />
           {t("addService")}
         </Button>
+      </div>
+
+      {/* Service colors — master switch, leading the tab because it governs what
+          the rows below show: while off, the per-service pickers and the row
+          swatches stay hidden and the calendar renders uncolored.
+
+          IMMEDIATE-SAVE, deliberately standalone: it writes through
+          updateServiceColorsEnabled on change and is NOT part of any form here.
+          The add/edit service sheet keeps its own `editing` state and explicit
+          handleSave — this toggle must never be folded into it, or flipping a
+          display preference would start dirtying an unsaved service draft. */}
+      <div className="rounded-2xl border border-border bg-card px-4 py-3">
+        <div className="flex items-start gap-3">
+          <Switch
+            checked={serviceColorsEnabled}
+            onCheckedChange={async (next) => {
+              try {
+                await updateServiceColorsEnabled.mutateAsync(next);
+                toast.success(t("profileSaved"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Error");
+              }
+            }}
+            disabled={updateServiceColorsEnabled.isPending}
+          />
+          <div className="flex-1">
+            <Label className="text-sm font-medium">{t("serviceColors")}</Label>
+            <p className="text-xs text-muted-foreground mt-1">{t("serviceColorsHelper")}</p>
+          </div>
+        </div>
       </div>
 
       {/* Parallel-services entry point — counter button opens the config sheet */}

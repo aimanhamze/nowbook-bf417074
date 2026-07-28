@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useLang } from "@/contexts/LangContext";
@@ -55,8 +54,7 @@ type FormValues = z.infer<typeof profileSchema>;
 
 export function BusinessProfileTab() {
   const { t, lang } = useLang();
-  const { profile, upsertProfile, updateWhatsAppTemplates, updateServiceColorsEnabled, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
-  const serviceColorsEnabled = profile?.service_colors_enabled ?? false;
+  const { profile, upsertProfile, updateWhatsAppTemplates, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
 
   const [accordionValue, setAccordionValue] = useState("");
   const [locationAccordionValue, setLocationAccordionValue] = useState("");
@@ -416,31 +414,6 @@ export function BusinessProfileTab() {
             </AccordionContent>
           </AccordionItem>
         </Accordion>
-      </div>
-
-      {/* Service colors — master switch. Saves immediately (like the toggles in
-          BookingSettingsTab), so it stays outside the form's submit flow and
-          never marks the profile form dirty. While off, the calendar renders
-          with no colors and the per-service pickers stay hidden. */}
-      <div className="rounded-2xl border border-border bg-card p-4">
-        <div className="flex items-start gap-3">
-          <Switch
-            checked={serviceColorsEnabled}
-            onCheckedChange={async (next) => {
-              try {
-                await updateServiceColorsEnabled.mutateAsync(next);
-                toast.success(t("profileSaved"));
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Error");
-              }
-            }}
-            disabled={updateServiceColorsEnabled.isPending}
-          />
-          <div className="flex-1">
-            <Label className="text-sm font-medium">{t("serviceColors")}</Label>
-            <p className="text-xs text-muted-foreground mt-1">{t("serviceColorsHelper")}</p>
-          </div>
-        </div>
       </div>
 
       {/* WhatsApp message templates */}
