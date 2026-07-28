@@ -25,6 +25,7 @@ import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderStaff } from "@/hooks/useProviderStaff";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { SettingsSection } from "@/components/settings/SettingsSection";
 import { toast } from "sonner";
 
 // Raised by trg_enforce_staff_enable_no_future_bookings when flipping
@@ -33,12 +34,12 @@ const GUARD_TOKEN = "STAFF_ENABLE_BLOCKED_BY_FUTURE_BOOKINGS";
 
 type EditState = { id?: string; name: string };
 
-// Staff management + the staff_enabled toggle, rendered as a card inside
-// BookingSettingsTab. Management (add/rename/deactivate) is always available so
-// an owner can set up their team BEFORE enabling the mode; everything here is
-// inert for customers until staff_enabled is on (and nothing customer-facing
-// reads staff yet in this phase anyway).
-export function StaffSection() {
+// Staff management + the staff_enabled toggle, rendered as a section on the
+// settings hub (/settings). Management (add/rename/deactivate) is always
+// available so an owner can set up their team BEFORE enabling the mode;
+// everything here is inert for customers until staff_enabled is on (and nothing
+// customer-facing reads staff yet in this phase anyway).
+export function StaffSection({ delay = 0 }: { delay?: number }) {
   const { t } = useLang();
   const { profile, updateStaffEnabled } = useProviderProfile();
   const { staff, activeStaff, isLoading, createStaff, renameStaff, setStaffActive } = useProviderStaff();
@@ -113,21 +114,19 @@ export function StaffSection() {
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-      {/* Header + add button */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold flex items-center gap-1.5">
-          <Users className="h-4 w-4 text-accent" />
-          {t("staffSectionTitle")}
-        </h3>
+    <SettingsSection
+      icon={Users}
+      title={t("staffSectionTitle")}
+      delay={delay}
+      action={
         <Button size="sm" variant="outline" onClick={() => setEditing({ name: "" })} className="gap-1.5">
           <Plus className="h-4 w-4" />
           {t("addStaff")}
         </Button>
-      </div>
-
+      }
+    >
       {/* staff_enabled toggle — mirrors the other boolean-flag rows */}
-      <div className="flex items-start gap-3 pt-3 border-t border-border">
+      <div className="flex items-start gap-3">
         <Switch
           checked={staffEnabled}
           onCheckedChange={handleToggle}
@@ -142,27 +141,28 @@ export function StaffSection() {
         </div>
       </div>
 
-      {/* Staff list */}
+      {/* Staff list. Rows are Tier-2 `.surface-soft` — repeated items must not
+          each carry a backdrop-filter inside an already-glass card. */}
       {isLoading ? (
-        <div className="space-y-2 pt-3 border-t border-border">
+        <div className="space-y-2 pt-3 border-t border-border/60">
           {[1, 2].map(i => (
             <div key={i} className="h-12 rounded-xl bg-secondary animate-pulse" />
           ))}
         </div>
       ) : staff.length === 0 ? (
-        <div className="text-center py-6 text-muted-foreground border-t border-border">
+        <div className="text-center py-6 text-muted-foreground border-t border-border/60">
           <p className="text-sm font-medium">{t("noStaff")}</p>
           <p className="text-xs mt-1">{t("addFirstStaff")}</p>
         </div>
       ) : (
-        <div className="space-y-2 pt-3 border-t border-border">
+        <div className="space-y-2 pt-3 border-t border-border/60">
           {staff.map((member, i) => (
             <motion.div
               key={member.id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className="flex items-center justify-between rounded-xl border border-border px-3 py-2"
+              className="surface-soft flex items-center justify-between rounded-xl px-3 py-2"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <p className={`text-sm font-medium truncate ${member.is_active ? "" : "text-muted-foreground line-through"}`}>
@@ -279,6 +279,6 @@ export function StaffSection() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </SettingsSection>
   );
 }
