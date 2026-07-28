@@ -1,18 +1,25 @@
 import { useState } from "react";
 import { Lock, KeyRound } from "lucide-react";
-import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
+import { SettingsSection } from "@/components/settings/SettingsSection";
+import { AvailabilityModeSection } from "@/components/settings/AvailabilityModeSection";
+import { StaffSection } from "@/components/settings/StaffSection";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
 const MIN_PASSWORD_LENGTH = 6;
 
+// Provider settings hub. Three sections, ordered business-first: how the
+// calendar is shaped (availability mode), who the bookings are for (staff),
+// then the account itself (password). Each is a SettingsSection so they read as
+// one list rather than three stacked panels.
 const Settings = () => {
   const { t } = useLang();
   const { user, isProvider } = useAuth();
@@ -75,33 +82,31 @@ const Settings = () => {
   };
 
   return (
-    <div className="min-h-screen pb-24">
-      <header className="px-5 pt-12 pb-6 flex items-center gap-3">
-        <button
-          onClick={() => navigate("/profile")}
-          className="p-1.5 -ml-1.5 rounded-lg hover:bg-secondary transition-colors"
-          aria-label={t("profile")}
-        >
-          <BackArrow className="h-5 w-5" />
-        </button>
-        <h1 className="text-xl font-bold">{t("settings")}</h1>
-      </header>
-
-      {isProvider ? (
-        <div className="px-5">
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="rounded-2xl border border-border bg-card p-4"
+    <div className={`min-h-screen pb-24 ${providerDesktopPage}`}>
+      <div className={providerDesktopColumn}>
+        <header className="px-5 pt-12 pb-6 flex items-center gap-3">
+          <button
+            onClick={() => navigate("/profile")}
+            className="p-1.5 -ms-1.5 rounded-lg hover:bg-secondary transition-colors"
+            aria-label={t("profile")}
           >
-            <div className="flex items-center gap-3 mb-1">
-              <Lock className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">{t("changePassword")}</span>
-            </div>
-            <p className="text-xs text-muted-foreground mb-4">{t("changePasswordDesc")}</p>
+            <BackArrow className="h-5 w-5" />
+          </button>
+          <h1 className="text-xl font-bold">{t("settings")}</h1>
+        </header>
 
-            <div className="space-y-4">
+        {isProvider ? (
+          <div className="px-5 space-y-4">
+            <AvailabilityModeSection delay={0} />
+
+            <StaffSection delay={0.06} />
+
+            <SettingsSection
+              icon={Lock}
+              title={t("changePassword")}
+              description={t("changePasswordDesc")}
+              delay={0.12}
+            >
               <div className="space-y-1.5">
                 <Label htmlFor="current-password">{t("currentPassword")}</Label>
                 <Input
@@ -146,14 +151,14 @@ const Settings = () => {
                 <KeyRound className="h-4 w-4" />
                 {loading ? t("updatingPassword") : t("updatePassword")}
               </Button>
-            </div>
-          </motion.div>
-        </div>
-      ) : (
-        <div className="px-5">
-          <p className="text-sm text-muted-foreground">{t("providerOnly")}</p>
-        </div>
-      )}
+            </SettingsSection>
+          </div>
+        ) : (
+          <div className="px-5">
+            <p className="text-sm text-muted-foreground">{t("providerOnly")}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

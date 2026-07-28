@@ -25,6 +25,7 @@ import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderStaff } from "@/hooks/useProviderStaff";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { SettingsSection } from "@/components/settings/SettingsSection";
 import { toast } from "sonner";
 
 // Raised by trg_enforce_staff_enable_no_future_bookings when flipping
@@ -33,12 +34,12 @@ const GUARD_TOKEN = "STAFF_ENABLE_BLOCKED_BY_FUTURE_BOOKINGS";
 
 type EditState = { id?: string; name: string };
 
-// Staff management + the staff_enabled toggle, rendered as a card inside
-// BookingSettingsTab. Management (add/rename/deactivate) is always available so
-// an owner can set up their team BEFORE enabling the mode; everything here is
-// inert for customers until staff_enabled is on (and nothing customer-facing
-// reads staff yet in this phase anyway).
-export function StaffSection() {
+// Staff management + the staff_enabled toggle, rendered as a section on the
+// settings hub (/settings). Management (add/rename/deactivate) is always
+// available so an owner can set up their team BEFORE enabling the mode;
+// everything here is inert for customers until staff_enabled is on (and nothing
+// customer-facing reads staff yet in this phase anyway).
+export function StaffSection({ delay = 0 }: { delay?: number }) {
   const { t } = useLang();
   const { profile, updateStaffEnabled } = useProviderProfile();
   const { staff, activeStaff, isLoading, createStaff, renameStaff, setStaffActive } = useProviderStaff();
@@ -113,21 +114,19 @@ export function StaffSection() {
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-      {/* Header + add button */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold flex items-center gap-1.5">
-          <Users className="h-4 w-4 text-accent" />
-          {t("staffSectionTitle")}
-        </h3>
+    <SettingsSection
+      icon={Users}
+      title={t("staffSectionTitle")}
+      delay={delay}
+      action={
         <Button size="sm" variant="outline" onClick={() => setEditing({ name: "" })} className="gap-1.5">
           <Plus className="h-4 w-4" />
           {t("addStaff")}
         </Button>
-      </div>
-
+      }
+    >
       {/* staff_enabled toggle — mirrors the other boolean-flag rows */}
-      <div className="flex items-start gap-3 pt-3 border-t border-border">
+      <div className="flex items-start gap-3">
         <Switch
           checked={staffEnabled}
           onCheckedChange={handleToggle}
@@ -279,6 +278,6 @@ export function StaffSection() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </SettingsSection>
   );
 }
