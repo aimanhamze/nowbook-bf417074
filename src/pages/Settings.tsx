@@ -12,17 +12,23 @@ import { AvailabilityModeSection } from "@/components/settings/AvailabilityModeS
 import { StaffSection } from "@/components/settings/StaffSection";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { supabase } from "@/integrations/supabase/client";
 
 const MIN_PASSWORD_LENGTH = 6;
 
-// Provider settings hub. Three sections, ordered business-first: how the
-// calendar is shaped (availability mode), who the bookings are for (staff),
-// then the account itself (password). Each is a SettingsSection so they read as
-// one list rather than three stacked panels.
+// Provider settings hub, grouped by who each setting affects:
+//
+//   Business — availability mode + staff. Both change what a CUSTOMER sees
+//              when booking, so they belong together and lead the page.
+//   Account  — the password. Private, no customer-facing consequence.
+//
+// The split is the page's organising idea, not decoration: it answers "will
+// changing this show up in my booking page?" before the owner has to guess.
 const Settings = () => {
   const { t } = useLang();
   const { user, isProvider } = useAuth();
+  const { profile } = useProviderProfile();
   const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -82,76 +88,104 @@ const Settings = () => {
   };
 
   return (
-    <div className={`min-h-screen pb-24 ${providerDesktopPage}`}>
-      <div className={providerDesktopColumn}>
-        <header className="px-5 pt-12 pb-6 flex items-center gap-3">
+    // Provider surface: the soft warm gradient + single calm accent glow used
+    // by Dashboard/Calendar/Notifications. Previously this page was flat white,
+    // which made it read as an orphan next to every other provider screen.
+    <div
+      className={`relative min-h-screen overflow-x-clip pb-24 ${providerDesktopPage}`}
+      style={{ background: "var(--bg-atmosphere-soft)" }}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[-4rem] [inset-inline-end:-5rem] h-[22rem] w-[22rem] rounded-full blur-3xl opacity-45"
+        style={{ background: "radial-gradient(circle, hsl(24 95% 80% / 0.34) 0%, transparent 65%)" }}
+      />
+
+      <div className={`relative ${providerDesktopColumn}`}>
+        {/* The business name under the title answers "whose settings are
+            these?" with data already in the cache — no invented copy. */}
+        <header className="px-5 pt-12 pb-6 flex items-start gap-3">
           <button
             onClick={() => navigate("/profile")}
-            className="p-1.5 -ms-1.5 rounded-lg hover:bg-secondary transition-colors"
+            className="-ms-1.5 mt-0.5 rounded-xl p-1.5 transition-colors hover:bg-secondary/60 active:scale-95"
             aria-label={t("profile")}
           >
             <BackArrow className="h-5 w-5" />
           </button>
-          <h1 className="text-xl font-bold">{t("settings")}</h1>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold leading-tight">{t("settings")}</h1>
+            {isProvider && profile?.business_name && (
+              <p className="mt-1 truncate text-xs text-muted-foreground">{profile.business_name}</p>
+            )}
+          </div>
         </header>
 
         {isProvider ? (
-          <div className="px-5 space-y-4">
-            <AvailabilityModeSection delay={0} />
+          <div className="px-5 space-y-7">
+            <div className="space-y-3">
+              <h2 className="px-1 text-xs font-semibold text-muted-foreground/80">
+                {t("settingsGroupBusiness")}
+              </h2>
+              <AvailabilityModeSection delay={0} />
+              <StaffSection delay={0.06} />
+            </div>
 
-            <StaffSection delay={0.06} />
-
-            <SettingsSection
-              icon={Lock}
-              title={t("changePassword")}
-              description={t("changePasswordDesc")}
-              delay={0.12}
-            >
-              <div className="space-y-1.5">
-                <Label htmlFor="current-password">{t("currentPassword")}</Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  dir="ltr"
-                  autoComplete="current-password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="new-password">{t("newPassword")}</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  dir="ltr"
-                  autoComplete="new-password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="confirm-password">{t("confirmNewPassword")}</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  dir="ltr"
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
-
-              <Button
-                className="w-full gap-2"
-                onClick={handleChangePassword}
-                disabled={loading || !currentPassword || !newPassword || !confirmPassword}
+            <div className="space-y-3">
+              <h2 className="px-1 text-xs font-semibold text-muted-foreground/80">
+                {t("settingsGroupAccount")}
+              </h2>
+              <SettingsSection
+                icon={Lock}
+                title={t("changePassword")}
+                description={t("changePasswordDesc")}
+                delay={0.12}
               >
-                <KeyRound className="h-4 w-4" />
-                {loading ? t("updatingPassword") : t("updatePassword")}
-              </Button>
-            </SettingsSection>
+                <div className="space-y-1.5">
+                  <Label htmlFor="current-password">{t("currentPassword")}</Label>
+                  <Input
+                    id="current-password"
+                    type="password"
+                    dir="ltr"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="new-password">{t("newPassword")}</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    dir="ltr"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirm-password">{t("confirmNewPassword")}</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    dir="ltr"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+
+                <Button
+                  className="w-full gap-2"
+                  onClick={handleChangePassword}
+                  disabled={loading || !currentPassword || !newPassword || !confirmPassword}
+                >
+                  <KeyRound className="h-4 w-4" />
+                  {loading ? t("updatingPassword") : t("updatePassword")}
+                </Button>
+              </SettingsSection>
+            </div>
           </div>
         ) : (
           <div className="px-5">

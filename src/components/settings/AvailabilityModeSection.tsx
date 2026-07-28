@@ -57,7 +57,7 @@ export function AvailabilityModeSection({ delay = 0 }: { delay?: number }) {
 
       {/* Flat-default controls — only relevant in monthly mode */}
       {availabilityMode === "monthly" && (
-        <div className="space-y-4 pt-3 border-t border-border">
+        <div className="space-y-4 pt-3 border-t border-border/60">
           <div className="flex items-start gap-3">
             <Switch
               checked={monthlyDefaultAvailable}

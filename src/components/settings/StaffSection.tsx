@@ -141,27 +141,28 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
         </div>
       </div>
 
-      {/* Staff list */}
+      {/* Staff list. Rows are Tier-2 `.surface-soft` — repeated items must not
+          each carry a backdrop-filter inside an already-glass card. */}
       {isLoading ? (
-        <div className="space-y-2 pt-3 border-t border-border">
+        <div className="space-y-2 pt-3 border-t border-border/60">
           {[1, 2].map(i => (
             <div key={i} className="h-12 rounded-xl bg-secondary animate-pulse" />
           ))}
         </div>
       ) : staff.length === 0 ? (
-        <div className="text-center py-6 text-muted-foreground border-t border-border">
+        <div className="text-center py-6 text-muted-foreground border-t border-border/60">
           <p className="text-sm font-medium">{t("noStaff")}</p>
           <p className="text-xs mt-1">{t("addFirstStaff")}</p>
         </div>
       ) : (
-        <div className="space-y-2 pt-3 border-t border-border">
+        <div className="space-y-2 pt-3 border-t border-border/60">
           {staff.map((member, i) => (
             <motion.div
               key={member.id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className="flex items-center justify-between rounded-xl border border-border px-3 py-2"
+              className="surface-soft flex items-center justify-between rounded-xl px-3 py-2"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <p className={`text-sm font-medium truncate ${member.is_active ? "" : "text-muted-foreground line-through"}`}>
