@@ -27,7 +27,6 @@ export const translations = {
     depositTemplate: "תבנית בקשת מקדמה",
     reminderTemplate: "תבנית תזכורת",
     availablePlaceholders: "משתנים זמינים",
-    resetToDefault: "שחזר לתבנית מקורית",
     templateSaved: "התבנית נשמרה ✅",
     about: "אודות",
     readMore: "קרא עוד",
@@ -85,7 +84,6 @@ export const translations = {
     exploreServices: "גלה שירותים",
     tabUpcoming: "הקרובים",
     tabHistory: "היסטוריה",
-    noUpcomingBookings: "אין תורים קרובים",
     noUpcomingHint: "הזמן תור והוא יופיע כאן",
     noPastBookings: "אין תורים קודמים",
     noFavoritesYet: "אין מועדפים עדיין",
@@ -607,6 +605,12 @@ export const translations = {
     staffMemberLabel: "איש צוות",
     withStaff: "עם {name}",
     allStaff: "כל הצוות",
+
+    // Service color coding (master toggle + per-service picker)
+    serviceColors: "צבעים לפי שירות",
+    serviceColorsHelper: "הצג כל שירות בצבע שונה ביומן",
+    serviceColor: "צבע השירות",
+    chooseColor: "בחר צבע",
   },
   ar: {
     appName: "Ehjezly",
@@ -634,7 +638,6 @@ export const translations = {
     depositTemplate: "قالب طلب الدفعة",
     reminderTemplate: "قالب التذكير",
     availablePlaceholders: "المتغيرات المتاحة",
-    resetToDefault: "إعادة للقالب الأصلي",
     templateSaved: "تم حفظ القالب ✅",
     about: "حول",
     readMore: "اقرأ المزيد",
@@ -692,7 +695,6 @@ export const translations = {
     exploreServices: "استكشف الخدمات",
     tabUpcoming: "القادمة",
     tabHistory: "السجل",
-    noUpcomingBookings: "لا مواعيد قادمة",
     noUpcomingHint: "احجز موعدًا وسيظهر هنا",
     noPastBookings: "لا مواعيد سابقة",
     noFavoritesYet: "لا توجد مفضلات بعد",
@@ -1214,6 +1216,12 @@ export const translations = {
     staffMemberLabel: "عضو الطاقم",
     withStaff: "مع {name}",
     allStaff: "كل الطاقم",
+
+    // Service color coding (master toggle + per-service picker)
+    serviceColors: "ألوان حسب الخدمة",
+    serviceColorsHelper: "عرض كل خدمة بلون مختلف في التقويم",
+    serviceColor: "لون الخدمة",
+    chooseColor: "اختر لوناً",
   },
   en: {
     appName: "Ehjezly",
@@ -1241,7 +1249,6 @@ export const translations = {
     depositTemplate: "Deposit Request Template",
     reminderTemplate: "Reminder Template",
     availablePlaceholders: "Available Placeholders",
-    resetToDefault: "Reset to Default",
     templateSaved: "Template saved ✅",
     about: "About",
     readMore: "Read more",
@@ -1299,7 +1306,6 @@ export const translations = {
     exploreServices: "Explore Services",
     tabUpcoming: "Upcoming",
     tabHistory: "History",
-    noUpcomingBookings: "No upcoming appointments",
     noUpcomingHint: "Book an appointment and it'll show up here",
     noPastBookings: "No past appointments",
     noFavoritesYet: "No favorites yet",
@@ -1821,6 +1827,12 @@ export const translations = {
     staffMemberLabel: "Staff member",
     withStaff: "With {name}",
     allStaff: "All staff",
+
+    // Service color coding (master toggle + per-service picker)
+    serviceColors: "Service Colors",
+    serviceColorsHelper: "Show each service in a different color in the calendar",
+    serviceColor: "Service Color",
+    chooseColor: "Choose Color",
   },
 } as const;
 

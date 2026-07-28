@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
+import { normalizeColor } from "@/lib/serviceColors";
 
 // Local YYYY-MM-DD — mirrors toLocalDateStr in useAllProviders. Kept local to
 // avoid a cross-module import; booking_date comparisons must use local dates.
@@ -58,6 +59,7 @@ export function useProviderServices() {
       latest_start_time?: string | null;
       customer_notes_enabled?: boolean;
       customer_notes_placeholder?: string | null;
+      color?: string;
     }) => {
       if (!profile) throw new Error("No provider profile");
       const isFitness = profile.category === 'fitness_studio';
@@ -82,6 +84,10 @@ export function useProviderServices() {
         customer_notes_placeholder: service.customer_notes_enabled
           ? (service.customer_notes_placeholder?.trim() || null)
           : null,
+        // Calendar display color. Always normalised to a valid hex so the DB
+        // CHECK can't reject a save, and kept even while the provider's master
+        // colors switch is off (it only hides the picker, never wipes values).
+        color: normalizeColor(service.color),
       };
       if (service.id) {
         const { error } = await supabase
