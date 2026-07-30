@@ -38,3 +38,11 @@ screenshots/
 
 # Higgsfield AI video assets
 higgsfield/
+
+# Local tooling / media-generation scripts — not part of the app build.
+# Listed individually rather than ignoring scripts/, so the tracked
+# scripts/take-screenshots.js stays visible and new scripts aren't hidden.
+install.ps1
+scripts/higgsfield-*.js
+scripts/build-reel-frames.js
+scripts/generate-reel-clips.ps1
