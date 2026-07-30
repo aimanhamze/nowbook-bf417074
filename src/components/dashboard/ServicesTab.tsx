@@ -361,13 +361,44 @@ export function ServicesTab() {
                 </div>
               )}
 
+              {/* Latest start time — OPTIONAL, and must stay clearable. A bare
+                  <input type="time"> offers no clear affordance (Chrome only
+                  shows the picker icon; a touch wheel picker can't produce an
+                  empty value), so the provider could set a cutoff but never
+                  remove it. The X button below is the only reliable way back to
+                  "" — which handleSave / upsertService turn into a real NULL.
+                  While empty the native "--:--" is hidden (text-transparent,
+                  restored on focus so typing is visible) and the peer overlay
+                  reads "ללא הגבלה" instead. */}
               <div>
                 <Label>{"שעת התחלה אחרונה (אופציונלי)"}</Label>
-                <Input
-                  type="time"
-                  value={editing.latest_start_time}
-                  onChange={e => setEditing({ ...editing, latest_start_time: e.target.value })}
-                />
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type="time"
+                      value={editing.latest_start_time}
+                      onChange={e => setEditing({ ...editing, latest_start_time: e.target.value })}
+                      className={cn("peer", !editing.latest_start_time && "text-transparent focus:text-foreground")}
+                    />
+                    {!editing.latest_start_time && (
+                      <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-sm text-muted-foreground peer-focus:hidden">
+                        {t("latestStartTimeNone")}
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={!editing.latest_start_time}
+                    onClick={() => setEditing({ ...editing, latest_start_time: "" })}
+                    aria-label={t("latestStartTimeClear")}
+                    title={t("latestStartTimeClear")}
+                    className="h-10 w-10 shrink-0 text-muted-foreground disabled:opacity-30"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">{t("latestStartTimeHelper")}</p>
               </div>
 
