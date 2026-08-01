@@ -34,6 +34,7 @@ const Reviews = lazy(() => import("./pages/Reviews"));
 const ProviderQrCode = lazy(() => import("./pages/ProviderQrCode"));
 const ProviderCustomers = lazy(() => import("./pages/ProviderCustomers"));
 const Statistics = lazy(() => import("./pages/Statistics"));
+const MonthlyReport = lazy(() => import("./pages/MonthlyReport"));
 
 const queryClient = new QueryClient();
 
@@ -106,6 +107,7 @@ const App = () => (
                   <Route path="/qr-code" element={<ProtectedRoute><ErrorBoundary><ProviderQrCode /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/customers" element={<ProtectedRoute><ErrorBoundary><ProviderCustomers /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/statistics" element={<ProtectedRoute><ErrorBoundary><Statistics /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/monthly-report" element={<ProtectedRoute><ErrorBoundary><MonthlyReport /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/notifications" element={<ProtectedRoute><ErrorBoundary><Notifications /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/admin" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
                   <Route path="/admin/providers" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
