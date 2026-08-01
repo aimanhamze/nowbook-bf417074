@@ -95,9 +95,13 @@ export function StatsCharts({ stats }: { stats: ProviderStats }) {
     { key: "cancelled", value: stats.bookings.byStatus.cancelled, fill: ROSE },
   ].filter((d) => d.value > 0);
 
-  // ── Top services (horizontal bar, top 5 by revenue) ─────────────────────────
+  // ── Top services (horizontal bar, top 5 by BOOKING COUNT) ───────────────────
+  // Counts, not revenue: a per-service revenue split could only be derived from
+  // the CURRENT catalog price x occurrences, which let a price change rewrite
+  // history and never summed back to headline revenue. Counts come straight off
+  // each booking's service_ids and are exact.
   const topServices = stats.topServices.slice(0, 5);
-  const servicesConfig = { revenue: { label: t("statRevenue"), color: VIOLET } } satisfies ChartConfig;
+  const servicesConfig = { count: { label: t("statBookings"), color: VIOLET } } satisfies ChartConfig;
 
   // ── Busiest days (bar by weekday) ───────────────────────────────────────────
   const weekdayData = stats.busiest.byWeekday.map((w) => ({
@@ -173,7 +177,7 @@ export function StatsCharts({ stats }: { stats: ProviderStats }) {
             (fully visible) Hebrew/Arabic service names. */}
         <ChartContainer config={servicesConfig} className={CHART_BOX} dir="ltr">
           <BarChart data={topServices} layout="vertical" margin={{ top: 0, right: 12, left: 4, bottom: 0 }}>
-            <XAxis type="number" dataKey="revenue" reversed={isRtl} hide />
+            <XAxis type="number" dataKey="count" reversed={isRtl} hide />
             <YAxis
               type="category"
               dataKey="name"
@@ -185,7 +189,7 @@ export function StatsCharts({ stats }: { stats: ProviderStats }) {
               tickFormatter={(v: string) => (v.length > 12 ? `${v.slice(0, 12)}…` : v)}
             />
             <ChartTooltip content={<ChartTooltipContent />} />
-            <Bar dataKey="revenue" fill="var(--color-revenue)" radius={4} />
+            <Bar dataKey="count" fill="var(--color-count)" radius={4} />
           </BarChart>
         </ChartContainer>
       </ChartCard>

@@ -5,6 +5,13 @@ import { useProviderProfile } from "./useProviderProfile";
 export interface EnrichedBooking {
   id: string;
   user_id: string | null;
+  /**
+   * Set by the link_walkin_to_account trigger when a provider-created walk-in's
+   * phone unambiguously matches one registered profile. Carried through so
+   * lib/customerKey can fold a linked walk-in into that account's identity
+   * instead of counting the same person twice.
+   */
+  linked_user_id: string | null;
   provider_id: string;
   service_ids: string[];
   booking_date: string;
@@ -100,6 +107,7 @@ export function useProviderBookings() {
           service_capacity: primaryService?.max_capacity ?? 1,
           class_schedule_id: b.class_schedule_id ?? null,
           class_name: b.class_schedule_id ? (classMap.get(b.class_schedule_id) ?? null) : null,
+          linked_user_id: b.linked_user_id ?? null,
           staff_id: b.staff_id ?? null,
           staff_name: b.staff_id ? (staffMap.get(b.staff_id) ?? null) : null,
         };
