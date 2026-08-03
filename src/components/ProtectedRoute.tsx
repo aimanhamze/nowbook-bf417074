@@ -1,5 +1,6 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -7,6 +8,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -17,6 +19,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!user) {
+    // Remember where they were going so /auth can return them here after login.
+    saveRedirectAfterLogin(`${location.pathname}${location.search}${location.hash}`);
     return <Navigate to="/auth" replace />;
   }
 

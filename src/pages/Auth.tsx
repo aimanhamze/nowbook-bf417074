@@ -8,6 +8,7 @@ import { BackArrow } from "@/components/ui/directional-icon";
 import { Loader2, Eye, EyeOff, Mail, Phone, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { consumeRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import eLogo from "@/assets/e_logo.png";
 
 const emailSchema = z.string().email();
@@ -201,6 +202,10 @@ const Auth = () => {
    *  customers only (never providers/admins) — so we do NOT show a name screen
    *  here. */
   const afterAuth = async () => {
+    // Consumed up front so a saved destination can never survive to fire twice,
+    // even if something below throws.
+    const redirect = consumeRedirectAfterLogin();
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate("/"); return; }
 
@@ -227,7 +232,10 @@ const Auth = () => {
       if (error) console.error("link_my_walkins failed:", error.message);
     });
 
-    navigate("/");
+    // Back to wherever they were headed before being bounced to /auth; "/" keeps
+    // the previous behaviour for a plain login (and routes staff to their own
+    // dashboard).
+    navigate(redirect ?? "/", { replace: true });
   };
 
   // ── Email handlers ─────────────────────────────────────────────────────────

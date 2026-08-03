@@ -11,6 +11,7 @@ import ReviewForm from "@/components/reviews/ReviewForm";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import type { Tables } from "@/integrations/supabase/types";
 
 // Fallback cutoff (hours) when a booking's provider can't be resolved (e.g. the
@@ -162,7 +163,7 @@ const Bookings = () => {
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="px-5 flex flex-col items-center justify-center py-20">
             <Calendar className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <p className="text-muted-foreground text-sm mb-1">{t("signInToManage")}</p>
-            <button onClick={() => navigate("/auth")} className="mt-4 px-6 py-2.5 rounded-2xl bg-accent text-accent-foreground text-sm font-semibold active:scale-[0.98] transition-transform">
+            <button onClick={() => { saveRedirectAfterLogin(); navigate("/auth"); }} className="mt-4 px-6 py-2.5 rounded-2xl bg-accent text-accent-foreground text-sm font-semibold active:scale-[0.98] transition-transform">
               {t("signIn")}
             </button>
           </motion.div>

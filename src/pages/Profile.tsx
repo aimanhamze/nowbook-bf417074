@@ -9,6 +9,7 @@ import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 
 const Profile = () => {
   const { lang, setLang, t } = useLang();
@@ -26,6 +27,7 @@ const Profile = () => {
     if (user) {
       await signOut();
     } else {
+      saveRedirectAfterLogin();
       navigate("/auth");
     }
   };

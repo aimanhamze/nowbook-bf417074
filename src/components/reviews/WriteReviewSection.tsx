@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLang } from "@/contexts/LangContext";
 import { useUserReviewEligibility } from "@/hooks/useUserReviewEligibility";
+import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import ReviewForm from "@/components/reviews/ReviewForm";
 
 interface Props {
@@ -28,7 +29,7 @@ export default function WriteReviewSection({ providerId }: Props) {
       <p className="mt-6 px-5 text-xs text-muted-foreground">
         {t("reviewsLogInToReview")}{" "}
         <button
-          onClick={() => navigate("/auth")}
+          onClick={() => { saveRedirectAfterLogin(); navigate("/auth"); }}
           className="font-medium text-accent underline-offset-2 hover:underline"
         >
           {t("signIn")}
