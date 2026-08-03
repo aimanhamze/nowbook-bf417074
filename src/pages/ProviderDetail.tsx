@@ -20,6 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import ReviewCard from "@/components/reviews/ReviewCard";
 import type { SocialLinks } from "@/lib/socialLinks";
 import { buildWhatsAppLink } from "@/lib/socialLinks";
+import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 
 interface SocialLinkEntry {
   href: string;
@@ -283,7 +284,7 @@ const ProviderDetail = () => {
               <Share2 className="h-5 w-5" />
             </button>
             <button
-              onClick={() => { if (user && id) toggleFavorite.mutate(id); else if (!user) navigate("/auth"); }}
+              onClick={() => { if (user && id) toggleFavorite.mutate(id); else if (!user) { saveRedirectAfterLogin(); navigate("/auth"); } }}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-all active:scale-95"
             >
               <Heart className={`h-5 w-5 transition-all ${liked ? "scale-110 fill-accent text-accent" : ""}`} />

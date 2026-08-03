@@ -7,6 +7,7 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFavorites } from "@/hooks/useFavorites";
 import { getProviderStatus } from "@/lib/providerStatus";
+import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import type { ProviderSchedule } from "@/hooks/useAllProviders";
 
 interface ProviderCardGridProps {
@@ -42,7 +43,7 @@ export function ProviderCardGrid({ provider, schedule, now }: ProviderCardGridPr
 
   const handleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!user) { navigate("/auth"); return; }
+    if (!user) { saveRedirectAfterLogin(); navigate("/auth"); return; }
     toggleFavorite.mutate(provider.id);
   };
 

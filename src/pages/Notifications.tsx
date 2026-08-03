@@ -8,6 +8,7 @@ import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { formatDistanceToNow } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
 import { useState } from "react";
@@ -102,7 +103,7 @@ const Notifications = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-5 gap-4">
         <p className="text-muted-foreground">{t("signInToManage")}</p>
-        <Button onClick={() => navigate("/auth")}>{t("signInUp")}</Button>
+        <Button onClick={() => { saveRedirectAfterLogin(); navigate("/auth"); }}>{t("signInUp")}</Button>
       </div>
     );
   }

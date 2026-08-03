@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFavorites } from "@/hooks/useFavorites";
+import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { categoryNames } from "@/lib/mock-data";
 
 interface ProviderCardProps {
@@ -22,7 +23,7 @@ export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
 
   const handleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!user) { navigate("/auth"); return; }
+    if (!user) { saveRedirectAfterLogin(); navigate("/auth"); return; }
     toggleFavorite.mutate(provider.id);
   };
 

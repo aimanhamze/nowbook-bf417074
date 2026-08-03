@@ -1,8 +1,10 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -12,7 +14,10 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) {
+    saveRedirectAfterLogin(`${location.pathname}${location.search}${location.hash}`);
+    return <Navigate to="/auth" replace />;
+  }
   if (!isAdmin) return <Navigate to="/" replace />;
 
   return <>{children}</>;

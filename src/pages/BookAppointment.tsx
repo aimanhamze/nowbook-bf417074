@@ -23,6 +23,7 @@ const bookingSchema = z.object({
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -185,7 +186,7 @@ const BookAppointment = () => {
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center gap-4">
         <h2 className="text-lg font-bold">{t("mustLoginToBook")}</h2>
         <button
-          onClick={() => navigate("/auth", { state: { from: `/provider/${id}/book` } })}
+          onClick={() => { saveRedirectAfterLogin(`/provider/${id}/book`); navigate("/auth"); }}
           className="px-6 py-3 rounded-2xl bg-accent text-accent-foreground font-semibold"
         >
           {t("loginLabel")}
