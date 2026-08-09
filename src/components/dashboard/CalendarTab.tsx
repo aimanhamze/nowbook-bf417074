@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, createContext, useContext, type CSSProperties } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote, UserRound } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote, UserRound, MoonStar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
@@ -24,6 +24,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { assignOverlapColumns } from "@/lib/weeklyOverlap";
 import { DEFAULT_SERVICE_COLOR, normalizeColor, withAlpha, darken } from "@/lib/serviceColors";
+import {
+  resolveDayHours,
+  isOutsideDayWindow,
+  type DateOverrideRow,
+  type MonthlySettings,
+  type WeeklyRow,
+} from "@/lib/availabilityResolver";
 import type { DayContentProps } from "react-day-picker";
 
 function toWhatsAppUrl(phone: string): string {
@@ -60,6 +67,40 @@ const ItemColorContext = createContext<ItemColorResolver>(() => null);
 
 function useItemColorResolver(): ItemColorResolver {
   return useContext(ItemColorContext);
+}
+
+// ── Out-of-hours marker ────────────────────────────────────────────────────
+// Answers "does this booking sit outside the provider's hours for its day?".
+// Purely DERIVED — no column, no migration: the day's window is re-resolved
+// through the same shared resolveDayHours the slot pipeline uses, and the
+// booking's time compared against it. A closed or blocked day resolves to null,
+// which makes every booking on it out-of-hours, which is correct.
+//
+// Passed by context for the same reason the color resolver is: the views nest
+// three deep and only CalendarTab holds the schedule inputs. The default
+// returns false, so any consumer rendered outside the provider is unmarked
+// rather than wrong.
+type OutOfHoursResolver = (bookingDate: string, bookingTime: string) => boolean;
+
+const OutOfHoursContext = createContext<OutOfHoursResolver>(() => false);
+
+function useOutOfHours(): OutOfHoursResolver {
+  return useContext(OutOfHoursContext);
+}
+
+// Small amber chip. Shown only when the marker fires, so calendars for
+// providers who never book out of hours look exactly as they do today.
+function OutOfHoursBadge() {
+  const { t } = useLang();
+  return (
+    <Badge
+      variant="outline"
+      className="shrink-0 gap-1 border-amber-200 bg-amber-500/15 text-[10px] text-amber-700"
+    >
+      <MoonStar className="h-3 w-3" />
+      {t("outOfHoursBadge")}
+    </Badge>
+  );
 }
 
 // Inline styles for a booking card: 4px accent edge on the leading side plus a
@@ -139,6 +180,7 @@ function BookingCard({ booking, index, color = null }: { booking: EnrichedBookin
   const rejectBooking = useRejectBooking();
   const { profile } = useProviderProfile();
   const reminderTemplate = profile?.reminder_message_template || DEFAULT_REMINDER_TEMPLATE;
+  const outOfHours = useOutOfHours()(booking.booking_date, booking.booking_time);
 
   const initials = booking.customer_name
     ? booking.customer_name.split(" ").map((w) => w[0]).join("").slice(0, 2)
@@ -198,9 +240,11 @@ function BookingCard({ booking, index, color = null }: { booking: EnrichedBookin
         </Badge>
       </div>
 
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{booking.booking_time}</span>
         <span className="flex items-center gap-1"><Banknote className="h-3.5 w-3.5" />₪{booking.total_price}</span>
+        {/* Derived, never stored — see OutOfHoursContext. */}
+        {outOfHours && <OutOfHoursBadge />}
       </div>
 
       <div className="flex flex-wrap gap-1.5">
@@ -335,6 +379,9 @@ function GroupClassCard({ time, bookings, serviceName, maxCapacity, index, color
 
   const activeBookings = bookings.filter(b => b.status !== 'cancelled');
   const bookedCount = activeBookings.length;
+  // Every booking in the group shares one date+time, so the first one answers
+  // for the whole card.
+  const outOfHours = useOutOfHours()(bookings[0]?.booking_date ?? "", time);
 
   return (
     <motion.div
@@ -348,13 +395,14 @@ function GroupClassCard({ time, bookings, serviceName, maxCapacity, index, color
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700">
               <Users className="h-3.5 w-3.5" /> {t("groupClass")}
             </span>
             <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] px-1.5">
               {bookedCount}/{maxCapacity} {t("classSlots")}
             </Badge>
+            {outOfHours && <OutOfHoursBadge />}
           </div>
           <p className="font-semibold text-sm truncate">{serviceName}</p>
           <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -829,6 +877,7 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
   const { availability } = useProviderAvailability();
   const { services } = useProviderServices();
   const colorOf = useItemColorResolver();
+  const outOfHoursOf = useOutOfHours();
   const [selected, setSelected] = useState<CalendarItem | null>(null);
 
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 });
@@ -952,7 +1001,11 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
                     className="absolute right-1 -translate-y-1/2 text-[9px] tabular-nums text-muted-foreground/70"
                     style={{ top: i * HOUR_H }}
                   >
-                    {String(h).padStart(2, "0")}:00
+                    {/* LABEL ONLY. maxEnd (and therefore `hours`) must keep its
+                        raw value — clamping it would re-clip late bookings out
+                        of the grid. A booking ending after midnight pushes
+                        endHour past 24, which without this printed "25:00". */}
+                    {String(h % 24).padStart(2, "0")}:00
                   </span>
                 ))}
               </div>
@@ -995,6 +1048,12 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
                       // The gray "past" treatment still wins, so completed
                       // bookings stay visually done.
                       const color = isPast ? null : colorOf(it);
+                      // Derived out-of-hours mark. Scheduled fitness classes are
+                      // excluded: their times come from the class schedule, not
+                      // from a booking, so flagging them would be noise.
+                      const isOutOfHours =
+                        it.type !== 'class_slot' &&
+                        outOfHoursOf(format(day, "yyyy-MM-dd"), itemTime(it));
                       return (
                         <button
                           key={rowKey(it)}
@@ -1022,10 +1081,17 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
                                 }
                               : {}),
                           }}
-                          title={`${info.time} ${info.name}`}
+                          title={`${info.time} ${info.name}${isOutOfHours ? ` · ${t("outOfHoursBadge")}` : ""}`}
                         >
-                          <p className="text-[9px] font-semibold leading-tight truncate">
-                            {info.time} {info.name}
+                          <p className="flex items-center gap-0.5 text-[9px] font-semibold leading-tight">
+                            {/* The block is ~9px tall of text — an icon is all
+                                that fits; the full label rides in the tooltip
+                                and on the card in the tap-through dialog. */}
+                            {isOutOfHours && <MoonStar className="h-2.5 w-2.5 shrink-0" />}
+                            {/* min-w-0 so the flex item may shrink below its
+                                content width — without it `truncate` never
+                                ellipsises inside a flex row. */}
+                            <span className="min-w-0 truncate">{info.time} {info.name}</span>
                           </p>
                           {height > 26 && info.sub && (
                             <p className="text-[8px] leading-tight truncate opacity-80">{info.sub}</p>
@@ -1179,6 +1245,10 @@ export function CalendarTab() {
   const { services, isLoading: servicesLoading } = useProviderServices();
   const { profile } = useProviderProfile();
   const { schedule } = useProviderClassSchedule();
+  // Schedule inputs for the DERIVED out-of-hours marker (see OutOfHoursContext).
+  // Same query keys WeeklyView/DailyView already mount, so React Query dedupes
+  // to a single fetch in those views.
+  const { availability, blockedDates, dateOverrides } = useProviderAvailability();
   const isFitnessStudio = profile?.category === 'fitness_studio';
   const reminderTemplate = profile?.reminder_message_template || DEFAULT_REMINDER_TEMPLATE;
   // Display granularity for the daily timeline — same source of truth the customer
@@ -1315,6 +1385,44 @@ export function CalendarTab() {
     return { DayContent: DayWithDots };
   }, [colorsEnabled, dotColorsByDate, dateFnsLocale]);
 
+  // ── Derived out-of-hours marker ──
+  // Adapters onto resolveDayHours' signature: blocked dates arrive as rows (it
+  // wants "YYYY-MM-DD" strings) and overrides as select("*") rows (a superset of
+  // DateOverrideRow). Weekly rows already match. Monthly settings resolve
+  // weekly-by-default, identically to useAllProviders.ts:453-459, so the marker
+  // and the slot pipeline can never disagree about which branch applies.
+  const blockedDateStrs = useMemo(
+    () => blockedDates.map((b) => b.blocked_date),
+    [blockedDates],
+  );
+  const monthlySettings = useMemo<MonthlySettings>(
+    () => ({
+      availability_mode: profile?.availability_mode === "monthly" ? "monthly" : "weekly",
+      monthly_default_available: profile?.monthly_default_available ?? true,
+      monthly_default_start: profile?.monthly_default_start ?? "09:00",
+      monthly_default_end: profile?.monthly_default_end ?? "17:00",
+    }),
+    [profile],
+  );
+  const outOfHoursOf = useCallback<OutOfHoursResolver>(
+    (bookingDate, bookingTime) => {
+      if (!bookingDate || !bookingTime) return false;
+      // While the schedule is still loading, `availability` is [] — which the
+      // weekly branch reads as "closed", flagging every booking. Stay quiet
+      // until there is something to compare against.
+      if (availability.length === 0 && monthlySettings.availability_mode !== "monthly") return false;
+      const window = resolveDayHours(
+        parseISO(bookingDate),
+        monthlySettings,
+        availability as WeeklyRow[],
+        blockedDateStrs,
+        dateOverrides as DateOverrideRow[],
+      );
+      return isOutsideDayWindow(window, bookingTime);
+    },
+    [availability, monthlySettings, blockedDateStrs, dateOverrides],
+  );
+
   const activeBookings = visibleBookings.filter(b => b.status !== 'cancelled');
   const todayBookings = activeBookings.filter((b) => isToday(parseISO(b.booking_date))).length;
   const upcomingBookings = activeBookings.filter((b) => isAfter(parseISO(b.booking_date), new Date())).length;
@@ -1332,6 +1440,7 @@ export function CalendarTab() {
 
   return (
     <ItemColorContext.Provider value={colorOf}>
+    <OutOfHoursContext.Provider value={outOfHoursOf}>
     <div className="space-y-5">
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
@@ -1499,6 +1608,7 @@ export function CalendarTab() {
         </>
       )}
     </div>
+    </OutOfHoursContext.Provider>
     </ItemColorContext.Provider>
   );
 }

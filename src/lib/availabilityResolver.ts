@@ -116,3 +116,35 @@ export function resolveDayHours(
     break_end: slot.break_end ?? null,
   };
 }
+
+/** "HH:MM" (or "HH:MM:SS") → minutes since midnight; null when unparseable. */
+function toMinutes(time: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(time);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/**
+ * Is `time` outside the provider's open window for a day? PURELY DERIVED —
+ * nothing about "out of hours" is stored on a booking; this is recomputed from
+ * the same resolved window the slot pipeline uses.
+ *
+ * `window` is whatever resolveDayHours returned for that day, so a closed or
+ * blocked day (null) makes EVERY time out-of-hours — which is exactly what a
+ * manual walk-in on a closed day should read as.
+ *
+ * Deliberately ignores break_start/break_end: a booking inside the lunch break
+ * is still within working hours, and flagging it would cry wolf.
+ *
+ * resolveDayHours itself is untouched; this only reads its result.
+ */
+export function isOutsideDayWindow(window: DayWindow | null, time: string): boolean {
+  if (!window) return true;
+  const t = toMinutes(time);
+  const start = toMinutes(window.start_time);
+  const end = toMinutes(window.end_time);
+  // Unparseable input → don't claim out-of-hours; the badge is advisory and a
+  // false positive on malformed data is worse than staying quiet.
+  if (t === null || start === null || end === null) return false;
+  return t < start || t >= end;
+}
