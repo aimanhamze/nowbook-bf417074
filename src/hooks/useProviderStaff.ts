@@ -35,6 +35,10 @@ export function useProviderStaff() {
 
   const staff = staffQuery.data || [];
 
+  // Returns the new staff member's id. Callers that only create a member can
+  // ignore it; the per-staff services editor needs it because the composite FK
+  // on provider_staff_services requires the staff row to exist before any
+  // assignment row can reference it.
   const createStaff = useMutation({
     mutationFn: async ({ name }: { name: string }) => {
       if (!profile) throw new Error("No provider profile");
@@ -42,10 +46,13 @@ export function useProviderStaff() {
       // pattern has none either), so creation order is the display order.
       const nextOrder =
         staff.length > 0 ? Math.max(...staff.map(s => s.display_order)) + 1 : 0;
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("provider_staff")
-        .insert({ provider_id: profile.id, name, display_order: nextOrder });
+        .insert({ provider_id: profile.id, name, display_order: nextOrder })
+        .select("id")
+        .single();
       if (error) throw error;
+      return data.id as string;
     },
     onSuccess: invalidateStaffCaches,
   });

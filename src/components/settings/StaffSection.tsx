@@ -24,15 +24,26 @@ import {
 import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderStaff } from "@/hooks/useProviderStaff";
+import { useProviderStaffServices } from "@/hooks/useProviderStaffServices";
+import { useProviderServices } from "@/hooks/useProviderServices";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { SettingsSection } from "@/components/settings/SettingsSection";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 // Raised by trg_enforce_staff_enable_no_future_bookings when flipping
 // staff_enabled false→true while future confirmed/pending bookings exist.
 const GUARD_TOKEN = "STAFF_ENABLE_BLOCKED_BY_FUTURE_BOOKINGS";
 
-type EditState = { id?: string; name: string };
+// serviceIds is the member's RESTRICTION set, edited locally and committed on
+// save. EMPTY is a meaningful value, not an unset one: it means "performs every
+// service" (inheritance rule), and it is stored as zero rows.
+type EditState = { id?: string; name: string; serviceIds: string[] };
+
+// Order-insensitive set comparison — lets save skip the assignment write
+// entirely when the owner only renamed the member.
+const sameSet = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((x) => b.includes(x));
 
 // Staff management + the staff_enabled toggle, rendered as a section on the
 // settings hub (/settings). Management (add/rename/deactivate) is always
@@ -45,6 +56,51 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
   const { staff, activeStaff, isLoading, createStaff, renameStaff, setStaffActive } = useProviderStaff();
   const [editing, setEditing] = useState<EditState | null>(null);
   const [pendingDeactivateId, setPendingDeactivateId] = useState<string | null>(null);
+
+  // Per-staff services. BOTH queries are gated on the provider actually having
+  // staff members, so a provider with none fires nothing new on this page —
+  // same enabled-gating discipline as useProviderActiveStaff.
+  const hasStaff = staff.length > 0;
+  const { servicesByStaff, setStaffServices } = useProviderStaffServices(hasStaff);
+  const { services, isLoading: servicesLoading } = useProviderServices(hasStaff);
+
+  // Assignable services = ACTIVE (the hook already filters) and NON-GROUP.
+  // Group/class services are excluded from the customer staff step entirely, so
+  // assigning them could never change anything. Mirrors ParallelServicesSheet's
+  // `service_type !== "group"` eligibility filter.
+  //
+  // Services that currently have SCHEDULED SESSIONS are deliberately NOT
+  // excluded, even though the staff step also skips them: session-ness is a
+  // transient, date-derived property (a future-dated provider_sessions row),
+  // not an attribute of the service. Filtering on it would make this list
+  // change shape as sessions come and go, and — because saving rewrites the
+  // member's whole set — would silently DELETE a valid assignment the moment a
+  // session was added. An assignment on a session service is inert, not wrong.
+  const assignableServices = services.filter((s) => s.service_type !== "group");
+
+  // Assigned count is intersected with the assignable list so the subtitle can
+  // never read "5 of 3" after a service is deleted or converted to a group.
+  // A member whose every assigned service is gone honestly reads "0 of N" —
+  // that is a real misconfiguration (nobody can perform anything) and hiding it
+  // would be worse than showing it.
+  const assignmentSummary = (staffId: string) => {
+    const assigned = servicesByStaff.get(staffId);
+    if (!assigned || assigned.size === 0) return t("staffServicesAll");
+    const count = assignableServices.filter((s) => assigned.has(s.id)).length;
+    return `${count} ${t("staffServicesOf")} ${assignableServices.length} ${t("staffServicesUnit")}`;
+  };
+
+  const toggleEditingService = (serviceId: string, next: boolean) => {
+    setEditing((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        serviceIds: next
+          ? [...prev.serviceIds, serviceId]
+          : prev.serviceIds.filter((id) => id !== serviceId),
+      };
+    });
+  };
 
   const staffEnabled = profile?.staff_enabled ?? false;
   // Enabling with zero active staff would (in later phases) show customers an
@@ -90,11 +146,33 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
       return;
     }
     try {
-      if (editing.id) {
-        await renameStaff.mutateAsync({ id: editing.id, name });
+      // Name FIRST, assignments second — the composite FK on
+      // provider_staff_services requires the staff row to exist before any
+      // assignment can reference it. On create we therefore write the member,
+      // take the returned id, and only then write the set. If that second write
+      // fails the member still exists, unrestricted (fails OPEN), visible in
+      // the list, and fixable by reopening the sheet — so the partial state is
+      // both safe and recoverable rather than silent.
+      let staffId = editing.id;
+      if (staffId) {
+        await renameStaff.mutateAsync({ id: staffId, name });
       } else {
-        await createStaff.mutateAsync({ name });
+        staffId = await createStaff.mutateAsync({ name });
       }
+
+      const current = editing.id ? [...(servicesByStaff.get(editing.id) ?? [])] : [];
+      if (!sameSet(editing.serviceIds, current)) {
+        try {
+          await setStaffServices.mutateAsync({ staffId, serviceIds: editing.serviceIds });
+        } catch {
+          // The member was saved; only the assignment write failed. Say exactly
+          // that rather than a generic error the owner can't act on.
+          toast.error(t("staffServicesSaveFailed"));
+          setEditing(null);
+          return;
+        }
+      }
+
       toast.success(t("staffSaved"));
       setEditing(null);
     } catch (err) {
@@ -119,7 +197,7 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
       title={t("staffSectionTitle")}
       delay={delay}
       action={
-        <Button size="sm" variant="outline" onClick={() => setEditing({ name: "" })} className="gap-1.5">
+        <Button size="sm" variant="outline" onClick={() => setEditing({ name: "", serviceIds: [] })} className="gap-1.5">
           <Plus className="h-4 w-4" />
           {t("addStaff")}
         </Button>
@@ -164,14 +242,24 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
               transition={{ delay: i * 0.05 }}
               className="surface-soft flex items-center justify-between rounded-xl px-3 py-2"
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <p className={`text-sm font-medium truncate ${member.is_active ? "" : "text-muted-foreground line-through"}`}>
-                  {member.name}
-                </p>
-                {!member.is_active && (
-                  <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium">
-                    {t("staffInactive")}
-                  </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className={`text-sm font-medium truncate ${member.is_active ? "" : "text-muted-foreground line-through"}`}>
+                    {member.name}
+                  </p>
+                  {!member.is_active && (
+                    <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium">
+                      {t("staffInactive")}
+                    </span>
+                  )}
+                </div>
+                {/* Which services this member performs, legible without opening
+                    the sheet. "All services" is the unrestricted (zero-rows)
+                    state — the common case and the default for new members. */}
+                {!servicesLoading && (
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {assignmentSummary(member.id)}
+                  </p>
                 )}
               </div>
               <div className="flex gap-1 shrink-0">
@@ -179,7 +267,13 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
                   size="icon"
                   variant="ghost"
                   className="h-8 w-8"
-                  onClick={() => setEditing({ id: member.id, name: member.name })}
+                  onClick={() =>
+                    setEditing({
+                      id: member.id,
+                      name: member.name,
+                      serviceIds: [...(servicesByStaff.get(member.id) ?? [])],
+                    })
+                  }
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
@@ -228,7 +322,7 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
           </SheetHeader>
 
           {editing && (
-            <div className="flex-1 space-y-3 overflow-y-auto px-5 pb-5 pt-4">
+            <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5 pt-4">
               <div>
                 <Label>{t("staffNameLabel")}</Label>
                 <Input
@@ -239,6 +333,45 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
                   onKeyDown={e => { if (e.key === "Enter") handleSave(); }}
                 />
               </div>
+
+              {/* Services this member performs. Switch rows reuse
+                  ParallelServicesSheet's visual so "pick a set of services"
+                  looks the same everywhere in the provider UI. */}
+              {assignableServices.length > 0 && (
+                <div className="space-y-2">
+                  <Label>{t("staffServicesLabel")}</Label>
+
+                  {/* The empty set is MEANINGFUL, not unset — say so out loud,
+                      otherwise an owner reads an all-off list as "not
+                      configured yet" and never learns that off-means-all. */}
+                  {editing.serviceIds.length === 0 && (
+                    <p className="rounded-2xl border border-accent/15 bg-accent/[0.06] p-3 text-xs leading-relaxed text-foreground/70">
+                      {t("staffServicesAllHint")}
+                    </p>
+                  )}
+
+                  <div className="space-y-2">
+                    {assignableServices.map((svc) => {
+                      const checked = editing.serviceIds.includes(svc.id);
+                      return (
+                        <div
+                          key={svc.id}
+                          className={cn(
+                            "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors",
+                            checked ? "border-accent/40 bg-accent/[0.06]" : "border-border bg-card"
+                          )}
+                        >
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium">{svc.name}</span>
+                          <Switch
+                            checked={checked}
+                            onCheckedChange={(next) => toggleEditingService(svc.id, next)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -246,7 +379,7 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
             <div className="flex gap-2">
               <Button
                 onClick={handleSave}
-                disabled={createStaff.isPending || renameStaff.isPending}
+                disabled={createStaff.isPending || renameStaff.isPending || setStaffServices.isPending}
                 className="h-12 flex-1 text-base font-semibold"
               >
                 {t("save")}
