@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { format, addDays, startOfDay } from "date-fns";
+import { format, addDays, startOfDay, endOfMonth, startOfMonth, eachDayOfInterval } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Plus, Clock, Users, CalendarDays, Check, CalendarX, UserRound } from "lucide-react";
+import { Plus, Clock, Users, CalendarDays, Check, CalendarX, UserRound, Pencil, Info, MoonStar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sheet,
@@ -11,6 +11,16 @@ import {
   SheetDescription,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +35,16 @@ import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { useProviderActiveStaff } from "@/hooks/useProviderStaff";
+import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useRealAvailability } from "@/hooks/useAllProviders";
+import {
+  resolveDayHours,
+  isOutsideDayWindow,
+  type DateOverrideRow,
+  type MonthlySettings,
+  type WeeklyRow,
+} from "@/lib/availabilityResolver";
+import { normalizeBookingTime } from "@/lib/bookingTime";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "sonner";
@@ -47,6 +66,12 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const { activeStaff, isLoading: staffLoading } = useProviderActiveStaff(profile?.id, staffEnabled);
   const [staffId, setStaffId] = useState("");
   const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(profile?.id, staffId || undefined);
+  // Raw schedule inputs for the OVERRIDE path. The slot pipeline above answers
+  // "are there bookable slots?"; it cannot answer "why not?", because
+  // resolveDayHours → null (closed/blocked) and "every slot taken" both arrive
+  // here as the same empty array. So the override path resolves the day's hours
+  // itself, from the same shared resolver the pipeline uses.
+  const { availability, blockedDates, dateOverrides } = useProviderAvailability();
   const queryClient = useQueryClient();
 
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
@@ -65,10 +90,18 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Manual ("שעה אחרת…") time entry on the time step. `manualTime` holds the
+  // RAW input value; `time` only ever receives the normalised form.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualTime, setManualTime] = useState("");
   // Calendar UI state: displayed month + whether a day was actively tapped
   // (`date` always holds a value, so it can't signal that alone).
   const [calMonth, setCalMonth] = useState<Date>(() => startOfDay(selectedDate));
   const [dateChosen, setDateChosen] = useState(false);
+  // An OFF day (closed / blocked / full) awaiting confirmation. Held here and
+  // NOT written into `date` until the provider confirms, so cancelling leaves
+  // every piece of booking state exactly as it was.
+  const [pendingOffDay, setPendingOffDay] = useState<Date | null>(null);
 
   const startToday = startOfDay(new Date());
   // Same selectable range the old date strip had: today .. today + window - 1.
@@ -83,19 +116,25 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     setDate(inRange ? seed : startToday);
     setCalMonth(inRange ? seed : startToday);
     setDateChosen(false);
+    setPendingOffDay(null);
     setStep(1);
     setServiceId("");
     setStaffId("");
     setTime("");
+    setManualOpen(false);
+    setManualTime("");
     setName("");
     setPhone("");
     setNotes("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // A different service/date invalidates any previously picked time.
+  // A different service/date invalidates any previously picked time — including
+  // a manually entered one, whose validity is just as day-dependent.
   useEffect(() => {
     setTime("");
+    setManualTime("");
+    setManualOpen(false);
   }, [serviceId, date]);
 
   // Day availability depends on the service (duration/capacity), so switching
@@ -150,6 +189,73 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     return getAvailableSlots(d, duration, service.max_capacity ?? 1, service.id).length > 0;
   };
 
+  // ── Out-of-hours override (walk-in only) ───────────────────────────────────
+  // Adapters onto resolveDayHours' signature. useProviderAvailability returns
+  // provider_blocked_dates ROWS (the resolver wants "YYYY-MM-DD" strings) and
+  // select("*") override rows (a superset of DateOverrideRow — the extra
+  // columns are simply unread). Weekly rows already match WeeklyRow.
+  const blockedDateStrs = blockedDates.map((b) => b.blocked_date);
+  // Same weekly-by-default resolution useRealAvailability applies, so both
+  // agree on which branch a provider is on (useAllProviders.ts:453-459).
+  const monthlySettings: MonthlySettings = {
+    availability_mode: profile?.availability_mode === "monthly" ? "monthly" : "weekly",
+    monthly_default_available: profile?.monthly_default_available ?? true,
+    monthly_default_start: profile?.monthly_default_start ?? "09:00",
+    monthly_default_end: profile?.monthly_default_end ?? "17:00",
+  };
+  const resolveWindow = (d: Date) =>
+    resolveDayHours(
+      d,
+      monthlySettings,
+      availability as WeeklyRow[],
+      blockedDateStrs,
+      dateOverrides as DateOverrideRow[],
+    );
+
+  // A day the provider may OVERRIDE: inside the SAME [today, booking window]
+  // range the calendar already enforces, but with nothing bookable — closed,
+  // blocked, or fully booked. Out-of-hours must never mean retroactive, so the
+  // range check is asserted here too rather than relying solely on the
+  // calendar's fromDate/toDate.
+  const dayIsOverridable = (d: Date): boolean => {
+    if (!service) return false;
+    const day = startOfDay(d);
+    if (day < startToday || day > windowEnd) return false;
+    return !dayHasAvailability(d);
+  };
+
+  // Why the CHOSEN day has no slots — only resolveDayHours can tell these apart,
+  // which is exactly why the predicate above can't live in the slot pipeline.
+  const chosenDayWindow = resolveWindow(date);
+  const chosenDayIsClosed = chosenDayWindow === null;
+  const selectedDayOverridable = dateChosen && dayIsOverridable(date);
+
+  // The SAME closed-vs-full distinction as chosenDayIsClosed, asked of the day
+  // awaiting confirmation rather than the chosen one — `date` deliberately has
+  // not moved yet at that point, so it cannot answer for the pending day.
+  const pendingOffDayIsClosed = pendingOffDay ? resolveWindow(pendingOffDay) === null : false;
+
+  // Does the displayed month contain any marked day? Drives the legend under
+  // the calendar, so the dashed cells are explained before one is tapped.
+  // Bounded to the selectable range; same per-day cost the calendar itself
+  // already pays for `disabled` and its modifiers.
+  const monthHasOverridableDay = (() => {
+    if (!service) return false;
+    const from = startOfMonth(calMonth) < startToday ? startToday : startOfMonth(calMonth);
+    const to = endOfMonth(calMonth) > windowEnd ? windowEnd : endOfMonth(calMonth);
+    if (from > to) return false;
+    return eachDayOfInterval({ start: from, end: to }).some(dayIsOverridable);
+  })();
+
+  // The manual time is advisory-flagged when it falls outside the day's resolved
+  // window — the same DERIVED test the provider calendar badges bookings with.
+  const manualIsOutOfHours = !!time && manualOpen && isOutsideDayWindow(chosenDayWindow, time);
+
+  // On an overridable day the slot area above the manual entry renders nothing
+  // at all (see the time step), so the manual block's divider would hang under
+  // an empty region. Drop the rule and its padding in exactly that case.
+  const slotAreaEmpty = !!service && !hasSlots && selectedDayOverridable;
+
   const canSubmit =
     !!service && !!time && name.trim().length > 0 && phone.trim().length > 0 && !submitting;
 
@@ -177,6 +283,21 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   };
 
   const handleBack = () => setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4 | 5) : s));
+
+  // Everything that happens once a day is ACCEPTED. Extracted so the normal
+  // path and the confirmed-off-day path run literally the same code — the
+  // confirmation is a gate in front of this, never a second implementation.
+  const commitDaySelection = (day: Date) => {
+    setDate(day);
+    setTime("");
+    setManualTime("");
+    // A day with nothing bookable can only be served by the manual entry, so
+    // open it straight away instead of landing the provider on an empty grid
+    // with a hidden affordance. Normal days keep the grid-first flow.
+    setManualOpen(dayIsOverridable(day));
+    setDateChosen(true);
+    setStep(timeStep as 3 | 4);
+  };
 
   const handleCreate = async () => {
     if (!profile || !service) return;
@@ -235,6 +356,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   ];
 
   return (
+    <>
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button size="sm" className="h-8 gap-1 text-xs shrink-0">
@@ -428,14 +550,39 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                     fromDate={startToday}
                     toDate={windowEnd}
                     dayHasAvailability={dayHasAvailability}
+                    dayIsOverridable={dayIsOverridable}
                     selected={dateChosen ? date : undefined}
                     onSelectDay={(day) => {
-                      setDate(day);
-                      setTime("");
-                      setDateChosen(true);
-                      setStep(timeStep as 3 | 4);
+                      // An OFF day (closed / blocked / full) is confirmed
+                      // first, so the provider can never land on the time step
+                      // without having registered that the day is off. NOTHING
+                      // is mutated here — not `date`, not `dateChosen`, not
+                      // `step` — until they confirm. A normal day never enters
+                      // this branch and behaves exactly as before.
+                      if (dayIsOverridable(day)) {
+                        setPendingOffDay(day);
+                        return;
+                      }
+                      commitDaySelection(day);
                     }}
                   />
+
+                  {/* Inline note — lives HERE, not in the shared calendar, which
+                      carries no caller-specific copy. Day-specific once a marked
+                      day is chosen (seen on return via "שינוי תאריך"), otherwise
+                      a legend explaining the dashed cells. */}
+                  {(selectedDayOverridable || monthHasOverridableDay) && (
+                    <div className="mt-3 flex items-start gap-2 rounded-xl border border-dashed border-muted-foreground/40 bg-muted/40 p-3">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        {selectedDayOverridable
+                          ? chosenDayIsClosed
+                            ? t("walkInOverrideClosedNote")
+                            : t("walkInOverrideFullNote")
+                          : t("walkInOverrideLegend")}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -480,10 +627,21 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                   {!service ? (
                     <p className="text-sm text-muted-foreground">{t("walkInService")}…</p>
                   ) : !hasSlots ? (
-                    <div className="rounded-2xl border border-dashed border-border p-8 text-center">
-                      <CalendarX className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" />
-                      <p className="text-sm text-muted-foreground">{t("walkInNoSlots")}</p>
-                    </div>
+                    // Zero slots splits two ways. On an OVERRIDABLE day the
+                    // provider has already been told three times that the day is
+                    // off — the marked cell, the note under the calendar, and
+                    // the confirm dialog — so a fourth, loud empty-state card
+                    // only buries the manual entry that IS the way forward.
+                    // Every OTHER zero-slot case still gets the card: a day the
+                    // provider reached without that context (service switched
+                    // after the day was picked, availability changed under
+                    // them, staff re-picked), where "no times here" is news.
+                    selectedDayOverridable ? null : (
+                      <div className="rounded-2xl border border-dashed border-border p-8 text-center">
+                        <CalendarX className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" />
+                        <p className="text-sm text-muted-foreground">{t("walkInNoSlots")}</p>
+                      </div>
+                    )
                   ) : isGroup ? (
                     <div className="grid grid-cols-3 gap-2">
                       {groupSlots.map((slot) => (
@@ -491,7 +649,13 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                           key={slot.time}
                           type="button"
                           disabled={slot.isFull}
-                          onClick={() => !slot.isFull && setTime(slot.time)}
+                          onClick={() => {
+                            if (slot.isFull) return;
+                            // Grid and manual entry are one selection: picking a
+                            // chip clears whatever was typed.
+                            setManualTime("");
+                            setTime(slot.time);
+                          }}
                           className={cn(
                             "flex flex-col items-center gap-0.5 rounded-xl border py-2.5 px-1 text-sm font-semibold transition-all active:scale-95",
                             time === slot.time
@@ -514,7 +678,10 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                         <button
                           key={slot}
                           type="button"
-                          onClick={() => setTime(slot)}
+                          onClick={() => {
+                            setManualTime("");
+                            setTime(slot);
+                          }}
                           className={cn(
                             "rounded-xl border py-3 text-sm font-semibold tabular-nums transition-all active:scale-95",
                             time === slot
@@ -525,6 +692,67 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                           {slot}
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {/* ── Manual time ("שעה אחרת…") ──
+                      A SIBLING of the whole !service / !hasSlots / isGroup /
+                      else chain above — deliberately NOT inside any branch. The
+                      zero-slot branch (a closed, blocked or fully-booked day) is
+                      exactly where this is the only way forward, so nesting it
+                      would hide it precisely when it is needed most.
+                      Conflicts are untouched: a colliding manual time is still
+                      rejected by prevent_booking_conflicts and surfaces through
+                      the existing handleCreate error branch. */}
+                  {!!service && (
+                    <div className={cn("mt-4", !slotAreaEmpty && "border-t border-border/60 pt-4")}>
+                      {!manualOpen ? (
+                        <button
+                          type="button"
+                          onClick={() => setManualOpen(true)}
+                          // max-w-full + text-start so the longer label wraps
+                          // inside the pill on a narrow phone instead of
+                          // overflowing the sheet.
+                          className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-secondary px-3.5 py-2 text-start text-xs font-semibold text-foreground transition-transform active:scale-95 hover:bg-secondary/80"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          {t("walkInOtherTime")}
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <Label htmlFor="walkin-manual-time" className="text-xs">
+                            {t("walkInManualTimeLabel")}
+                          </Label>
+                          <Input
+                            id="walkin-manual-time"
+                            type="time"
+                            dir="ltr"
+                            step={60}
+                            value={manualTime}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setManualTime(raw);
+                              // ALWAYS normalised before it reaches `time`, which
+                              // is what the insert and canProceed read. A partial
+                              // or invalid entry clears the selection rather than
+                              // leaking an unpadded value downstream — see
+                              // lib/bookingTime.ts for the two silent failures
+                              // this prevents.
+                              setTime(normalizeBookingTime(raw) ?? "");
+                            }}
+                            className="h-12 w-full tabular-nums"
+                          />
+                          <p className="text-[11px] leading-relaxed text-muted-foreground">
+                            {t("walkInManualTimeHint")}
+                          </p>
+                          {manualIsOutOfHours && (
+                            <p className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600">
+                              <MoonStar className="h-3.5 w-3.5 shrink-0" />
+                              {t("walkInManualOutOfHours")}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -668,5 +896,48 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
         </div>
       </SheetContent>
     </Sheet>
+
+    {/* ── OFF-day confirmation ──
+        Sibling of the Sheet (same placement as the deactivate-staff dialog):
+        it portals above the still-open sheet rather than nesting inside it.
+        Reached ONLY from the overridable branch of onSelectDay, so a normal
+        available day never renders it. Cancel — the backdrop, Esc, or the
+        cancel button — closes via onOpenChange and only clears pendingOffDay,
+        leaving date / dateChosen / time / step untouched. */}
+    <AlertDialog
+      open={!!pendingOffDay}
+      onOpenChange={(isOpen) => { if (!isOpen) setPendingOffDay(null); }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("walkInOffDayConfirmTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {/* Same closed-vs-full distinction the inline note uses, resolved
+                for the pending day. */}
+            {pendingOffDayIsClosed
+              ? t("walkInOffDayConfirmClosed")
+              : t("walkInOffDayConfirmFull")}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {pendingOffDay && (
+          <p className="text-sm font-semibold text-foreground">
+            {format(pendingOffDay, "EEEE, d MMMM yyyy", { locale: dateFnsLocale })}
+          </p>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              // Proceed exactly as a normal day does — same single code path.
+              if (pendingOffDay) commitDaySelection(pendingOffDay);
+              setPendingOffDay(null);
+            }}
+          >
+            {t("continue")}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

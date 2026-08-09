@@ -19,10 +19,30 @@ interface BookingMonthCalendarProps {
    * time step that follows it. Days where this returns false are disabled.
    */
   dayHasAvailability: (date: Date) => boolean;
+  /**
+   * OPTIONAL second question, for callers that may OVERRIDE availability — today
+   * only the provider walk-in flow (NewBookingSheet). Days where this returns
+   * true stay TAPPABLE even though `dayHasAvailability` said no, and are marked
+   * with the `overridable` style so they never read as normal open days.
+   *
+   * Omitted by the customer flow (BookAppointment) and the reschedule flow
+   * (RescheduleSheet): it defaults to "never", which collapses `disabled` back
+   * to `!dayHasAvailability(date)` and leaves the `overridable` modifier
+   * matching nothing — byte-identical rendering to before this prop existed.
+   *
+   * This can NOT be folded into `dayHasAvailability`: the slot pipeline behind
+   * it collapses "closed", "blocked" and "fully booked" into the same empty
+   * array, so it cannot express a third state. Callers answer this one from
+   * resolveDayHours instead.
+   */
+  dayIsOverridable?: (date: Date) => boolean;
   /** Highlighted day, if the user already picked one. */
   selected?: Date;
   onSelectDay: (day: Date) => void;
 }
+
+/** Stable default for `dayIsOverridable` — no caller opts in, nothing changes. */
+const NEVER_OVERRIDABLE = () => false;
 
 /**
  * Shared month calendar for BOOKING day selection — used by the customer flow
@@ -41,6 +61,7 @@ export function BookingMonthCalendar({
   fromDate,
   toDate,
   dayHasAvailability,
+  dayIsOverridable = NEVER_OVERRIDABLE,
   selected,
   onSelectDay,
 }: BookingMonthCalendarProps) {
@@ -93,19 +114,38 @@ export function BookingMonthCalendar({
         locale={dateFnsLocale}
         fromDate={fromDate}
         toDate={toDate}
-        disabled={(date) => !dayHasAvailability(date)}
+        // An overridable day is NOT disabled — that is the whole point. Days
+        // outside [fromDate, toDate] stay disabled regardless: react-day-picker
+        // pushes { before: fromDate } / { after: toDate } into its own disabled
+        // matchers alongside this prop, so no predicate here can make the past
+        // (or beyond the booking window) selectable.
+        disabled={(date) => !dayHasAvailability(date) && !dayIsOverridable(date)}
         selected={selected}
         onDayClick={(day, mods) => {
+          // Overridable days reach this with mods.disabled === false, so the
+          // existing guard lets them through unchanged.
           if (mods.disabled) return;
           onSelectDay(day);
         }}
         modifiers={{
           hasSlots: (date) => date >= fromDate && date <= toDate && dayHasAvailability(date),
+          // Mutually exclusive with hasSlots by construction (`!dayHasAvailability`),
+          // so an overridable day gets the muted mark but NEVER the accent dot —
+          // "open" and "closed but bookable" stay visually distinct for free.
+          overridable: (date) =>
+            date >= fromDate && date <= toDate && !dayHasAvailability(date) && dayIsOverridable(date),
         }}
         modifiersClassNames={{
           hasSlots:
             "relative after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 " +
             "after:h-1 after:w-1 after:rounded-full after:bg-accent/60 aria-selected:after:bg-accent-foreground/90",
+          // Dashed + muted: reads as "not a normal open day", still obviously
+          // tappable. The aria-selected overrides win on specificity (attribute
+          // selector) so a picked overridable day still shows the accent fill
+          // rather than depending on stylesheet ordering against day_selected.
+          overridable:
+            "border border-dashed border-muted-foreground/45 bg-muted/50 text-muted-foreground/80 " +
+            "aria-selected:border-transparent aria-selected:bg-accent aria-selected:text-accent-foreground",
         }}
         classNames={{
           caption: "hidden",
