@@ -24,6 +24,7 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
+import { notifyBookingConfirmed } from "@/lib/whatsappConfirm";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -486,7 +487,15 @@ const BookAppointment = () => {
         }
       }
 
-      const { error } = await supabase.from("bookings").insert(insertPayload);
+      // Read the row back: enforce_booking_approval_status silently rewrites an
+      // inserted 'confirmed' to 'pending' for approval-required providers, so
+      // the status we sent is NOT necessarily the status that was stored. The
+      // WhatsApp confirmation below must key off what the DB actually holds.
+      const { data: createdBooking, error } = await supabase
+        .from("bookings")
+        .insert(insertPayload)
+        .select("id, status")
+        .single();
       setLoading(false);
       if (error) {
         if (error.message === "LEAD_TIME_VIOLATION") {
@@ -506,6 +515,14 @@ const BookAppointment = () => {
           toast.error(error.message);
         }
         return;
+      }
+
+      // Only when the DB really stored 'confirmed' — an approval-required
+      // provider's booking is 'pending' here and gets its message later, from
+      // the approval path in useApproveBooking. Fire-and-forget: never awaited,
+      // so it cannot delay or fail the booking the customer just made.
+      if (createdBooking?.status === "confirmed") {
+        notifyBookingConfirmed(createdBooking.id);
       }
 
       const [{ data: customerProfile }, { data: providerProfile }] = await Promise.all([

@@ -270,6 +270,40 @@ export function useProviderProfile() {
     },
   });
 
+  // ── WhatsApp booking confirmations (opt-in) ────────────────────────────────
+  // Both columns landed in the 20260814000001 migration and are present in the
+  // regenerated types.ts, so neither needs the `as never` cast used above for
+  // columns whose migration has not been applied yet.
+  const updateWhatsAppConfirmEnabled = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ whatsapp_confirm_enabled: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+    },
+  });
+
+  // 'he' | 'ar' only — there is no approved English template, and the DB CHECK
+  // constraint rejects anything else.
+  const updateWhatsAppMessageLanguage = useMutation({
+    mutationFn: async (value: "he" | "ar") => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ whatsapp_message_language: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+    },
+  });
+
   const uploadCoverImage = useMutation({
     mutationFn: async (file: File) => {
       if (!user) throw new Error("Not authenticated");
@@ -346,6 +380,8 @@ export function useProviderProfile() {
     updateAvailabilityMode,
     updateMonthlyDefaults,
     updateWhatsAppTemplates,
+    updateWhatsAppConfirmEnabled,
+    updateWhatsAppMessageLanguage,
     uploadCoverImage,
     uploadAvatarImage,
   };

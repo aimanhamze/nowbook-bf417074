@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
+import { notifyBookingConfirmed } from "@/lib/whatsappConfirm";
 
 export interface EnrichedBooking {
   id: string;
@@ -236,6 +237,11 @@ export function useApproveBooking() {
         console.error("Approve booking error:", error);
         throw error;
       }
+
+      // The booking is now confirmed. Fire the WhatsApp confirmation as a side
+      // effect — never awaited, so SendPulse being slow or down cannot delay or
+      // fail the approval the provider just performed.
+      notifyBookingConfirmed(bookingId);
 
       if (booking) {
         const { data: provider } = await supabase
