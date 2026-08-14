@@ -54,7 +54,7 @@ function buildConfirmMessage(booking: EnrichedBooking, template: string, busines
   });
 }
 
-function PendingCard({ booking, index, depositTemplate, depositEnabled, businessName }: { booking: EnrichedBooking; index: number; depositTemplate: string; depositEnabled: boolean; businessName: string }) {
+function PendingCard({ booking, index, depositTemplate, depositEnabled, businessName, whatsappConfirmEnabled }: { booking: EnrichedBooking; index: number; depositTemplate: string; depositEnabled: boolean; businessName: string; whatsappConfirmEnabled: boolean }) {
   const { t } = useLang();
   const approveBooking = useApproveBooking();
   const rejectBooking = useRejectBooking();
@@ -65,8 +65,16 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
 
   const formattedDate = format(parseISO(booking.booking_date), "EEE, d בMMM", { locale: he });
 
-  // Pre-built wa.me confirmation link (null when the customer has no phone).
-  const confirmWhatsAppUrl = booking.customer_phone
+  // Pre-built wa.me confirmation link. NULL in two cases, both of which fall
+  // through to the plain confirm button below:
+  //   1. the customer has no phone — nothing to open;
+  //   2. the provider has whatsapp_confirm_enabled ON — Ehjezly already sends
+  //      an automatic confirmation from the business number, so opening the
+  //      provider's own WhatsApp here would deliver the customer a SECOND
+  //      confirmation from a different number.
+  // With the flag OFF (the default) this is byte-for-byte the previous
+  // behaviour: the provider's manual message stays the only confirmation.
+  const confirmWhatsAppUrl = booking.customer_phone && !whatsappConfirmEnabled
     ? `${toWhatsAppUrl(booking.customer_phone)}?text=${encodeURIComponent(
         buildConfirmMessage(booking, t("confirmWhatsappMessage"), businessName)
       )}`
@@ -187,7 +195,8 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
             </a>
           </Button>
         ) : (
-          // No phone → confirm only, no WhatsApp.
+          // No phone, or Ehjezly is sending the confirmation automatically →
+          // confirm only, no WhatsApp redirect.
           <Button
             variant="outline"
             size="sm"
@@ -239,6 +248,11 @@ export function PendingTab() {
   // apply. Default false → deposit button hidden until the provider opts in.
   const depositEnabled =
     (profile as { deposit_request_enabled?: boolean } | null)?.deposit_request_enabled ?? false;
+  // When ON, the whatsapp-booking-confirm Edge Function sends the confirmation
+  // from the Ehjezly business number, so the provider must NOT also be sent to
+  // their own WhatsApp — that is how a customer ends up with two confirmations
+  // from two different numbers. Default false keeps today's behaviour.
+  const whatsappConfirmEnabled = profile?.whatsapp_confirm_enabled ?? false;
 
   const pending = bookings
     .filter((b) => b.status === "pending")
@@ -269,7 +283,7 @@ export function PendingTab() {
     <AnimatePresence mode="popLayout">
       <div className="space-y-3">
         {pending.map((booking, i) => (
-          <PendingCard key={booking.id} booking={booking} index={i} depositTemplate={depositTemplate} depositEnabled={depositEnabled} businessName={profile?.business_name ?? ""} />
+          <PendingCard key={booking.id} booking={booking} index={i} depositTemplate={depositTemplate} depositEnabled={depositEnabled} businessName={profile?.business_name ?? ""} whatsappConfirmEnabled={whatsappConfirmEnabled} />
         ))}
       </div>
     </AnimatePresence>
