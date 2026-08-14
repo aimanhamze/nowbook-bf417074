@@ -185,3 +185,38 @@ SELECT count(*) AS rows_left FROM public.whatsapp_send_log;
 --       SELECT business_name FROM public.provider_profiles
 --       WHERE whatsapp_confirm_enabled;
 --     Expect: zero rows until someone deliberately opts in via the new UI.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- §E. OPERATIONAL — stuck-claim check. Run periodically during allowlist
+--     rollout, BY HAND.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- The Edge Function writes a 'sending' row to claim a booking before calling
+-- SendPulse, then moves it to a terminal state. Its catch block resolves a claim
+-- that never got there. But if the Deno instance is KILLED between the two
+-- (timeout, OOM, redeploy), no catch runs and the row stays 'sending' forever.
+--
+-- Because the UNIQUE index treats 'sending' as a claim, such a booking will
+-- never be retried — it silently got no confirmation message.
+--
+-- E1. Find stranded claims.
+--     Expect: ZERO rows in normal operation.
+SELECT id, booking_id, provider_id, created_at, now() - created_at AS stuck_for
+FROM public.whatsapp_send_log
+WHERE status = 'sending'
+  AND created_at < now() - interval '15 minutes'
+ORDER BY created_at;
+
+-- E2. If E1 returns rows, DO NOT bulk-clear them, and DO NOT schedule a job to
+--     do it. Auto-clearing a stuck claim re-opens the double-send window, which
+--     is the one failure in this feature that cannot be undone: a duplicate
+--     WhatsApp message to a real customer is unrecallable, and repeated
+--     duplicates degrade the sender quality rating for ALL traffic.
+--
+--     A non-empty E1 is a SYMPTOM, not a queue to drain. It means the function
+--     is dying mid-flight — investigate the Edge Function logs for timeouts
+--     before touching any row.
+--
+--     To deliberately release ONE claim after confirming from the SendPulse
+--     dashboard that no message went out for that booking:
+--       DELETE FROM public.whatsapp_send_log WHERE id = '<the id from E1>';
+--     One row at a time, each justified by evidence. Never a blanket DELETE.

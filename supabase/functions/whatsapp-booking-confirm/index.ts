@@ -94,7 +94,15 @@ function toSendPulsePhone(raw: string | null | undefined): string | null {
   return `972${d}`;
 }
 
-/** Loose digits, for allowlist comparison only — never for sending. */
+/**
+ * Normalizes an ALLOWLIST ENTRY to the same 972-prefixed digit form
+ * toSendPulsePhone produces, so "+972-54-786-8325", "0547868325" and
+ * "972547868325" in the env var all match the same recipient.
+ *
+ * Applied only to configuration, never to a customer's number: the recipient
+ * has already passed toSendPulsePhone's strict validation by the time this is
+ * used for comparison.
+ */
 function looseDigits(raw: string | null | undefined): string {
   const d = (raw ?? "").replace(/\D/g, "");
   if (d.startsWith("00972")) return d.slice(3);
@@ -343,6 +351,14 @@ Deno.serve(async (req) => {
   const startedAt = Date.now();
   let bookingIdForLog = "unknown";
 
+  // Held in outer scope so the catch below can still resolve a claim that was
+  // created but never reached a terminal status. `sendAccepted` distinguishes
+  // "we never sent" from "SendPulse took it and the bookkeeping afterwards
+  // threw" — recording the latter as 'failed' would be an audit lie about a
+  // message the customer actually received.
+  let claimId: string | null = null;
+  let sendAccepted = false;
+
   try {
     // ── Caller authentication (anon client verifies the token) ───────────────
     const authHeader = req.headers.get("Authorization");
@@ -469,34 +485,61 @@ Deno.serve(async (req) => {
     let rawPhone: string | null = null;
 
     if (accountId) {
-      const { data: authUser } = await admin.auth.admin.getUserById(accountId);
+      // getUserById can fail independently of the database (GoTrue admin API
+      // hiccup, deleted user). That must NOT abort the send — it degrades to
+      // the profiles mirror. The error is logged rather than swallowed, because
+      // a persistent failure here would silently push every send onto the
+      // less-reliable fallback and look like a data-quality problem instead.
+      const { data: authUser, error: authUserError } = await admin.auth.admin
+        .getUserById(accountId);
+
+      if (authUserError) {
+        console.warn("whatsapp-booking-confirm: getUserById failed, falling back to profiles.phone", {
+          booking_id: bookingId,
+          reason: authUserError.message,
+        });
+      }
+
       rawPhone = authUser?.user?.phone ?? null;
 
+      // Fallback covers email-only accounts (no verified phone on auth.users)
+      // and the getUserById failure above.
       if (!rawPhone) {
-        const { data: profileRow } = await admin
+        const { data: profileRow, error: profileError } = await admin
           .from("profiles")
           .select("phone")
           .eq("user_id", accountId)
           .maybeSingle();
+
+        if (profileError) {
+          console.warn("whatsapp-booking-confirm: profiles.phone lookup failed", {
+            booking_id: bookingId,
+            reason: profileError.message,
+          });
+        }
         rawPhone = profileRow?.phone ?? null;
       }
     }
 
-    // ── GATE 4: allowlist ────────────────────────────────────────────────────
-    // Checked BEFORE strict validation and before any data-quality skip, so that
-    // during rollout the ledger only ever accumulates rows for numbers we would
-    // actually message. No row on failure — widening the allowlist is the
-    // cutover, and a claim here would block it.
-    const compareDigits = looseDigits(rawPhone);
-    if (!compareDigits || !isAllowlisted(compareDigits)) {
-      return json(200, { ok: true, result: "skipped", reason: "NOT_ALLOWLISTED" });
-    }
-
-    // ── Data quality (these DO write a ledger row) ───────────────────────────
+    // ── Recipient data quality (DOES write a ledger row) ─────────────────────
+    // Deliberately BEFORE the allowlist. A missing or malformed number is a
+    // data-quality fact that must leave a record: without one, a customer with
+    // no phone at all is indistinguishable from a customer who is simply out of
+    // rollout scope, and the problem stays invisible. Covers both NULL (nothing
+    // on auth.users or profiles) and unparseable values.
     const phoneDigits = toSendPulsePhone(rawPhone);
     if (!phoneDigits) {
       await logSkip(admin, bookingId, provider.id, "INVALID_PHONE", null);
       return json(200, { ok: true, result: "skipped", reason: "INVALID_PHONE" });
+    }
+
+    // ── GATE 4: allowlist ────────────────────────────────────────────────────
+    // Reaches here only with a VALID Israeli mobile, so this gate expresses one
+    // thing and one thing only: "valid, but not yet in rollout scope". No ledger
+    // row — widening the allowlist IS the cutover, and a claim here would block
+    // the legitimate send that follows.
+    if (!isAllowlisted(phoneDigits)) {
+      return json(200, { ok: true, result: "skipped", reason: "NOT_ALLOWLISTED" });
     }
 
     // {{1}} customer name. No generic fallback by design: a nameless greeting
@@ -569,6 +612,7 @@ Deno.serve(async (req) => {
       }
       throw claimError;
     }
+    claimId = claim.id;
 
     // ── Send ─────────────────────────────────────────────────────────────────
     const params = [customerName, businessName, dateText, timeText, serviceName];
@@ -612,6 +656,10 @@ Deno.serve(async (req) => {
       return json(200, { ok: false, result: "failed", reason: "SEND_REJECTED" });
     }
 
+    // Set BEFORE the bookkeeping update: from here on the customer has the
+    // message, whatever happens to our record of it.
+    sendAccepted = true;
+
     await admin
       .from("whatsapp_send_log")
       .update({
@@ -643,6 +691,37 @@ Deno.serve(async (req) => {
       booking_id: bookingIdForLog,
       reason,
     });
+
+    // Resolve a claim that never reached a terminal status, so no row is left
+    // stranded at 'sending'. Guarded by .eq("status","sending") so this can
+    // never overwrite a state the happy path already wrote.
+    //
+    // `sendAccepted` decides which terminal state is TRUE, not which is
+    // convenient: if SendPulse already took the message, the customer has it
+    // and the row must say 'sent' even though our bookkeeping fell over.
+    // Blanket-writing 'failed' here would misreport a delivered message.
+    if (claimId) {
+      try {
+        const recovery = sendAccepted
+          ? { status: "sent", error_code: "TERMINAL_UPDATE_FAILED" }
+          : { status: "failed", error_code: "UNHANDLED_ERROR" };
+        await createAdminClient()
+          .from("whatsapp_send_log")
+          .update({ ...recovery, updated_at: new Date().toISOString() })
+          .eq("id", claimId)
+          .eq("status", "sending");
+      } catch (recoveryErr) {
+        // The database itself is unreachable. The row stays 'sending' and is
+        // picked up by the stuck-claim sweep in the VERIFY file; there is
+        // nothing further this process can do.
+        console.error("whatsapp-booking-confirm: claim recovery failed", {
+          booking_id: bookingIdForLog,
+          claim_id: claimId,
+          reason: recoveryErr instanceof Error ? recoveryErr.message : String(recoveryErr),
+        });
+      }
+    }
+
     // Internals never reach the browser; callers ignore this anyway.
     return json(500, { error: "Internal error" });
   } finally {
