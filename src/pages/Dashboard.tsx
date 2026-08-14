@@ -11,7 +11,6 @@ import { BusinessProfileTab } from "@/components/dashboard/BusinessProfileTab";
 import { BookingSettingsTab } from "@/components/dashboard/BookingSettingsTab";
 import { AvailabilityTab } from "@/components/dashboard/AvailabilityTab";
 import { PhotosTab } from "@/components/dashboard/PhotosTab";
-import { NotificationsTab } from "@/components/dashboard/NotificationsTab";
 import { Button } from "@/components/ui/button";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
@@ -22,7 +21,6 @@ const tabs = [
   { id: "availability", icon: Clock },
   { id: "services", icon: Briefcase },
   { id: "gallery", icon: Images },
-  { id: "notifications", icon: Bell },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -33,7 +31,6 @@ const TAB_LABELS: Record<TabId, string> = {
   booking: "bookingSettingsTitle",
   availability: "availability",
   gallery: "gallery",
-  notifications: "notificationsTabTitle",
 };
 
 export default function Dashboard() {
@@ -170,7 +167,6 @@ export default function Dashboard() {
           {activeTab === "availability" && <AvailabilityTab />}
           {activeTab === "services" && <ServicesTab />}
           {activeTab === "gallery" && <PhotosTab />}
-          {activeTab === "notifications" && <NotificationsTab />}
         </motion.div>
       </div>
     </div>

@@ -33,6 +33,7 @@ const ProviderCalendar = lazy(() => import("./pages/ProviderCalendar"));
 const Reviews = lazy(() => import("./pages/Reviews"));
 const ProviderQrCode = lazy(() => import("./pages/ProviderQrCode"));
 const ProviderCustomers = lazy(() => import("./pages/ProviderCustomers"));
+const ProviderNotifications = lazy(() => import("./pages/ProviderNotifications"));
 const Statistics = lazy(() => import("./pages/Statistics"));
 const MonthlyReport = lazy(() => import("./pages/MonthlyReport"));
 
@@ -106,6 +107,9 @@ const App = () => (
                   <Route path="/reviews" element={<ProtectedRoute><ErrorBoundary><Reviews /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/qr-code" element={<ProtectedRoute><ErrorBoundary><ProviderQrCode /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/customers" element={<ProtectedRoute><ErrorBoundary><ProviderCustomers /></ErrorBoundary></ProtectedRoute>} />
+                  {/* Provider WhatsApp settings. Distinct from /notifications,
+                      which is the customer's notification feed. */}
+                  <Route path="/notification-settings" element={<ProtectedRoute><ErrorBoundary><ProviderNotifications /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/statistics" element={<ProtectedRoute><ErrorBoundary><Statistics /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/monthly-report" element={<ProtectedRoute><ErrorBoundary><MonthlyReport /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/notifications" element={<ProtectedRoute><ErrorBoundary><Notifications /></ErrorBoundary></ProtectedRoute>} />
