@@ -161,6 +161,63 @@ export type Database = {
         }
         Relationships: []
       }
+      otp_requests: {
+        Row: {
+          attempt_count: number
+          code_hash: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          invalidated_at: string | null
+          max_attempts: number
+          otp_session_id: string
+          phone_e164: string
+          request_ip_hash: string | null
+          send_count: number
+          sent_at: string | null
+          updated_at: string
+          user_agent_hash: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          attempt_count?: number
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          invalidated_at?: string | null
+          max_attempts?: number
+          otp_session_id: string
+          phone_e164: string
+          request_ip_hash?: string | null
+          send_count?: number
+          sent_at?: string | null
+          updated_at?: string
+          user_agent_hash?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          attempt_count?: number
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invalidated_at?: string | null
+          max_attempts?: number
+          otp_session_id?: string
+          phone_e164?: string
+          request_ip_hash?: string | null
+          send_count?: number
+          sent_at?: string | null
+          updated_at?: string
+          user_agent_hash?: string | null
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -430,6 +487,8 @@ export type Database = {
           treatment_notes_enabled: boolean
           updated_at: string
           user_id: string
+          whatsapp_confirm_enabled: boolean
+          whatsapp_message_language: string
         }
         Insert: {
           about?: string | null
@@ -464,6 +523,8 @@ export type Database = {
           treatment_notes_enabled?: boolean
           updated_at?: string
           user_id: string
+          whatsapp_confirm_enabled?: boolean
+          whatsapp_message_language?: string
         }
         Update: {
           about?: string | null
@@ -498,6 +559,8 @@ export type Database = {
           treatment_notes_enabled?: boolean
           updated_at?: string
           user_id?: string
+          whatsapp_confirm_enabled?: boolean
+          whatsapp_message_language?: string
         }
         Relationships: []
       }
@@ -646,6 +709,42 @@ export type Database = {
           },
         ]
       }
+      provider_staff_services: {
+        Row: {
+          created_at: string
+          provider_id: string
+          service_id: string
+          staff_id: string
+        }
+        Insert: {
+          created_at?: string
+          provider_id: string
+          service_id: string
+          staff_id: string
+        }
+        Update: {
+          created_at?: string
+          provider_id?: string
+          service_id?: string
+          staff_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pss_service_fkey"
+            columns: ["service_id", "provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_services"
+            referencedColumns: ["id", "provider_id"]
+          },
+          {
+            foreignKeyName: "pss_staff_fkey"
+            columns: ["staff_id", "provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_staff"
+            referencedColumns: ["id", "provider_id"]
+          },
+        ]
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -721,6 +820,27 @@ export type Database = {
           },
         ]
       }
+      sendpulse_token_cache: {
+        Row: {
+          access_token: string
+          expires_at: string
+          id: number
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          expires_at: string
+          id?: number
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          expires_at?: string
+          id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -738,6 +858,69 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      whatsapp_send_log: {
+        Row: {
+          booking_id: string
+          created_at: string
+          error_code: string | null
+          id: string
+          language_code: string | null
+          message_kind: string
+          missing_message_id: boolean
+          phone_digits: string | null
+          provider_id: string | null
+          sendpulse_message_id: string | null
+          status: string
+          template_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          language_code?: string | null
+          message_kind?: string
+          missing_message_id?: boolean
+          phone_digits?: string | null
+          provider_id?: string | null
+          sendpulse_message_id?: string | null
+          status?: string
+          template_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          language_code?: string | null
+          message_kind?: string
+          missing_message_id?: boolean
+          phone_digits?: string | null
+          provider_id?: string | null
+          sendpulse_message_id?: string | null
+          status?: string
+          template_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_send_log_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_send_log_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -856,6 +1039,43 @@ export type Database = {
         Returns: boolean
       }
       link_my_walkins: { Args: never; Returns: number }
+      otp_cleanup: { Args: never; Returns: number }
+      otp_create_request: {
+        Args: {
+          p_code_hash: string
+          p_cooldown_seconds?: number
+          p_ip_hash: string
+          p_max_attempts?: number
+          p_max_per_ip?: number
+          p_max_per_phone?: number
+          p_phone: string
+          p_session_id: string
+          p_ttl_seconds?: number
+          p_ua_hash: string
+          p_window_minutes?: number
+        }
+        Returns: {
+          r_retry_after: number
+          r_session_id: string
+          r_status: string
+        }[]
+      }
+      otp_find_user_by_phone: {
+        Args: { p_phone: string }
+        Returns: {
+          r_email: string
+          r_user_id: string
+        }[]
+      }
+      otp_invalidate: { Args: { p_session_id: string }; Returns: undefined }
+      otp_mark_sent: { Args: { p_session_id: string }; Returns: undefined }
+      otp_verify_attempt: {
+        Args: { p_code_hash: string; p_phone: string; p_session_id: string }
+        Returns: {
+          r_attempts_left: number
+          r_status: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "provider" | "user"
