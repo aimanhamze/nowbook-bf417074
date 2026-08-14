@@ -489,6 +489,8 @@ export type Database = {
           user_id: string
           whatsapp_confirm_enabled: boolean
           whatsapp_message_language: string
+          whatsapp_reminder_enabled: boolean
+          whatsapp_reminder_hours: number
         }
         Insert: {
           about?: string | null
@@ -525,6 +527,8 @@ export type Database = {
           user_id: string
           whatsapp_confirm_enabled?: boolean
           whatsapp_message_language?: string
+          whatsapp_reminder_enabled?: boolean
+          whatsapp_reminder_hours?: number
         }
         Update: {
           about?: string | null
@@ -561,6 +565,8 @@ export type Database = {
           user_id?: string
           whatsapp_confirm_enabled?: boolean
           whatsapp_message_language?: string
+          whatsapp_reminder_enabled?: boolean
+          whatsapp_reminder_hours?: number
         }
         Relationships: []
       }
@@ -1008,6 +1014,14 @@ export type Database = {
         }[]
       }
       get_display_name: { Args: { _user_id: string }; Returns: string }
+      get_due_whatsapp_reminders: {
+        Args: { p_limit?: number }
+        Returns: {
+          r_booking_id: string
+          r_message_kind: string
+          r_provider_id: string
+        }[]
+      }
       get_provider_busy_slots: {
         Args: { p_from_date: string; p_provider_id: string; p_to_date: string }
         Returns: {
