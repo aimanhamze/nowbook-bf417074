@@ -23,6 +23,13 @@
 -- ║    * a bare CR (0x0d) anywhere inside the JSON breaks it identically.    ║
 -- ║  §A6 of the VERIFY file greps the stored command for CR and MUST pass.    ║
 -- ║                                                                          ║
+-- ║  ALSO CONFIRMED IN PRACTICE: a $cron$ … $cron$ DOLLAR-QUOTED body        ║
+-- ║  preserves the CRs of whatever was pasted into it, so the job stores a    ║
+-- ║  command containing 0x0d and fails exactly like booking-reminder — even   ║
+-- ║  with the headers themselves unwrapped. Scheduling with a SINGLE-LINE     ║
+-- ║  ORDINARY STRING LITERAL instead of a dollar-quoted block fixed it.       ║
+-- ║  Prefer the single-line form; if you do use $cron$, re-run §A6 after.     ║
+-- ║                                                                          ║
 -- ║  Headers are built with jsonb_build_object rather than a JSON string      ║
 -- ║  literal so the object cannot be malformed by stray whitespace at all.    ║
 -- ╚══════════════════════════════════════════════════════════════════════════╝

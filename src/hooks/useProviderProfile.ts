@@ -304,6 +304,39 @@ export function useProviderProfile() {
     },
   });
 
+  // ── WhatsApp appointment reminders (opt-in, separate from confirmations) ───
+  // A provider may want confirmations without reminders, or the reverse, so
+  // this flag is independent of whatsapp_confirm_enabled. The message language
+  // is NOT duplicated — whatsapp_message_language governs both.
+  const updateWhatsAppReminderEnabled = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ whatsapp_reminder_enabled: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+    },
+  });
+
+  // 1 or 24 only — the DB CHECK constraint rejects anything else.
+  const updateWhatsAppReminderHours = useMutation({
+    mutationFn: async (value: 1 | 24) => {
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ whatsapp_reminder_hours: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+    },
+  });
+
   const uploadCoverImage = useMutation({
     mutationFn: async (file: File) => {
       if (!user) throw new Error("Not authenticated");
@@ -382,6 +415,8 @@ export function useProviderProfile() {
     updateWhatsAppTemplates,
     updateWhatsAppConfirmEnabled,
     updateWhatsAppMessageLanguage,
+    updateWhatsAppReminderEnabled,
+    updateWhatsAppReminderHours,
     uploadCoverImage,
     uploadAvatarImage,
   };

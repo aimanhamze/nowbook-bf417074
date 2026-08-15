@@ -18,6 +18,11 @@ import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/
 const MESSAGE_LANGUAGES = ["he", "ar"] as const;
 type MessageLanguage = typeof MESSAGE_LANGUAGES[number];
 
+// Two lead times only, matching the CHECK constraint on
+// provider_profiles.whatsapp_reminder_hours.
+const REMINDER_LEAD_HOURS = [24, 1] as const;
+type ReminderLeadHours = typeof REMINDER_LEAD_HOURS[number];
+
 // Standalone provider settings page, reached from /profile. Deliberately NOT a
 // sixth Dashboard tab: that tab bar is five flex-1 items whose labels are
 // already hidden below `sm`, so a sixth would push a shipped, heavily-used RTL
@@ -29,8 +34,14 @@ export default function ProviderNotifications() {
   const { t } = useLang();
   const { user, isProvider } = useAuth();
   const navigate = useNavigate();
-  const { profile, isLoading, updateWhatsAppConfirmEnabled, updateWhatsAppMessageLanguage } =
-    useProviderProfile();
+  const {
+    profile,
+    isLoading,
+    updateWhatsAppConfirmEnabled,
+    updateWhatsAppMessageLanguage,
+    updateWhatsAppReminderEnabled,
+    updateWhatsAppReminderHours,
+  } = useProviderProfile();
 
   useEffect(() => {
     if (user && !isProvider) {
@@ -56,8 +67,15 @@ export default function ProviderNotifications() {
   const messageLanguage: MessageLanguage =
     profile?.whatsapp_message_language === "ar" ? "ar" : "he";
 
+  const reminderEnabled = profile?.whatsapp_reminder_enabled ?? false;
+  const reminderHours: ReminderLeadHours =
+    profile?.whatsapp_reminder_hours === 1 ? 1 : 24;
+
   const languageLabel = (lang: MessageLanguage) =>
     lang === "ar" ? t("whatsappLanguageAr") : t("whatsappLanguageHe");
+
+  const leadLabel = (hours: ReminderLeadHours) =>
+    hours === 1 ? t("whatsappReminderLead1") : t("whatsappReminderLead24");
 
   return (
     <div className={`min-h-screen pb-24 ${providerDesktopPage}`}>
@@ -77,7 +95,7 @@ export default function ProviderNotifications() {
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="px-5"
+          className="px-5 space-y-4"
         >
           <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
             {/* Master switch. Default OFF — a provider must opt in before a
@@ -101,37 +119,95 @@ export default function ProviderNotifications() {
               </div>
             </div>
 
-            {/* Language picker. Shown only once the feature is on: with the
-                switch off it governs nothing, and an active-looking control
-                that does nothing is worse than no control. */}
-            {confirmEnabled && (
+          </div>
+
+          {/* Reminders — a separate opt-in. A provider may want confirmations
+              without reminders, or the reverse, so the two switches are
+              independent. Default OFF. */}
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+            <div className="flex items-start gap-3">
+              <Switch
+                checked={reminderEnabled}
+                onCheckedChange={async (next) => {
+                  try {
+                    await updateWhatsAppReminderEnabled.mutateAsync(next);
+                    toast.success(t("profileSaved"));
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Error");
+                  }
+                }}
+                disabled={updateWhatsAppReminderEnabled.isPending}
+              />
+              <div className="flex-1">
+                <Label className="text-sm font-medium">{t("whatsappReminderLabel")}</Label>
+                <p className="text-xs text-muted-foreground mt-1">{t("whatsappReminderHelp")}</p>
+              </div>
+            </div>
+
+            {/* Lead time. Shown only once reminders are on — with the switch
+                off it governs nothing. */}
+            {reminderEnabled && (
               <div className="pt-3 border-t border-border">
-                <Label>{t("whatsappLanguageLabel")}</Label>
+                <Label>{t("whatsappReminderLeadLabel")}</Label>
                 <Select
-                  value={messageLanguage}
+                  value={String(reminderHours)}
                   onValueChange={async (v) => {
                     try {
-                      await updateWhatsAppMessageLanguage.mutateAsync(v as MessageLanguage);
+                      await updateWhatsAppReminderHours.mutateAsync(Number(v) as ReminderLeadHours);
                       toast.success(t("profileSaved"));
                     } catch (err) {
                       toast.error(err instanceof Error ? err.message : "Error");
                     }
                   }}
-                  disabled={updateWhatsAppMessageLanguage.isPending}
+                  disabled={updateWhatsAppReminderHours.isPending}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {MESSAGE_LANGUAGES.map((lang) => (
-                      <SelectItem key={lang} value={lang}>
-                        {languageLabel(lang)}
+                    {REMINDER_LEAD_HOURS.map((hours) => (
+                      <SelectItem key={hours} value={String(hours)}>
+                        {leadLabel(hours)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">{t("whatsappLanguageHelp")}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t("whatsappReminderLeadHelp")}</p>
               </div>
             )}
           </div>
+
+          {/* Message language — ONE setting governing every WhatsApp message,
+              matching the single whatsapp_message_language column. It lived
+              inside the confirmations card until reminders were added; left
+              there, a provider who enabled only reminders would have had no way
+              to reach it. Shown whenever EITHER feature is on, and hidden when
+              both are off, since it then governs nothing. */}
+          {(confirmEnabled || reminderEnabled) && (
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <Label>{t("whatsappLanguageLabel")}</Label>
+              <Select
+                value={messageLanguage}
+                onValueChange={async (v) => {
+                  try {
+                    await updateWhatsAppMessageLanguage.mutateAsync(v as MessageLanguage);
+                    toast.success(t("profileSaved"));
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Error");
+                  }
+                }}
+                disabled={updateWhatsAppMessageLanguage.isPending}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MESSAGE_LANGUAGES.map((lang) => (
+                    <SelectItem key={lang} value={lang}>
+                      {languageLabel(lang)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">{t("whatsappLanguageHelp")}</p>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>
