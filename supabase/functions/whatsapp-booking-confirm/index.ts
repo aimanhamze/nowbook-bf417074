@@ -397,7 +397,7 @@ Deno.serve(async (req) => {
     // ── Load the booking (service role — the source of truth) ────────────────
     const { data: booking, error: bookingError } = await admin
       .from("bookings")
-      .select("id, status, provider_id, user_id, linked_user_id, service_ids, booking_date, booking_time, customer_name, customer_phone")
+      .select("id, status, provider_id, user_id, linked_user_id, service_ids, class_schedule_id, booking_date, booking_time, customer_name, customer_phone")
       .eq("id", bookingId)
       .maybeSingle();
 
@@ -557,17 +557,39 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, result: "skipped", reason: "NO_NAME" });
     }
 
-    // {{5}} service name — first service only. service_ids is a uuid[] with no
-    // FK, and a group-class booking carries an empty array.
-    const firstServiceId = Array.isArray(booking.service_ids) ? booking.service_ids[0] : null;
+    // {{5}} service name. Two mutually exclusive sources, decided by
+    // class_schedule_id — the same signal useProviderBookings.ts:110 keys off:
+    //   * group class    -> provider_class_schedule.class_name. These bookings
+    //     carry an EMPTY service_ids array, so the class name is the ONLY
+    //     source. Reading service_ids[0] regardless is what silently skipped
+    //     every class booking as NO_SERVICE.
+    //   * everything else -> provider_services via service_ids[0]. service_ids
+    //     is a uuid[] with no FK, so a missing row is possible and handled.
+    // class_name is NOT NULL but has no non-empty constraint, so it is trimmed
+    // and an empty value falls through to the NO_SERVICE skip below.
+    // The BOOKING's own booking_time stays the time source in both branches —
+    // provider_class_schedule.start_time is 'HH:MM:SS' and is never read.
+    //
+    // KEEP THIS BLOCK BYTE-IDENTICAL TO THE ONE IN whatsapp-booking-reminder.
+    // If the two diverge, classes work for one message type and not the other.
     let serviceName = "";
-    if (firstServiceId) {
-      const { data: service } = await admin
-        .from("provider_services")
-        .select("name")
-        .eq("id", firstServiceId)
+    if (booking.class_schedule_id) {
+      const { data: classRow } = await admin
+        .from("provider_class_schedule")
+        .select("class_name")
+        .eq("id", booking.class_schedule_id)
         .maybeSingle();
-      serviceName = (service?.name ?? "").trim();
+      serviceName = (classRow?.class_name ?? "").trim();
+    } else {
+      const firstServiceId = Array.isArray(booking.service_ids) ? booking.service_ids[0] : null;
+      if (firstServiceId) {
+        const { data: service } = await admin
+          .from("provider_services")
+          .select("name")
+          .eq("id", firstServiceId)
+          .maybeSingle();
+        serviceName = (service?.name ?? "").trim();
+      }
     }
     if (!serviceName) {
       await logSkip(admin, bookingId, provider.id, "NO_SERVICE", phoneDigits);
