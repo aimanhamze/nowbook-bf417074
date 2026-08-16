@@ -74,6 +74,22 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+/**
+ * Rejects a request at an entry gate, naming the gate in the log.
+ *
+ * Mirrors the helper in whatsapp-booking-confirm. This function is cron-driven,
+ * so a rejection here means NO reminders went out for that tick — and on a
+ * fifteen-minute schedule that is easy to miss unless the reason is named. A
+ * silent 401 looks identical to a quiet run with nothing due.
+ *
+ * `gate` is a fixed identifier chosen here, never caller-controlled input, and
+ * the shared secret is never logged in any form.
+ */
+function reject(gate: string, status: number, body: unknown): Response {
+  console.warn("whatsapp-booking-reminder: rejected", { gate, status });
+  return json(status, body);
+}
+
 /** Safe for logs — last 4 digits only. Full numbers are PII. */
 function maskPhone(value: string | null | undefined): string {
   const d = (value ?? "").replace(/\D/g, "");
@@ -723,13 +739,21 @@ Deno.serve(async (req) => {
     const expectedSecret = Deno.env.get("CRON_SECRET");
     if (!expectedSecret) {
       console.error("whatsapp-booking-reminder: CRON_SECRET is not configured");
-      return json(500, { error: "Server misconfigured" });
+      return reject("cron_secret_not_configured", 500, { error: "Server misconfigured" });
     }
 
     const providedSecret = req.headers.get("x-cron-secret") ?? "";
     if (!(await secretMatches(providedSecret, expectedSecret))) {
-      console.warn("whatsapp-booking-reminder: rejected unauthenticated invocation");
-      return json(401, { error: "Unauthorized" });
+      // Distinguishes "the cron sent nothing" from "the cron sent the wrong
+      // value" — a header missing entirely usually means the schedule was
+      // rebuilt without it. Only presence is recorded; the secret itself, right
+      // or wrong, is never logged.
+      console.warn("whatsapp-booking-reminder: cron secret rejected", {
+        gate: "cron_secret_mismatch",
+        status: 401,
+        header_present: req.headers.has("x-cron-secret"),
+      });
+      return reject("cron_secret_mismatch", 401, { error: "Unauthorized" });
     }
 
     // ── Batch size ───────────────────────────────────────────────────────────

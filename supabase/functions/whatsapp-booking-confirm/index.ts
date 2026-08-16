@@ -66,6 +66,23 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+/**
+ * Rejects a request at an entry gate, naming the gate in the log.
+ *
+ * Every gate below returns before bookingIdForLog is assigned, so the trailing
+ * "request" log line reports booking_id "unknown" for all of them. Without a
+ * gate name, a missing header, a rejected token, a malformed body and a bad
+ * booking_id are indistinguishable in the logs — which is exactly what made a
+ * production 401 take a day to identify.
+ *
+ * `gate` is a fixed identifier chosen here, never caller-controlled input: no
+ * token, phone number or request content can reach the log through it.
+ */
+function reject(gate: string, status: number, body: unknown): Response {
+  console.warn("whatsapp-booking-confirm: rejected", { gate, status });
+  return json(status, body);
+}
+
 /** Safe for logs — last 4 digits only. Full numbers are PII. */
 function maskPhone(value: string | null | undefined): string {
   const d = (value ?? "").replace(/\D/g, "");
@@ -363,7 +380,7 @@ Deno.serve(async (req) => {
     // ── Caller authentication (anon client verifies the token) ───────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return json(401, { error: "Unauthorized" });
+      return reject("missing_auth_header", 401, { error: "Unauthorized" });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -373,7 +390,17 @@ Deno.serve(async (req) => {
     const userClient = createClient(supabaseUrl, anonKey);
     const { data: userData, error: userError } = await userClient.auth.getUser(token);
     if (userError || !userData?.user) {
-      return json(401, { error: "Unauthorized" });
+      // The distinguishing case: a token WAS sent and the auth server rejected
+      // it. supabase.functions.invoke falls back to the anon key when there is
+      // no valid session, and the anon key is a well-formed JWT that satisfies
+      // the platform gateway but is not a user token — so it lands here.
+      // getUser's own message is safe to log; it never echoes the token.
+      console.warn("whatsapp-booking-confirm: getUser rejected the token", {
+        gate: "get_user_rejected",
+        status: 401,
+        reason: userError?.message ?? "no user for token",
+      });
+      return reject("get_user_rejected", 401, { error: "Unauthorized" });
     }
     const callerId = userData.user.id;
 
@@ -382,13 +409,20 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return json(400, { error: "Malformed JSON body" });
+      return reject("malformed_json_body", 400, { error: "Malformed JSON body" });
     }
 
     const bookingId = body.booking_id;
     if (typeof bookingId !== "string" ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingId)) {
-      return json(400, { error: "booking_id (uuid) is required" });
+      // The received TYPE is logged, never the value: a caller-supplied value
+      // could be anything, and this line must stay safe to read in production.
+      console.warn("whatsapp-booking-confirm: booking_id unusable", {
+        gate: "invalid_booking_id",
+        status: 400,
+        received_type: bookingId === null ? "null" : typeof bookingId,
+      });
+      return reject("invalid_booking_id", 400, { error: "booking_id (uuid) is required" });
     }
     bookingIdForLog = bookingId;
 
