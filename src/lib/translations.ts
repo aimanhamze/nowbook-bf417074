@@ -155,6 +155,9 @@ export const translations = {
     welcomeBack: "ברוך שובך",
     otpSent: "קוד נשלח למספר שלך",
     invalidOtp: "קוד לא תקין",
+    // Neutral by design: the session ended on the server, which is not
+    // something the user did. States what happened and what to do next.
+    sessionEndedMessage: "החיבור הסתיים. יש להתחבר שוב כדי להמשיך",
     phoneRequired: "נדרש מספר טלפון",
     notificationSettingsTitle: "הגדרות התראות",
     whatsappConfirmLabel: "שליחת אישור תור בוואטסאפ",
@@ -798,6 +801,7 @@ export const translations = {
     welcomeBack: "مرحباً بعودتك",
     otpSent: "تم إرسال الرمز إلى رقمك",
     invalidOtp: "رمز غير صالح",
+    sessionEndedMessage: "انتهى الاتصال. يرجى تسجيل الدخول مرة أخرى للمتابعة",
     phoneRequired: "رقم الهاتف مطلوب",
     notificationSettingsTitle: "إعدادات الإشعارات",
     whatsappConfirmLabel: "إرسال تأكيد الحجز عبر واتساب",
@@ -1441,6 +1445,7 @@ export const translations = {
     welcomeBack: "Welcome back",
     otpSent: "Code sent to your number",
     invalidOtp: "Invalid code",
+    sessionEndedMessage: "Your connection has ended. Please sign in again to continue",
     phoneRequired: "Phone number is required",
     notificationSettingsTitle: "Notification settings",
     whatsappConfirmLabel: "Send booking confirmation on WhatsApp",

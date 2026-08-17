@@ -489,8 +489,13 @@ async function processBooking(
         .getUserById(accountId);
 
       if (authUserError) {
+        // `code` is the field to key on — Supabase's guidance is never to
+        // string-match the message. This function is cron-driven and has no
+        // caller token of its own, so this admin-API call is its only auth
+        // surface; capturing the code keeps it diagnosable the same way.
         console.warn("whatsapp-booking-reminder: getUserById failed, falling back to profiles.phone", {
           booking_id: bookingId,
+          code: (authUserError as { code?: string }).code ?? null,
           reason: authUserError.message,
         });
       }

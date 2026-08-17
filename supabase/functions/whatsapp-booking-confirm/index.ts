@@ -395,9 +395,16 @@ Deno.serve(async (req) => {
       // no valid session, and the anon key is a well-formed JWT that satisfies
       // the platform gateway but is not a user token — so it lands here.
       // getUser's own message is safe to log; it never echoes the token.
+      // `code` is the field to key on — Supabase's own guidance is never to
+      // string-match the message. It also settles WHY a session is dead:
+      //   session_not_found          -> the session row is gone
+      //   refresh_token_already_used -> refresh-token reuse detection revoked
+      //                                 the whole family (the open question)
+      // The message is kept alongside it purely as human context.
       console.warn("whatsapp-booking-confirm: getUser rejected the token", {
         gate: "get_user_rejected",
         status: 401,
+        code: (userError as { code?: string } | null)?.code ?? null,
         reason: userError?.message ?? "no user for token",
       });
       return reject("get_user_rejected", 401, { error: "Unauthorized" });
@@ -530,6 +537,7 @@ Deno.serve(async (req) => {
       if (authUserError) {
         console.warn("whatsapp-booking-confirm: getUserById failed, falling back to profiles.phone", {
           booking_id: bookingId,
+          code: (authUserError as { code?: string }).code ?? null,
           reason: authUserError.message,
         });
       }
