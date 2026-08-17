@@ -1,7 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
-import { notifyBookingConfirmed } from "@/lib/whatsappConfirm";
+import {
+  notifyBookingConfirmed,
+  notifyBookingCancelled,
+  notifyBookingsCancelled,
+} from "@/lib/whatsappConfirm";
 
 export interface EnrichedBooking {
   id: string;
@@ -140,6 +144,11 @@ export function useCancelBooking() {
         .eq("id", bookingId);
       if (error) throw error;
 
+      // PROVIDER-initiated cancellation — the customer does not know yet, so
+      // tell them. Fire-and-forget: never awaited, so a messaging failure cannot
+      // block or fail the cancellation the provider just performed.
+      notifyBookingCancelled(bookingId);
+
       if (booking) {
         const { data: provider } = await supabase
           .from("provider_profiles")
@@ -177,6 +186,12 @@ export function useCancelGroupClass() {
         .update({ status: "cancelled" })
         .in("id", bookingIds);
       if (error) throw error;
+
+      // Every participant needs telling. notifyBookingsCancelled paces the sends
+      // ONE AT A TIME in a detached chain, so a single tap cancelling a whole
+      // class never fires N concurrent SendPulse calls, and never delays this
+      // mutation. A plain loop here would not serialise anything.
+      notifyBookingsCancelled(bookingIds);
 
       if (allBookings?.length) {
         const first = allBookings[0];

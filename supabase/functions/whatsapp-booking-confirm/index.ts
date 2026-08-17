@@ -1,27 +1,42 @@
-// whatsapp-booking-confirm — sends the Meta-approved WhatsApp confirmation
-// template to a customer whose booking has just become confirmed.
+// whatsapp-booking-confirm — sends a Meta-approved WhatsApp template to the
+// customer when their booking is confirmed, or when the PROVIDER cancels it.
 //
-// CONTRACT:  POST { "booking_id": "<uuid>" }  → 200 { ok, result, ... }
+// ⚠ NAME IS A MISNOMER. This function now serves two message kinds, not just
+// confirmations. The slug is kept deliberately: renaming means redeploying under
+// a new name and updating every call site, and churning a working production
+// deployment is not worth the tidier label.
 //
-// The request body carries a booking id and NOTHING ELSE. Every value that ends
-// up in the message — recipient phone, customer name, business name, date, time,
-// service — is re-read from the database with the service role. Accepting text
-// or a phone number from the client would turn this endpoint into a way for any
-// authenticated user to send arbitrary WhatsApp messages from the business's
-// number, which is a Meta-ban-level risk, not merely a cost risk.
+// CONTRACT:  POST { "booking_id": "<uuid>", "kind"?: "booking_confirm" | "booking_cancelled" }
+//            → 200 { ok, result, ... }        ("kind" defaults to booking_confirm)
+//
+// Besides the booking id, the ONLY thing the body may carry is `kind`, which
+// selects among the server-side constants in MESSAGE_KINDS below. Every value
+// that ends up in the message — recipient phone, customer name, business name,
+// date, time, service — is re-read from the database with the service role.
+// Accepting message text or a phone number from the client would turn this
+// endpoint into a way for any authenticated user to send arbitrary WhatsApp
+// messages from the business's number: a Meta-ban-level risk, not a cost risk.
 //
 // FIVE INDEPENDENT GATES, in order. All must pass before a message is sent:
-//   1. Caller is the booking's provider, an admin, or the booking's own customer
-//   2. bookings.status reads exactly 'confirmed' from the DB
-//   3. provider_profiles.whatsapp_confirm_enabled is true
+//   1. Caller is authorized FOR THIS KIND (see MESSAGE_KINDS.allowCustomerCaller)
+//   2. bookings.status reads exactly the status this kind requires
+//   3. provider_profiles.whatsapp_confirm_enabled is true — ONE flag governs both
+//      kinds. Three switches for three message types is too many.
 //   4. The recipient is on WHATSAPP_CONFIRM_PHONES (unset = nobody)
 //   5. The UNIQUE index on whatsapp_send_log (booking_id, message_kind) has not
-//      already been claimed — this is the real ceiling: one message per booking,
+//      already been claimed — the real ceiling: one message per booking PER KIND,
 //      ever. There is no rate cap and no automatic retry anywhere.
 //
+// WHY GATE 1 IS THE LOAD-BEARING ONE FOR CANCELLATIONS: `bookings` has no
+// cancelled_by or cancelled_at column, so a row cancelled by the provider is
+// byte-for-byte identical to one cancelled by the customer. Database state
+// CANNOT distinguish them. The caller's identity is the only signal, which is
+// why a customer may trigger their own confirmation but never a cancellation —
+// otherwise they could send themselves "your appointment was cancelled".
+//
 // BEST-EFFORT: callers invoke this fire-and-forget. Nothing here can block,
-// delay or fail the booking itself — the booking is confirmed regardless, and
-// the message is a side effect.
+// delay or fail the booking itself — the booking is confirmed or cancelled
+// regardless, and the message is a side effect.
 //
 // NO SHARED MODULE: the SendPulse OAuth logic below is deliberately duplicated
 // rather than factored out. A separate OTP function on another branch needs the
@@ -40,18 +55,50 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── Templates ────────────────────────────────────────────────────────────────
-// Both are approved by Meta with an IDENTICAL 5-parameter body and no buttons.
-// "booking_confirm_hebrow" is misspelled upstream; it is used verbatim because
-// that is the name Meta approved.
-const TEMPLATES = {
-  he: { name: "booking_confirm_hebrow", languageCode: "he" },
-  ar: { name: "booking_confirmation_arabic", languageCode: "ar" },
+// ── Message kinds ────────────────────────────────────────────────────────────
+// All four templates are approved by Meta with an IDENTICAL 5-parameter body
+// ({{1}} customer, {{2}} business, {{3}} date, {{4}} time, {{5}} service) and no
+// buttons, which is what lets one send path serve both kinds.
+//
+// "booking_confirm_hebrow" is misspelled upstream; used verbatim because that is
+// the name Meta approved.
+//
+// The key of this map IS the message_kind written to whatsapp_send_log, so the
+// unique index on (booking_id, message_kind) gives one message per booking per
+// kind with no extra logic.
+const MESSAGE_KINDS = {
+  booking_confirm: {
+    requiredStatus: "confirmed",
+    // A customer may trigger their own confirmation: the function derives every
+    // value server-side and the unique index caps it at one message.
+    allowCustomerCaller: true,
+    wrongStatusReason: "NOT_CONFIRMED",
+    templates: {
+      he: { name: "booking_confirm_hebrow", languageCode: "he" },
+      ar: { name: "booking_confirmation_arabic", languageCode: "ar" },
+    },
+  },
+  booking_cancelled: {
+    requiredStatus: "cancelled",
+    // NEVER a customer. A customer who cancels their own booking passes the
+    // status gate, so allowing them here would let them send themselves a
+    // "your appointment was cancelled" notice. Provider-owner or admin only.
+    allowCustomerCaller: false,
+    wrongStatusReason: "NOT_CANCELLED",
+    templates: {
+      he: { name: "booking_cancelled_hebrew", languageCode: "he" },
+      ar: { name: "booking_cancelled_arabic", languageCode: "ar" },
+    },
+  },
 } as const;
 
-type LanguageKey = keyof typeof TEMPLATES;
+type MessageKind = keyof typeof MESSAGE_KINDS;
+type LanguageKey = keyof typeof MESSAGE_KINDS["booking_confirm"]["templates"];
 
-const MESSAGE_KIND = "booking_confirm";
+/** Unknown/absent kind defaults to booking_confirm, preserving the old contract. */
+function isMessageKind(value: unknown): value is MessageKind {
+  return typeof value === "string" && Object.hasOwn(MESSAGE_KINDS, value);
+}
 
 const SENDPULSE_OAUTH_URL = "https://api.sendpulse.com/oauth/access_token";
 const SENDPULSE_SEND_URL = "https://api.sendpulse.com/whatsapp/contacts/sendTemplateByPhone";
@@ -338,13 +385,14 @@ async function sendTemplate(
 async function logSkip(
   admin: Admin,
   bookingId: string,
+  messageKind: MessageKind,
   providerId: string | null,
   errorCode: string,
   phoneDigits: string | null,
 ): Promise<void> {
   const { error } = await admin.from("whatsapp_send_log").insert({
     booking_id: bookingId,
-    message_kind: MESSAGE_KIND,
+    message_kind: messageKind,
     provider_id: providerId,
     phone_digits: phoneDigits,
     status: "skipped",
@@ -367,6 +415,10 @@ Deno.serve(async (req) => {
 
   const startedAt = Date.now();
   let bookingIdForLog = "unknown";
+  // Carried on the trailing request log line. A cancellation is the message type
+  // most likely to matter to a customer about to arrive at a closed salon, so a
+  // failure must be attributable to the right kind without guesswork.
+  let kindForLog = "unknown";
 
   // Held in outer scope so the catch below can still resolve a claim that was
   // created but never reached a terminal status. `sendAccepted` distinguishes
@@ -411,13 +463,34 @@ Deno.serve(async (req) => {
     }
     const callerId = userData.user.id;
 
-    // ── Input: a booking id and nothing else ─────────────────────────────────
-    let body: { booking_id?: unknown };
+    // ── Input: a booking id, and optionally which kind of message ────────────
+    let body: { booking_id?: unknown; kind?: unknown };
     try {
       body = await req.json();
     } catch {
       return reject("malformed_json_body", 400, { error: "Malformed JSON body" });
     }
+
+    // `kind` is resolved BEFORE booking_id so the trailing request log names the
+    // kind even when the id turns out to be unusable.
+    //
+    // Safe to accept from the client: it only selects among the server-side
+    // constants in MESSAGE_KINDS and cannot inject content. An unknown value is
+    // rejected rather than defaulted, so a typo can never silently send the
+    // wrong message type; an ABSENT value defaults to booking_confirm, which
+    // preserves the original contract for existing callers.
+    const rawKind = body.kind ?? "booking_confirm";
+    if (!isMessageKind(rawKind)) {
+      console.warn("whatsapp-booking-confirm: unknown message kind", {
+        gate: "invalid_kind",
+        status: 400,
+        received_type: typeof rawKind,
+      });
+      return reject("invalid_kind", 400, { error: "kind is not a known message kind" });
+    }
+    const messageKind: MessageKind = rawKind;
+    const kindConfig = MESSAGE_KINDS[messageKind];
+    kindForLog = messageKind;
 
     const bookingId = body.booking_id;
     if (typeof bookingId !== "string" ||
@@ -445,15 +518,20 @@ Deno.serve(async (req) => {
     if (bookingError) throw bookingError;
     if (!booking) return json(404, { error: "Booking not found" });
 
-    // ── GATE 1: authorization ────────────────────────────────────────────────
-    // The caller must be the booking's own customer, the provider who owns it,
-    // or an admin. Anyone else is rejected — being merely authenticated is not
-    // enough.
+    // ── GATE 1: authorization, per kind ──────────────────────────────────────
+    // The provider who owns the booking and admins may trigger any kind. The
+    // booking's own customer may trigger ONLY kinds with allowCustomerCaller.
+    //
+    // This is the load-bearing gate for cancellations. `bookings` records no
+    // cancelled_by, so a customer's own cancellation is indistinguishable in the
+    // database from the provider's — meaning a customer allowed through here
+    // could send themselves "your appointment was cancelled". Being merely
+    // authenticated is never enough for any kind.
     const isOwnCustomer =
       (booking.user_id !== null && booking.user_id === callerId) ||
       (booking.linked_user_id !== null && booking.linked_user_id === callerId);
 
-    let authorized = isOwnCustomer;
+    let authorized = kindConfig.allowCustomerCaller && isOwnCustomer;
 
     if (!authorized) {
       const { data: ownedProvider } = await admin
@@ -476,17 +554,34 @@ Deno.serve(async (req) => {
     }
 
     if (!authorized) {
-      console.warn("whatsapp-booking-confirm: forbidden", { booking_id: bookingId });
+      // `kind` and whether the caller was the customer are both logged: a
+      // customer attempting booking_cancelled is the specific abuse this gate
+      // exists to stop, and it should be visible when it happens.
+      console.warn("whatsapp-booking-confirm: forbidden", {
+        gate: "not_authorized_for_kind",
+        status: 403,
+        booking_id: bookingId,
+        kind: messageKind,
+        was_own_customer: isOwnCustomer,
+      });
       return json(403, { error: "Forbidden" });
     }
 
-    // ── GATE 2: the booking really is confirmed ──────────────────────────────
-    // Tested for equality, never as "not pending": bookings.status also allows
+    // ── GATE 2: the booking is in the status this kind requires ───────────────
+    // Tested for EQUALITY, never as a negation: bookings.status also allows
     // 'completed', and enforce_booking_approval_status silently rewrites an
-    // inserted 'confirmed' to 'pending' for approval-required providers. No
-    // ledger row — a pending booking may legitimately be approved later.
-    if (booking.status !== "confirmed") {
-      return json(200, { ok: true, result: "skipped", reason: "NOT_CONFIRMED" });
+    // inserted 'confirmed' to 'pending' for approval-required providers. So
+    // "not pending" would wrongly admit a completed booking.
+    //   booking_confirm   -> 'confirmed'
+    //   booking_cancelled -> 'cancelled'
+    // No ledger row: a pending booking may legitimately be approved later, and a
+    // confirmed one may later be cancelled — each then earns its own message.
+    if (booking.status !== kindConfig.requiredStatus) {
+      return json(200, {
+        ok: true,
+        result: "skipped",
+        reason: kindConfig.wrongStatusReason,
+      });
     }
 
     // Walk-ins are excluded from v1: the customer never opted in to receive
@@ -516,7 +611,7 @@ Deno.serve(async (req) => {
     // fallback covers only an unexpected value.
     const langKey: LanguageKey =
       provider.whatsapp_message_language === "ar" ? "ar" : "he";
-    const template = TEMPLATES[langKey];
+    const template = kindConfig.templates[langKey];
 
     // ── Recipient ────────────────────────────────────────────────────────────
     // auth.users.phone is the canonical, OTP-VERIFIED number; profiles.phone is
@@ -571,7 +666,7 @@ Deno.serve(async (req) => {
     // on auth.users or profiles) and unparseable values.
     const phoneDigits = toSendPulsePhone(rawPhone);
     if (!phoneDigits) {
-      await logSkip(admin, bookingId, provider.id, "INVALID_PHONE", null);
+      await logSkip(admin, bookingId, messageKind, provider.id, "INVALID_PHONE", null);
       return json(200, { ok: true, result: "skipped", reason: "INVALID_PHONE" });
     }
 
@@ -595,7 +690,7 @@ Deno.serve(async (req) => {
 
     const customerName = (customerProfile?.display_name ?? "").trim();
     if (!customerName) {
-      await logSkip(admin, bookingId, provider.id, "NO_NAME", phoneDigits);
+      await logSkip(admin, bookingId, messageKind, provider.id, "NO_NAME", phoneDigits);
       return json(200, { ok: true, result: "skipped", reason: "NO_NAME" });
     }
 
@@ -634,20 +729,20 @@ Deno.serve(async (req) => {
       }
     }
     if (!serviceName) {
-      await logSkip(admin, bookingId, provider.id, "NO_SERVICE", phoneDigits);
+      await logSkip(admin, bookingId, messageKind, provider.id, "NO_SERVICE", phoneDigits);
       return json(200, { ok: true, result: "skipped", reason: "NO_SERVICE" });
     }
 
     const dateText = formatBookingDate(booking.booking_date);
     const timeText = formatBookingTime(booking.booking_time);
     if (!dateText || !timeText) {
-      await logSkip(admin, bookingId, provider.id, "BAD_DATETIME", phoneDigits);
+      await logSkip(admin, bookingId, messageKind, provider.id, "BAD_DATETIME", phoneDigits);
       return json(200, { ok: true, result: "skipped", reason: "BAD_DATETIME" });
     }
 
     const businessName = (provider.business_name ?? "").trim();
     if (!businessName) {
-      await logSkip(admin, bookingId, provider.id, "NO_BUSINESS_NAME", phoneDigits);
+      await logSkip(admin, bookingId, messageKind, provider.id, "NO_BUSINESS_NAME", phoneDigits);
       return json(200, { ok: true, result: "skipped", reason: "NO_BUSINESS_NAME" });
     }
 
@@ -660,7 +755,7 @@ Deno.serve(async (req) => {
       .from("whatsapp_send_log")
       .insert({
         booking_id: bookingId,
-        message_kind: MESSAGE_KIND,
+        message_kind: messageKind,
         provider_id: provider.id,
         phone_digits: phoneDigits,
         template_name: template.name,
@@ -693,6 +788,7 @@ Deno.serve(async (req) => {
         .eq("id", claim.id);
       console.error("whatsapp-booking-confirm: send threw", {
         booking_id: bookingId,
+        kind: messageKind,
         phone: maskPhone(phoneDigits),
         reason,
       });
@@ -710,6 +806,7 @@ Deno.serve(async (req) => {
         .eq("id", claim.id);
       console.error("whatsapp-booking-confirm: send rejected", {
         booking_id: bookingId,
+        kind: messageKind,
         phone: maskPhone(phoneDigits),
         http_status: sent.status,
         reason: sent.reason,
@@ -736,6 +833,7 @@ Deno.serve(async (req) => {
 
     console.log("whatsapp-booking-confirm: sent", {
       booking_id: bookingId,
+      kind: messageKind,
       provider_id: provider.id,
       phone: maskPhone(phoneDigits),
       language: template.languageCode,
@@ -753,6 +851,7 @@ Deno.serve(async (req) => {
     const reason = err instanceof Error ? err.message : String(err);
     console.error("whatsapp-booking-confirm: unhandled error", {
       booking_id: bookingIdForLog,
+      kind: kindForLog,
       reason,
     });
 
@@ -791,6 +890,7 @@ Deno.serve(async (req) => {
   } finally {
     console.log("whatsapp-booking-confirm: request", {
       booking_id: bookingIdForLog,
+      kind: kindForLog,
       latency_ms: Date.now() - startedAt,
     });
   }
