@@ -1,12 +1,16 @@
 // whatsapp-booking-confirm — sends a Meta-approved WhatsApp template to the
-// customer when their booking is confirmed, or when the PROVIDER cancels it.
+// customer when their booking is confirmed, when the PROVIDER cancels it, or
+// when the provider declines their pending request.
 //
-// ⚠ NAME IS A MISNOMER. This function now serves two message kinds, not just
+// ⚠ NAME IS A MISNOMER. This function now serves three message kinds, not just
 // confirmations. The slug is kept deliberately: renaming means redeploying under
 // a new name and updating every call site, and churning a working production
 // deployment is not worth the tidier label.
 //
-// CONTRACT:  POST { "booking_id": "<uuid>", "kind"?: "booking_confirm" | "booking_cancelled" }
+// CONTRACT:  POST {
+//              "booking_id": "<uuid>",
+//              "kind"?: "booking_confirm" | "booking_cancelled" | "booking_declined"
+//            }
 //            → 200 { ok, result, ... }        ("kind" defaults to booking_confirm)
 //
 // Besides the booking id, the ONLY thing the body may carry is `kind`, which
@@ -27,12 +31,14 @@
 //      already been claimed — the real ceiling: one message per booking PER KIND,
 //      ever. There is no rate cap and no automatic retry anywhere.
 //
-// WHY GATE 1 IS THE LOAD-BEARING ONE FOR CANCELLATIONS: `bookings` has no
-// cancelled_by or cancelled_at column, so a row cancelled by the provider is
-// byte-for-byte identical to one cancelled by the customer. Database state
-// CANNOT distinguish them. The caller's identity is the only signal, which is
-// why a customer may trigger their own confirmation but never a cancellation —
-// otherwise they could send themselves "your appointment was cancelled".
+// WHY GATE 1 IS THE LOAD-BEARING ONE FOR CANCELLATIONS AND DECLINES: `bookings`
+// has no cancelled_by or cancelled_at column, so a row cancelled by the
+// provider, declined by the provider, or cancelled by the customer are all
+// byte-for-byte identical — every one of them is just status='cancelled'.
+// Database state CANNOT distinguish them. The caller's identity is the only
+// signal, which is why a customer may trigger their own confirmation but never
+// a cancellation or a decline: otherwise they could send themselves "your
+// appointment was cancelled".
 //
 // BEST-EFFORT: callers invoke this fire-and-forget. Nothing here can block,
 // delay or fail the booking itself — the booking is confirmed or cancelled
@@ -88,6 +94,33 @@ const MESSAGE_KINDS = {
     templates: {
       he: { name: "booking_cancelled_hebrew", languageCode: "he" },
       ar: { name: "booking_cancelled_arabic", languageCode: "ar" },
+    },
+  },
+  // A DECLINED request and a PROVIDER-CANCELLED appointment both end at
+  // status='cancelled', and `bookings` records nothing that tells them apart.
+  // This entry is reachable ONLY because useRejectBooking asks for it by name —
+  // `kind` is the entire signal, and the status gate cannot disambiguate.
+  //
+  // WHAT KEEPS THE TWO APART IS UI STATE, NOT THE DATABASE. The unique index on
+  // (booking_id, message_kind) does NOT prevent a booking from receiving both:
+  // separate kinds are separate keys, so it would happily store both rows. What
+  // actually prevents it is that the affordances are mutually exclusive — the
+  // cancel button is hidden for pending bookings (CalendarTab.tsx:321) and
+  // PendingTab offers only approve/reject:
+  //     pending   → reject → cancelled → booking_declined
+  //     confirmed → cancel → cancelled → booking_cancelled
+  // A future path that cancels a PENDING booking through the cancellation
+  // helper would send the wrong message, and nothing here would catch it.
+  booking_declined: {
+    requiredStatus: "cancelled",
+    // Same reasoning as booking_cancelled, and the same hazard: a customer
+    // cancelling their own pending request also lands on status='cancelled', so
+    // allowing customer callers would let them send themselves a decline notice.
+    allowCustomerCaller: false,
+    wrongStatusReason: "NOT_CANCELLED",
+    templates: {
+      he: { name: "booking_declined_hebrew", languageCode: "he" },
+      ar: { name: "booking_declined_arabic", languageCode: "ar" },
     },
   },
 } as const;

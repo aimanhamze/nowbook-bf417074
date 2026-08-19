@@ -5,6 +5,7 @@ import {
   notifyBookingConfirmed,
   notifyBookingCancelled,
   notifyBookingsCancelled,
+  notifyBookingDeclined,
 } from "@/lib/whatsappConfirm";
 
 export interface EnrichedBooking {
@@ -298,6 +299,14 @@ export function useRejectBooking() {
         console.error("Reject booking error:", error);
         throw error;
       }
+
+      // DECLINED, not cancelled. Both transitions land on status='cancelled' and
+      // the database cannot tell them apart, so this call site is the only thing
+      // deciding which template the customer receives — notifyBookingCancelled
+      // here would tell them an appointment was cancelled that they were never
+      // told they had. Fire-and-forget: never awaited, so a messaging failure
+      // cannot block or fail the rejection.
+      notifyBookingDeclined(bookingId);
 
       if (booking) {
         const { data: provider } = await supabase
