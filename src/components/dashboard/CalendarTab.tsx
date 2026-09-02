@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { assignOverlapColumns } from "@/lib/weeklyOverlap";
 import { bookingDuration } from "@/lib/bookingDuration";
+import { supabaseErrorMessage, supabaseErrorCode } from "@/lib/supabaseError";
 import { DEFAULT_SERVICE_COLOR, normalizeColor, withAlpha, darken } from "@/lib/serviceColors";
 import {
   resolveDayHours,
@@ -211,7 +212,22 @@ function DurationOverrideBox({ booking }: { booking: EnrichedBooking }) {
           toast.success(t("durationSaved"));
           setOpen(false);
         },
-        onError: (err) => toast.error(err instanceof Error ? err.message : "שגיאה בשמירה"),
+        onError: (err) => {
+          // The trigger rejects a length that would run into the next booking.
+          // That is correct behaviour, but its raw text ("the selected time is
+          // no longer available") talks about a time the provider did not
+          // change — so name the real cause instead.
+          const code = supabaseErrorCode(err);
+          if (code === "23505") {
+            toast.error(t("durationConflict"));
+            return;
+          }
+          if (code === "P0001" && supabaseErrorMessage(err, "").includes("DURATION_OVERRIDE_FORBIDDEN")) {
+            toast.error(t("durationForbidden"));
+            return;
+          }
+          toast.error(supabaseErrorMessage(err, "שגיאה בשמירה"));
+        },
       },
     );
   };
