@@ -5,6 +5,7 @@ import type { Provider, Service } from "@/lib/mock-data";
 import type { Lang } from "@/lib/translations";
 import type { SocialLinks } from "@/lib/socialLinks";
 import type { AvailabilityRow } from "@/lib/providerStatus";
+import { bookingDuration } from "@/lib/bookingDuration";
 // Shared date→hours resolver + types. ONE source of truth for "hours for date X",
 // reused by the slot logic below AND the customer profile's hours display.
 import {
@@ -547,10 +548,9 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
       })
       .forEach(b => {
         const bookingStart = parseTime(b.booking_time);
-        const totalDuration = (b.service_ids || []).reduce((sum: number, sid: string) => {
-          const svc = services.find(s => s.id === sid);
-          return sum + (svc?.duration || 30);
-        }, 0);
+        // Shared with both CalendarTab views and RescheduleSheet, and mirrors
+        // the conflict trigger's own COALESCE(duration_override, SUM(duration)).
+        const totalDuration = bookingDuration(b, services);
         bookedIntervals.push({
           start: bookingStart,
           end: bookingStart + totalDuration,

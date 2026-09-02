@@ -1,13 +1,13 @@
 import { useState, useMemo, useEffect, useRef, useCallback, createContext, useContext, type CSSProperties } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote, UserRound, MoonStar } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote, UserRound, MoonStar, Timer } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
-import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, useSaveTreatmentNote, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, useSaveTreatmentNote, useSetDurationOverride, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { useProviderActiveStaff } from "@/hooks/useProviderStaff";
@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { assignOverlapColumns } from "@/lib/weeklyOverlap";
+import { bookingDuration } from "@/lib/bookingDuration";
 import { DEFAULT_SERVICE_COLOR, normalizeColor, withAlpha, darken } from "@/lib/serviceColors";
 import {
   resolveDayHours,
@@ -172,7 +173,107 @@ function TreatmentNoteBox({ booking }: { booking: EnrichedBooking }) {
   );
 }
 
-function BookingCard({ booking, index, color = null }: { booking: EnrichedBooking; index: number; color?: string | null }) {
+/**
+ * Inline editor for a booking's custom length (bookings.duration_override).
+ *
+ * Daily view only: that is the one surface where blocks are drawn against a
+ * time axis, so a changed length is immediately legible. The write is
+ * provider-only at the DB level (enforce_duration_override_permission), so this
+ * control simply never renders anywhere a non-provider can reach.
+ *
+ * Saving re-runs the conflict trigger. Stretching a booking over its neighbour
+ * is therefore rejected by the database, not by this form — we surface that
+ * error verbatim rather than pre-validating against a stale client cache.
+ */
+function DurationOverrideBox({ booking }: { booking: EnrichedBooking }) {
+  const { t } = useLang();
+  const { services } = useProviderServices();
+  const { mutate: setOverride, isPending } = useSetDurationOverride();
+  const [open, setOpen] = useState(false);
+  // What the booking WOULD run for with no override — shown as the placeholder
+  // and the "default: N minutes" hint, so resetting has a visible target.
+  const defaultDuration = bookingDuration({ service_ids: booking.service_ids }, services);
+  const [value, setValue] = useState<string>(
+    booking.duration_override ? String(booking.duration_override) : "",
+  );
+
+  // A save elsewhere (another tab, a reschedule) re-renders this card — follow
+  // the server value rather than stranding a stale local edit.
+  useEffect(() => {
+    setValue(booking.duration_override ? String(booking.duration_override) : "");
+  }, [booking.duration_override]);
+
+  const apply = (minutes: number | null) => {
+    setOverride(
+      { bookingId: booking.id, minutes },
+      {
+        onSuccess: () => {
+          toast.success(t("durationSaved"));
+          setOpen(false);
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "שגיאה בשמירה"),
+      },
+    );
+  };
+
+  const parsed = Number(value);
+  const canSave = value !== "" && Number.isFinite(parsed) && parsed >= 5 && parsed <= 480;
+
+  return (
+    <div className="pt-1">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="w-full text-[11px] h-7 px-2 text-muted-foreground hover:text-foreground"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Timer className="h-3.5 w-3.5 mr-1" />
+        {t("editDuration")}
+        {booking.duration_override ? ` · ${booking.duration_override} ${t("min")}` : ""}
+      </Button>
+
+      {open && (
+        <div className="mt-2 space-y-2 rounded-lg border border-border/60 bg-secondary/20 p-2.5">
+          <p className="text-[11px] font-medium text-foreground">{t("customDuration")}</p>
+          <input
+            type="number"
+            min={5}
+            max={480}
+            step={5}
+            value={value}
+            placeholder={String(defaultDuration)}
+            onChange={(e) => setValue(e.target.value)}
+            className="w-full text-xs rounded-lg border border-border bg-background p-2 text-foreground focus:outline-none focus:border-accent"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            {t("defaultDuration").replace("{minutes}", String(defaultDuration))}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1 text-[11px] h-7"
+              onClick={() => apply(parsed)}
+              disabled={isPending || !canSave}
+            >
+              {isPending ? "..." : t("save")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-[11px] h-7"
+              onClick={() => apply(null)}
+              disabled={isPending || !booking.duration_override}
+            >
+              {t("resetDuration")}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BookingCard({ booking, index, color = null, showDurationEditor = false }: { booking: EnrichedBooking; index: number; color?: string | null; showDurationEditor?: boolean }) {
   const { t } = useLang();
   const cancelBooking = useCancelBooking();
   const deleteBooking = useDeleteBooking();
@@ -354,6 +455,12 @@ function BookingCard({ booking, index, color = null }: { booking: EnrichedBookin
           <MessageCircle className="h-3.5 w-3.5" />
           שלח תזכורת 🔔
         </a>
+      )}
+
+      {/* Custom length — confirmed bookings in the daily timeline only, where a
+          changed duration is actually visible against the time axis. */}
+      {isConfirmed && showDurationEditor && !booking.class_schedule_id && !booking.is_group_service && (
+        <DurationOverrideBox booking={booking} />
       )}
 
       {/* Treatment notes — confirmed bookings, only when feature is enabled */}
@@ -735,7 +842,7 @@ function generateSlots(start: string, end: string, stepMinutes: number): string[
 }
 
 // Renders a list of calendar items using the existing card components. Shared by all views.
-function CalendarItemsList({ items, reminderTemplate }: { items: CalendarItem[]; reminderTemplate: string }) {
+function CalendarItemsList({ items, reminderTemplate, showDurationEditor = false }: { items: CalendarItem[]; reminderTemplate: string; showDurationEditor?: boolean }) {
   const colorOf = useItemColorResolver();
   return (
     <AnimatePresence mode="popLayout">
@@ -761,7 +868,7 @@ function CalendarItemsList({ items, reminderTemplate }: { items: CalendarItem[];
               color={colorOf(item)}
             />
           ) : (
-            <BookingCard key={item.booking.id} booking={item.booking} index={i} color={colorOf(item)} />
+            <BookingCard key={item.booking.id} booking={item.booking} index={i} color={colorOf(item)} showDurationEditor={showDurationEditor} />
           )
         )}
       </div>
@@ -885,12 +992,12 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
   const weekEnd = days[6];
   const title = `${format(weekStart, "d MMM", { locale: dateFnsLocale })} – ${format(weekEnd, "d MMM", { locale: dateFnsLocale })}`;
 
-  const durationMap = new Map(services.map((s) => [s.id, s.duration]));
+  // Class slots carry their own length; bookings go through the shared helper
+  // so a provider's duration_override moves the block here exactly as it moves
+  // the customer's offered slots.
   const itemDuration = (it: CalendarItem): number => {
     if (it.type === 'class_slot') return it.classEntry.duration_minutes || 15;
-    const ids = it.type === 'private' ? it.booking.service_ids : it.bookings[0].service_ids;
-    const total = (ids || []).reduce((sum, id) => sum + (durationMap.get(id) ?? 0), 0);
-    return total > 0 ? total : 15;
+    return bookingDuration(it.type === 'private' ? it.booking : it.bookings[0], services);
   };
   const rowKey = (item: CalendarItem): string =>
     item.type === 'private' ? item.booking.id
@@ -1170,12 +1277,9 @@ function DailyView({ selectedDate, bookings, schedule, isFitnessStudio, reminder
 
   // A booking occupies every slot from its start until start + total service
   // duration, so slots mid-service render as "continuation" rather than "פנוי".
-  const durationMap = new Map(services.map((s) => [s.id, s.duration]));
   const itemDuration = (it: CalendarItem): number => {
     if (it.type === 'class_slot') return it.classEntry.duration_minutes || 15;
-    const ids = it.type === 'private' ? it.booking.service_ids : it.bookings[0].service_ids;
-    const total = (ids || []).reduce((sum, id) => sum + (durationMap.get(id) ?? 0), 0);
-    return total > 0 ? total : 15;
+    return bookingDuration(it.type === 'private' ? it.booking : it.bookings[0], services);
   };
   // start (inclusive) → start + total duration (exclusive). The end minute is the
   // first free slot: a 13:00 booking of 30 min occupies 13:00 + 13:15, and 13:30
@@ -1210,7 +1314,7 @@ function DailyView({ selectedDate, bookings, schedule, isFitnessStudio, reminder
                 <div key={time} className="flex gap-2">
                   <span className="text-[11px] font-medium text-muted-foreground/70 tabular-nums pt-4 w-10 shrink-0">{time}</span>
                   <div className="flex-1 min-w-0">
-                    <CalendarItemsList items={rowItems} reminderTemplate={reminderTemplate} />
+                    <CalendarItemsList items={rowItems} reminderTemplate={reminderTemplate} showDurationEditor />
                   </div>
                 </div>
               );

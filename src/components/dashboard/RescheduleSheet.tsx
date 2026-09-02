@@ -17,6 +17,7 @@ import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { cn } from "@/lib/utils";
+import { bookingDuration } from "@/lib/bookingDuration";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
@@ -63,11 +64,9 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
   // the slot pipeline uses when computing overlaps.
   const primaryService = services.find((s) => s.id === booking.service_ids?.[0]);
   const isGroup = primaryService?.service_type === "group";
-  const duration =
-    (booking.service_ids || []).reduce(
-      (sum, id) => sum + (services.find((s) => s.id === id)?.duration || 15),
-      0,
-    ) || 15;
+  // A booking that was given a custom length keeps that length when it moves —
+  // rescheduling changes WHEN it happens, never how long it runs.
+  const duration = bookingDuration(booking, services);
   const capacity = primaryService?.max_capacity ?? 1;
 
   // Reset the wizard each time the sheet opens, seeded on today's month.

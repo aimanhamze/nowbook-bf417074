@@ -39,6 +39,16 @@ export interface EnrichedBooking {
   // non-staff providers, group/class bookings, and everything pre-staff.
   staff_id: string | null;
   staff_name: string | null;
+  /**
+   * Per-booking length in minutes, overriding the sum of the booked services'
+   * `duration`. NULL = use the service default. Never read this directly —
+   * go through `lib/bookingDuration`, which applies the same precedence the
+   * conflict trigger does.
+   *
+   * Provider-writable only: `enforce_duration_override_permission()` rejects a
+   * write from anyone who is not this booking's provider.
+   */
+  duration_override: number | null;
 }
 
 export function useProviderBookings() {
@@ -115,6 +125,11 @@ export function useProviderBookings() {
           linked_user_id: b.linked_user_id ?? null,
           staff_id: b.staff_id ?? null,
           staff_name: b.staff_id ? (staffMap.get(b.staff_id) ?? null) : null,
+          // Cast: duration_override lands in the generated types only after the
+          // 20260830000001 migration reaches the project types.ts was generated
+          // from (repo convention for pre-regen columns — see staff_id above).
+          duration_override:
+            (b as { duration_override?: number | null }).duration_override ?? null,
         };
       });
     },
@@ -359,6 +374,36 @@ export function useRescheduleBooking() {
           type: "booking_confirmed",
         });
       }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-public"] });
+    },
+  });
+}
+
+/**
+ * Set (or clear, with `null`) a booking's custom length.
+ *
+ * Writing this column re-runs the conflict trigger — `duration_override` is in
+ * trg_prevent_booking_conflicts' UPDATE OF list — so stretching a booking over
+ * a neighbour is rejected by the DB with the usual "selected time is no longer
+ * available" error rather than silently double-booking. Surface that error to
+ * the provider; do not retry.
+ *
+ * Invalidates the public slot cache too: a changed length moves which slots the
+ * CUSTOMER is offered, not just what the provider's timeline draws.
+ */
+export function useSetDurationOverride() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ bookingId, minutes }: { bookingId: string; minutes: number | null }) => {
+      const { error } = await supabase
+        .from("bookings")
+        // Cast: see the duration_override note in useProviderBookings above.
+        .update({ duration_override: minutes } as never)
+        .eq("id", bookingId);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
