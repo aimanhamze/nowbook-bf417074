@@ -1,0 +1,31 @@
+-- DEV PARITY: provider_profiles.average_rating exists on PROD but is absent on
+-- DEV. Established 2026-09-04 by a full information_schema.columns diff of the
+-- two projects: PROD has `average_rating numeric` (nullable); DEV does not.
+-- It was missed by the hand-written backfill when DEV was built 2026-08-28.
+--
+-- WHY IT MATTERS: useProviderLocations.ts selects the column by name --
+--     .select("id, business_name, category, average_rating, ...")
+-- so the map's provider query fails outright on DEV with "column does not
+-- exist". useAllProviders.ts also reads it for the star rating.
+--
+-- IF NOT EXISTS: PROD ALREADY HAS THIS COLUMN. This file is a deliberate no-op
+-- there and must not be read as a PROD change. It exists to bring DEV in line,
+-- and is written to be harmless in either lineage.
+--
+-- NULLABLE, NO DEFAULT: matches PROD. types.ts records `number | null`, and
+-- useAllProviders.ts:76 already coerces with `dbp.average_rating ?? 0`.
+--
+-- SCOPE LIMIT -- READ THIS: nothing in this repo WRITES average_rating. No
+-- trigger, no function, no application code -- `grep -rn average_rating
+-- supabase/` returns nothing. On PROD the value is maintained out of band.
+-- This migration makes the DEV queries SUCCEED; it does not make DEV POPULATE
+-- the value. DEV rows will read NULL (rendered as 0). That is sufficient for
+-- the map and the provider list to load, which is the actual breakage. Do not
+-- assume DEV ratings are meaningful.
+--
+-- Note also that ReviewsTab.tsx deliberately computes its average from the
+-- review rows and NOT from this column, so the provider-facing reviews screen
+-- is unaffected either way.
+
+ALTER TABLE public.provider_profiles
+  ADD COLUMN IF NOT EXISTS average_rating numeric;
