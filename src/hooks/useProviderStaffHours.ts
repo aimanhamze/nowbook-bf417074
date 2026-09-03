@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
 import type { StaffHoursRow } from "@/lib/staffHours";
+import type { StaffWeeklyRow } from "@/lib/availabilityResolver";
 
 // Per-staff working hours (per-staff-availability Phase 2). Mirrors
 // useProviderStaffServices deliberately, down to the mutation shape: the two
@@ -116,14 +117,12 @@ export function useProviderStaffHours(enabled = true) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["provider-staff-availability"] });
-      // Phase 3's booking-side read will live under a SEPARATE key
-      // ("provider-staff-availability-public"), which the line above does not
-      // reach — React Query matches key prefixes element-wise, so a different
-      // first element is a different tree, not a child. Invalidating it here
-      // already (harmless while no such query is mounted) is the same discipline
-      // setStaffServices needed, and it means the owner's own walk-in sheet
-      // cannot show stale hours for up to the 5-minute staleTime once Phase 3
-      // lands.
+      // The booking-side read (usePublicStaffHours, below) lives under a
+      // SEPARATE key, which the line above does not reach — React Query matches
+      // key prefixes element-wise, so a different first element is a different
+      // tree, not a child. Without this the owner would edit a member's hours
+      // and then see the OLD hours in their own walk-in sheet for up to the
+      // 5-minute staleTime.
       queryClient.invalidateQueries({ queryKey: ["provider-staff-availability-public"] });
     },
   });
@@ -134,4 +133,58 @@ export function useProviderStaffHours(enabled = true) {
     error: hoursQuery.error,
     setStaffHours,
   };
+}
+
+// Customer-side read of a provider's per-staff working hours (Phase 3).
+// provider_staff_availability has public SELECT RLS, so this works pre-auth like
+// the other "-public" queries, and it shares its cache with the walk-in sheet.
+//
+// THREE THINGS THIS QUERY MUST NEVER BECOME, because the booking calendar calls
+// dayHasAvailability once per rendered day and any of them would fan out across
+// a whole month grid:
+//
+//   1. NOT keyed per staff member. The key is [.., providerId] and the query
+//      fetches EVERY member's rows in one request. A staff-keyed cache would
+//      re-fetch on each pick in the staff step, and — worse — could serve one
+//      member's hours under another's key on a stale render.
+//   2. NOT queried per calendar day. The result is indexed into a Map ONCE, in
+//      a useMemo, and the slot builder closes over that Map. Resolving a day
+//      costs a Map.get, never a round trip.
+//   3. NOT mounted unconditionally. `enabled` should be "a staff member is
+//      actually selected", so a provider who does not use staff — or a customer
+//      who has not reached the staff step — fires nothing at all. Without a
+//      selected member there is nothing to narrow, so the data would be unused
+//      anyway.
+export function usePublicStaffHours(providerId: string | undefined, enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["provider-staff-availability-public", providerId],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      if (!providerId) return [];
+      const { data, error } = await supabase
+        .from("provider_staff_availability")
+        .select("staff_id, day_of_week, start_time, end_time, is_available")
+        .eq("provider_id", providerId);
+      if (error) throw error;
+      return (data || []) as StaffHoursRow[];
+    },
+    enabled: !!providerId && enabled,
+  });
+
+  // staff_id → (day_of_week → row). A member ABSENT from this map has no
+  // configuration and works all of the shop's hours — staffDayWindow turns that
+  // absence into `undefined`, which narrowToStaff turns into the identity path.
+  // Callers must pass `hoursByStaff.get(id)` through and let the resolver decide;
+  // substituting an empty Map here would read as "configured and off every day".
+  const hoursByStaff = useMemo(() => {
+    const map = new Map<string, Map<number, StaffWeeklyRow>>();
+    for (const row of query.data || []) {
+      const days = map.get(row.staff_id) ?? new Map<number, StaffWeeklyRow>();
+      days.set(row.day_of_week, row);
+      map.set(row.staff_id, days);
+    }
+    return map;
+  }, [query.data]);
+
+  return { hoursByStaff, isLoading: query.isLoading };
 }

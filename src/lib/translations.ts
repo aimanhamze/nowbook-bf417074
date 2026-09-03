@@ -499,6 +499,10 @@ export const translations = {
     walkInOverrideLegend: "ימים מקווקווים סגורים או חסומים — אפשר לקבוע בהם תור ידנית",
     walkInOverrideClosedNote: "היום הזה סגור או חסום. אפשר לקבוע בו שעה ידנית בשלב הבא.",
     walkInOverrideFullNote: "כל השעות ביום הזה תפוסות. אפשר לקבוע בו שעה ידנית בשלב הבא.",
+    // Per-staff availability (Phase 3): "לא עובד" must never read as "סגור"
+    walkInOverrideStaffOffNote: "{name} לא עובד/ת ביום הזה. אפשר לקבוע שעה ידנית בשלב הבא, או לבחור איש צוות אחר.",
+    walkInOffDayConfirmStaffOff: "{name} לא עובד/ת ביום הזה. לקבוע בכל זאת תור ידני?",
+    walkInStaffOffDay: "{name} לא עובד/ת ביום הזה",
     walkInOffDayConfirmTitle: "קביעת תור ביום זה",
     walkInOffDayConfirmClosed: "היום הזה סגור או חסום. לקבוע תור בכל זאת?",
     walkInOffDayConfirmFull: "כל השעות ביום הזה תפוסות. לקבוע תור בכל זאת?",
@@ -669,6 +673,9 @@ export const translations = {
     staffHoursNone: "לא עובד באף יום",
     staffHoursDays: "{n} ימי עבודה",
     staffHoursSaveFailed: "איש הצוות נשמר, אך שמירת שעות העבודה נכשלה. נסה שוב מעריכת איש הצוות.",
+    // Per-staff availability (Phase 3) — customer-facing empty states
+    staffOffDay: "{name} לא עובד/ת ביום זה",
+    staffNoDaysInWindow: "ל{name} אין ימים פנויים בתקופה הזו. חזור אחורה ובחר איש צוות אחר.",
 
     pickStaff: "בחירת איש צוות",
     staffMemberLabel: "איש צוות",
@@ -1177,6 +1184,10 @@ export const translations = {
     walkInOverrideLegend: "الأيام المتقطّعة مغلقة أو محجوبة — يمكن حجز موعد فيها يدويًا",
     walkInOverrideClosedNote: "هذا اليوم مغلق أو محجوب. يمكنك تحديد وقت يدويًا في الخطوة التالية.",
     walkInOverrideFullNote: "كل الأوقات في هذا اليوم محجوزة. يمكنك تحديد وقت يدويًا في الخطوة التالية.",
+    // Per-staff availability (Phase 3): "لا يعمل" must never read as "مغلق"
+    walkInOverrideStaffOffNote: "{name} لا يعمل في هذا اليوم. يمكنك تحديد وقت يدويًا في الخطوة التالية، أو اختيار عضو طاقم آخر.",
+    walkInOffDayConfirmStaffOff: "{name} لا يعمل في هذا اليوم. هل تريد حجز موعد يدويًا على أي حال؟",
+    walkInStaffOffDay: "{name} لا يعمل في هذا اليوم",
     walkInOffDayConfirmTitle: "حجز موعد في هذا اليوم",
     walkInOffDayConfirmClosed: "هذا اليوم مغلق أو محجوب. هل تريد حجز موعد رغم ذلك؟",
     walkInOffDayConfirmFull: "كل الأوقات في هذا اليوم محجوزة. هل تريد حجز موعد رغم ذلك؟",
@@ -1346,6 +1357,9 @@ export const translations = {
     staffHoursNone: "لا يعمل في أي يوم",
     staffHoursDays: "{n} أيام عمل",
     staffHoursSaveFailed: "تم حفظ عضو الطاقم، لكن حفظ ساعات العمل فشل. حاول مرة أخرى من تعديل عضو الطاقم.",
+    // Per-staff availability (Phase 3) — customer-facing empty states
+    staffOffDay: "{name} لا يعمل في هذا اليوم",
+    staffNoDaysInWindow: "لا توجد أيام متاحة لدى {name} في هذه الفترة. ارجع واختر عضو طاقم آخر.",
 
     pickStaff: "اختيار عضو الطاقم",
     staffMemberLabel: "عضو الطاقم",
@@ -1854,6 +1868,10 @@ export const translations = {
     walkInOverrideLegend: "Dashed days are closed or blocked — you can still book them manually",
     walkInOverrideClosedNote: "This day is closed or blocked. You can set a time manually in the next step.",
     walkInOverrideFullNote: "Every time on this day is taken. You can set a time manually in the next step.",
+    // Per-staff availability (Phase 3): "not working" must never read as "closed"
+    walkInOverrideStaffOffNote: "{name} isn't working this day. You can set a time manually in the next step, or pick another staff member.",
+    walkInOffDayConfirmStaffOff: "{name} isn't working this day. Book a manual appointment anyway?",
+    walkInStaffOffDay: "{name} isn't working this day",
     walkInOffDayConfirmTitle: "Book on this day",
     walkInOffDayConfirmClosed: "This day is closed or blocked. Book anyway?",
     walkInOffDayConfirmFull: "Every time on this day is taken. Book anyway?",
@@ -2023,6 +2041,9 @@ export const translations = {
     staffHoursNone: "Not working any day",
     staffHoursDays: "{n} working days",
     staffHoursSaveFailed: "Staff member saved, but saving their working hours failed. Try again from the staff member's edit sheet.",
+    // Per-staff availability (Phase 3) — customer-facing empty states
+    staffOffDay: "{name} isn't working this day",
+    staffNoDaysInWindow: "{name} has no available days in this period. Go back and pick another staff member.",
 
     pickStaff: "Choose staff member",
     staffMemberLabel: "Staff member",

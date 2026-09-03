@@ -10,10 +10,13 @@ import { bookingDuration } from "@/lib/bookingDuration";
 // reused by the slot logic below AND the customer profile's hours display.
 import {
   resolveDayHours,
+  narrowToStaff,
+  staffDayWindow,
   toLocalDateStr,
   type MonthlySettings,
   type DateOverrideRow,
 } from "@/lib/availabilityResolver";
+import { usePublicStaffHours } from "./useProviderStaffHours";
 
 export interface DbProvider {
   id: string;
@@ -459,6 +462,27 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     monthly_default_end: monthlySettingsQuery.data?.monthly_default_end ?? "17:00",
   };
 
+  // ── PER-STAFF HOURS (Phase 3) ───────────────────────────────────────────────
+  // ONE query for EVERY member's rows, keyed by providerId only, indexed into a
+  // Map once. `getAvailableSlots` closes over that Map, so resolving a day costs
+  // a Map.get and never a round trip — which matters because dayHasAvailability
+  // calls it once per rendered calendar cell.
+  //
+  // Gated on a member actually being SELECTED: with no selection there is
+  // nothing to narrow, so a provider who does not use staff — and a customer who
+  // has not reached the staff step — fires no request at all.
+  const { hoursByStaff: staffHoursByStaff, isLoading: staffHoursLoading } = usePublicStaffHours(
+    providerId,
+    !!selectedStaffId
+  );
+
+  // The selected member's week, resolved ONCE per render rather than per day.
+  // `undefined` here means "no member selected, or this member has no rows" —
+  // both of which staffDayWindow turns into the identity path. Substituting an
+  // empty Map would read as "configured and off every day"; the absence must
+  // travel all the way to the resolver intact.
+  const selectedStaffDays = selectedStaffId ? staffHoursByStaff.get(selectedStaffId) : undefined;
+
   // Per-date overrides for monthly mode (mirrors blockedDatesQuery). Only
   // consulted when availability_mode==='monthly'; irrelevant to weekly providers.
   const overridesQuery = useQuery({
@@ -508,14 +532,28 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     // Resolve this provider's open window for `date` via the SINGLE shared helper
     // (blocked-check → mode branch → weekday lookup). For weekly providers this
     // returns exactly what the old inline code did. null === closed.
-    const dayWindow = resolveDayHours(
+    const shopWindow = resolveDayHours(
       date,
       monthlySettings,
       availabilityQuery.data || [],
       blockedDatesQuery.data || [],
       overridesQuery.data || [],
     );
+
+    // PER-STAFF NARROWING (Phase 3). resolveDayHours is untouched — this
+    // composes over its output. With no member selected, or a member who has no
+    // hours rows, narrowToStaff returns `shopWindow` ITSELF and this line is the
+    // identity, so every existing provider gets byte-identical behaviour.
+    // Deliberately NOT applied in getGroupSlotsWithCapacity below: group
+    // capacity is pooled shop-wide and the trigger's group branch is staff-blind.
+    const dayWindow = narrowToStaff(shopWindow, staffDayWindow(date, selectedStaffDays));
     if (!dayWindow) return [];
+
+    // A member is selected but their hours have not arrived yet. Fail CLOSED
+    // rather than offering the un-narrowed shop window and retracting it a
+    // moment later: this is an offering rule, and briefly showing nothing is the
+    // same thing the page already does while the weekly rows load.
+    if (selectedStaffId && staffHoursLoading) return [];
 
     const services = servicesQuery.data || [];
 
@@ -656,7 +694,37 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     return result;
   };
 
-  return { getAvailableSlots, getGroupSlotsWithCapacity, isLoading: availabilityQuery.isLoading };
+  /**
+   * COPY ONLY — never gates a slot, never hides a day.
+   *
+   * "No times on this day" has three different causes and the customer deserves
+   * to be told which: the shop is closed, the chosen member is not working, or
+   * everything is booked. The slot pipeline collapses all three into an empty
+   * array, so this answers the middle one: the SHOP is open on `date` but the
+   * selected member's narrowed window is null.
+   *
+   * Returns false with no member selected, and false when the shop itself is
+   * closed — that case already has its own message.
+   */
+  const staffOffOnDate = (date: Date): boolean => {
+    if (!selectedStaffId) return false;
+    const shopWindow = resolveDayHours(
+      date,
+      monthlySettings,
+      availabilityQuery.data || [],
+      blockedDatesQuery.data || [],
+      overridesQuery.data || [],
+    );
+    if (!shopWindow) return false;
+    return narrowToStaff(shopWindow, staffDayWindow(date, selectedStaffDays)) === null;
+  };
+
+  return {
+    getAvailableSlots,
+    getGroupSlotsWithCapacity,
+    staffOffOnDate,
+    isLoading: availabilityQuery.isLoading,
+  };
 }
 
 function parseTime(timeStr: string): number {
