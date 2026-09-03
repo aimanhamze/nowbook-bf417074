@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useProviderById, useRealAvailability, usePublicProviderSchedule } from "@/hooks/useAllProviders";
-import { useProviderActiveStaff } from "@/hooks/useProviderStaff";
+import { useProviderActiveStaff, useProviderStaffAssignments } from "@/hooks/useProviderStaff";
+import { eligibleStaffForService } from "@/lib/staffServices";
 import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import { useProviderClassScheduleById, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
 import type { Service } from "@/lib/mock-data";
@@ -64,8 +65,31 @@ const BookAppointment = () => {
   // useRealAvailability behaves exactly as before. The staff list query itself
   // is gated on provider.staffEnabled — non-staff providers never fire it.
   const [selectedStaffId, setSelectedStaffId] = useState<string>("");
+  // Declared up here, ahead of the availability hook, because the eligible-staff
+  // filter below needs the chosen service and the availability hook in turn
+  // needs the filtered staff pick. (The rest of the standard-flow state stays
+  // together further down.)
+  const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const { activeStaff, isLoading: staffLoading } = useProviderActiveStaff(id, provider?.staffEnabled === true);
-  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(id, selectedStaffId || undefined);
+  // Per-staff services (Phase 3): same gate as the staff list, so a provider who
+  // never enabled staff fires neither query. A provider who enabled staff but
+  // never assigned anything gets an EMPTY map here, and an empty map filters
+  // nothing — see eligibleStaffForService.
+  const { servicesByStaff, isLoading: staffServicesLoading } = useProviderStaffAssignments(
+    id,
+    provider?.staffEnabled === true
+  );
+  // Only the staff who perform the chosen service may be offered. Before a
+  // service is picked this is the full active list (nothing to filter by).
+  const eligibleStaff = eligibleStaffForService(activeStaff, servicesByStaff, selectedServices[0]?.id);
+  // A pick can go stale: assignments refetch on their own, and the owner may
+  // edit them while a customer is mid-flow. Treating an ineligible pick as
+  // "not picked" keeps every downstream consumer — availability, the continue
+  // gate, the confirm summary and the insert — reading the SAME staff id, which
+  // is why this is resolved here rather than at each use site.
+  const effectiveStaffId =
+    selectedStaffId && eligibleStaff.some((s) => s.id === selectedStaffId) ? selectedStaffId : "";
+  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(id, effectiveStaffId || undefined);
   const { data: allSessions = [], isLoading: sessionsLoading } = useProviderSessionsById(id);
   const { data: classSchedule = [], isLoading: scheduleLoading } = useProviderClassScheduleById(id);
   // Blocked dates for the FITNESS class path. The class flow builds its dates from
@@ -93,7 +117,8 @@ const BookAppointment = () => {
   // provider is staff-enabled (services → staff → day → time → [notes] →
   // confirm, max 6). Step numbers are derived below (calendarStep/timeStep/…).
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
-  const [selectedServices, setSelectedServices] = useState<Service[]>([]);
+  // selectedServices is declared with the staff state above — the eligible-staff
+  // filter needs it before the availability hook runs.
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>("");
@@ -260,17 +285,27 @@ const BookAppointment = () => {
   // provider opted in, the chosen service is PRIVATE (group capacity is pooled
   // shop-wide — matches the trigger's staff-blind group branch), the service is
   // not session-based (a session is a fixed one-off event, not a per-staff
-  // slot), and the provider has at least one ACTIVE staff member. Zero active
-  // staff → the step is skipped gracefully and the booking inserts staff_id
-  // NULL, exactly like a non-staff provider — never dead-end the customer.
+  // slot), and the provider has at least one ELIGIBLE staff member. Zero
+  // eligible staff → the step is skipped gracefully and the booking inserts
+  // staff_id NULL, exactly like a non-staff provider — never dead-end the
+  // customer.
+  //
+  // Phase 3 changed the last condition from activeStaff to eligibleStaff, and
+  // that is the ONLY change to this condition. The two lists are identical for
+  // every provider with no assignments, so the step appears and disappears
+  // exactly as before for them. When assignments DO exist and they exclude
+  // every member from the chosen service, the count reaches zero and the step
+  // vanishes — deliberately reusing the zero-active-staff fallback rather than
+  // blocking the service, so a provider's configuration mistake can never
+  // strand a customer on a service they cannot book.
   const staffStepEnabled =
     !isFitnessStudio &&
     provider.staffEnabled &&
     !!primaryService &&
     !isGroupBooking &&
     !hasScheduledSessions &&
-    activeStaff.length > 0;
-  const selectedStaff = activeStaff.find((s) => s.id === selectedStaffId);
+    eligibleStaff.length > 0;
+  const selectedStaff = eligibleStaff.find((s) => s.id === effectiveStaffId);
 
   // Standard-flow step numbers. Without the staff step these collapse to
   // exactly the pre-staff values (calendar 2, time 3, notes 4, confirm 4/5) —
@@ -374,11 +409,17 @@ const BookAppointment = () => {
   // date+time, so the time step is skipped (2 → 4), exactly as before —
   // session services never have a staff step, so their numbering is unshifted.
   const canProceed =
-    // While a staff-enabled provider's staff list is still loading we don't yet
-    // know whether the staff step exists — hold the continue button for that
-    // (tiny) window instead of guessing. Non-staff providers never hit this.
-    (step === 1 && selectedServices.length > 0 && !(provider.staffEnabled && staffLoading)) ||
-    (staffStepEnabled && step === 2 && !!selectedStaffId) ||
+    // While a staff-enabled provider's staff list OR its per-staff service
+    // assignments are still loading we don't yet know whether the staff step
+    // exists — hold the continue button for that (tiny) window instead of
+    // guessing. Both queries must be waited on: with only the staff list in
+    // hand the step looks enabled, and the assignments arriving a moment later
+    // could empty it, flashing a step in and back out. Non-staff providers
+    // never hit this — neither query runs for them.
+    (step === 1 &&
+      selectedServices.length > 0 &&
+      !(provider.staffEnabled && (staffLoading || staffServicesLoading))) ||
+    (staffStepEnabled && step === 2 && !!effectiveStaffId) ||
     (step === calendarStep && (hasScheduledSessions ? !!selectedSessionId : dateChosen)) ||
     (step === timeStep && !!selectedTime) ||
     // Notes step (only reachable when notesEnabled) — always proceedable since
@@ -390,7 +431,7 @@ const BookAppointment = () => {
     if (step === 1 && selectedServices.length > 0) {
       setStep(2); // staff step when enabled, else calendar — both are step 2
     } else if (staffStepEnabled && step === 2) {
-      if (selectedStaffId) setStep(3);
+      if (effectiveStaffId) setStep(3);
     } else if (step === calendarStep) {
       // Session-based services fold date+time into the session card, so they
       // jump past the time step to step 4 (notes when enabled, else confirm).
@@ -480,10 +521,12 @@ const BookAppointment = () => {
           insertPayload.customer_notes = customerNotes.trim() || null;
         }
         // Multi-staff: only when the staff step was part of THIS flow. Group,
-        // session-based, zero-active-staff, and non-staff providers all omit
+        // session-based, zero-eligible-staff, and non-staff providers all omit
         // the column → staff_id NULL, identical to pre-staff bookings.
-        if (staffStepEnabled && selectedStaffId) {
-          insertPayload.staff_id = selectedStaffId;
+        // effectiveStaffId (not the raw pick) so a member who became ineligible
+        // mid-flow is never written onto the booking.
+        if (staffStepEnabled && effectiveStaffId) {
+          insertPayload.staff_id = effectiveStaffId;
         }
       }
 
@@ -1097,7 +1140,10 @@ const BookAppointment = () => {
               staff-enabled providers + private, non-session services. Tapping a
               staff member selects AND advances (same gesture as tapping a day
               on the calendar). Re-picking a different member resets the chosen
-              date/time — availability is per-staff. */}
+              date/time — availability is per-staff.
+              Phase 3: the list is eligibleStaff, not activeStaff — only members
+              who perform the chosen service. Identical lists when the provider
+              has assigned nothing. */}
           {!isFitnessStudio && staffStepEnabled && step === 2 && (
             <motion.div
               key="step-staff"
@@ -1112,8 +1158,8 @@ const BookAppointment = () => {
                 {t("pickStaff")}
               </SectionLabel>
               <div className="flex flex-col gap-3">
-                {activeStaff.map((member, i) => {
-                  const isSelected = selectedStaffId === member.id;
+                {eligibleStaff.map((member, i) => {
+                  const isSelected = effectiveStaffId === member.id;
                   return (
                     <motion.button
                       key={member.id}
@@ -1121,7 +1167,7 @@ const BookAppointment = () => {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ ...SPRING, delay: i * 0.06 }}
                       onClick={() => {
-                        if (member.id !== selectedStaffId) {
+                        if (member.id !== effectiveStaffId) {
                           // New staff member → their calendar differs; the
                           // previously picked day/time may not exist for them.
                           setSelectedTime("");
