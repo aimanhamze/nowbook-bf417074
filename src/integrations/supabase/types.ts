@@ -718,6 +718,44 @@ export type Database = {
           },
         ]
       }
+      provider_staff_availability: {
+        Row: {
+          created_at: string
+          day_of_week: number
+          end_time: string
+          is_available: boolean
+          provider_id: string
+          staff_id: string
+          start_time: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: number
+          end_time?: string
+          is_available?: boolean
+          provider_id: string
+          staff_id: string
+          start_time?: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          is_available?: boolean
+          provider_id?: string
+          staff_id?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "psa_staff_fkey"
+            columns: ["staff_id", "provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_staff"
+            referencedColumns: ["id", "provider_id"]
+          },
+        ]
+      }
       provider_staff_services: {
         Row: {
           created_at: string
