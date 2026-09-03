@@ -94,6 +94,13 @@ export function useProviderStaffServices(enabled = true) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["provider-staff-services"] });
+      // Phase 3: the booking-side read (useProviderStaffAssignments) lives under
+      // a SEPARATE key, so the line above does not reach it — React Query matches
+      // key prefixes element-wise, and "provider-staff-services-public" is a
+      // different first element, not a child of "provider-staff-services".
+      // Without this the owner would edit assignments and then see the OLD list
+      // in their own walk-in sheet for up to the 5-minute staleTime.
+      queryClient.invalidateQueries({ queryKey: ["provider-staff-services-public"] });
     },
   });
 

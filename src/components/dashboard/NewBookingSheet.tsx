@@ -34,7 +34,8 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
-import { useProviderActiveStaff } from "@/hooks/useProviderStaff";
+import { useProviderActiveStaff, useProviderStaffAssignments } from "@/hooks/useProviderStaff";
+import { eligibleStaffForService } from "@/lib/staffServices";
 import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useRealAvailability } from "@/hooks/useAllProviders";
 import {
@@ -65,7 +66,27 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const staffEnabled = profile?.staff_enabled === true;
   const { activeStaff, isLoading: staffLoading } = useProviderActiveStaff(profile?.id, staffEnabled);
   const [staffId, setStaffId] = useState("");
-  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(profile?.id, staffId || undefined);
+  // Declared up here, ahead of the availability hook, because the eligible-staff
+  // filter needs the chosen service and the availability hook in turn needs the
+  // filtered staff pick. (The rest of the step state stays together below.)
+  const [serviceId, setServiceId] = useState("");
+  // Per-staff services (Phase 3). Same public hook the customer flow uses, so
+  // the two pickers share a cache and cannot drift; the owner-side editor
+  // invalidates this key on save, so assignments edited in settings show up here
+  // immediately rather than after the 5-minute staleTime.
+  const { servicesByStaff, isLoading: staffServicesLoading } = useProviderStaffAssignments(
+    profile?.id,
+    staffEnabled
+  );
+  // The walk-in sheet ENFORCES the same restriction as the customer flow — no
+  // owner override. The owner is the one who set the assignments, and a picker
+  // that disagrees with the customer-facing one is how this feature would rot.
+  const eligibleStaff = eligibleStaffForService(activeStaff, servicesByStaff, serviceId || undefined);
+  // A pick can go stale (assignments refetch, or the owner edits them in another
+  // tab). Resolving it once here keeps availability, the continue gate, the
+  // summary and the insert all reading the same staff id.
+  const effectiveStaffId = staffId && eligibleStaff.some((s) => s.id === staffId) ? staffId : "";
+  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(profile?.id, effectiveStaffId || undefined);
   // Raw schedule inputs for the OVERRIDE path. The slot pipeline above answers
   // "are there bookable slots?"; it cannot answer "why not?", because
   // resolveDayHours → null (closed/blocked) and "every slot taken" both arrive
@@ -83,7 +104,8 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   // step numbers are DERIVED below so the 4-step machine is unchanged for
   // everyone else. One machine, not forked.
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
-  const [serviceId, setServiceId] = useState("");
+  // serviceId is declared with the staff state above — the eligible-staff filter
+  // needs it before the availability hook runs.
   const [date, setDate] = useState<Date>(startOfDay(selectedDate));
   const [time, setTime] = useState("");
   const [name, setName] = useState("");
@@ -160,10 +182,11 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
 
   // Same conditions as the customer flow's staff step: provider opted in,
   // PRIVATE service (group capacity is pooled shop-wide, staff-blind), and at
-  // least one ACTIVE staff member. Zero active staff → step skipped, walk-in
-  // inserts staff_id NULL — same graceful fallback as Phase 4.
-  const staffStepEnabled = staffEnabled && !!service && !isGroup && activeStaff.length > 0;
-  const selectedStaff = activeStaff.find((s) => s.id === staffId);
+  // least one ELIGIBLE staff member. Zero eligible staff → step skipped, walk-in
+  // inserts staff_id NULL — same graceful fallback as Phase 4, now also covering
+  // "every member is assigned away from this service" (Phase 3).
+  const staffStepEnabled = staffEnabled && !!service && !isGroup && eligibleStaff.length > 0;
+  const selectedStaff = eligibleStaff.find((s) => s.id === effectiveStaffId);
 
   // Derived step numbers — collapse to the literal 4-step values whenever the
   // staff step is absent, so non-staff providers keep today's flow untouched.
@@ -260,15 +283,17 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     !!service && !!time && name.trim().length > 0 && phone.trim().length > 0 && !submitting;
 
   // Per-step gate: service → [staff] → day → time → (name + phone handled by
-  // canSubmit on the info step). While a staff-enabled provider's staff list
-  // is still loading we don't yet know whether the staff step exists — hold
-  // the continue button for that (tiny) window. Non-staff providers never hit
+  // canSubmit on the info step). While a staff-enabled provider's staff list OR
+  // its per-staff service assignments are still loading we don't yet know
+  // whether the staff step exists — hold the continue button for that (tiny)
+  // window. Both must be waited on, or the step can flash in on the staff list
+  // and back out when the assignments empty it. Non-staff providers never hit
   // that clause.
   const canProceed =
     step === 1
-      ? !!service && !(staffEnabled && staffLoading)
+      ? !!service && !(staffEnabled && (staffLoading || staffServicesLoading))
       : staffStepEnabled && step === 2
-      ? !!staffId
+      ? !!effectiveStaffId
       : step === calendarStep
       ? dateChosen
       : step === timeStep
@@ -277,7 +302,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
 
   const handleNext = () => {
     if (step === 1 && service) setStep(2); // staff step when enabled, else calendar
-    else if (staffStepEnabled && step === 2 && staffId) setStep(3);
+    else if (staffStepEnabled && step === 2 && effectiveStaffId) setStep(3);
     else if (step === calendarStep && dateChosen) setStep(timeStep as 3 | 4);
     else if (step === timeStep && time) setStep(infoStep as 4 | 5);
   };
@@ -318,9 +343,11 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
       customer_phone: phone.trim(),
       guest_notes: notes.trim() || null,
       // Multi-staff: set only when the staff step was part of THIS flow —
-      // group, zero-active-staff and non-staff providers stay NULL, identical
-      // to pre-staff walk-ins. Same rule as the customer flow's insert.
-      staff_id: staffStepEnabled && staffId ? staffId : null,
+      // group, zero-eligible-staff and non-staff providers stay NULL, identical
+      // to pre-staff walk-ins. Same rule as the customer flow's insert, and
+      // effectiveStaffId for the same reason: never write a pick that has since
+      // become ineligible.
+      staff_id: staffStepEnabled && effectiveStaffId ? effectiveStaffId : null,
     };
 
     const { error } = await supabase.from("bookings").insert(payload);
@@ -481,8 +508,11 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                   {t("pickStaff")}
                 </SectionLabel>
                 <div className="flex flex-col gap-2.5">
-                  {activeStaff.map((member, i) => {
-                    const selected = staffId === member.id;
+                  {/* eligibleStaff, not activeStaff — only members who perform
+                      the chosen service (Phase 3). Identical lists for a
+                      provider who has assigned nothing. */}
+                  {eligibleStaff.map((member, i) => {
+                    const selected = effectiveStaffId === member.id;
                     return (
                       <motion.button
                         key={member.id}
@@ -491,7 +521,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ ...SPRING, delay: i * 0.04 }}
                         onClick={() => {
-                          if (member.id !== staffId) {
+                          if (member.id !== effectiveStaffId) {
                             // A different member → their calendar differs; the
                             // previously picked day/time may not exist for them.
                             setTime("");
