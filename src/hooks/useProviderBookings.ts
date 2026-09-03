@@ -125,11 +125,7 @@ export function useProviderBookings() {
           linked_user_id: b.linked_user_id ?? null,
           staff_id: b.staff_id ?? null,
           staff_name: b.staff_id ? (staffMap.get(b.staff_id) ?? null) : null,
-          // Cast: duration_override lands in the generated types only after the
-          // 20260830000001 migration reaches the project types.ts was generated
-          // from (repo convention for pre-regen columns — see staff_id above).
-          duration_override:
-            (b as { duration_override?: number | null }).duration_override ?? null,
+          duration_override: b.duration_override ?? null,
         };
       });
     },
@@ -400,8 +396,7 @@ export function useSetDurationOverride() {
     mutationFn: async ({ bookingId, minutes }: { bookingId: string; minutes: number | null }) => {
       const { error } = await supabase
         .from("bookings")
-        // Cast: see the duration_override note in useProviderBookings above.
-        .update({ duration_override: minutes } as never)
+        .update({ duration_override: minutes })
         .eq("id", bookingId);
       if (error) throw error;
     },
