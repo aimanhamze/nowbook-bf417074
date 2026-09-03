@@ -2,7 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
 
-export function useProviderAvailability() {
+// `enabled` gates every query here, mirroring useProviderServices(enabled) and
+// useProviderStaffServices(enabled). It DEFAULTS TO TRUE, so all four existing
+// callers (AvailabilityTab, CalendarTab, MonthlyAvailabilityCalendar,
+// NewBookingSheet) pass nothing and are completely unaffected. It exists for
+// StaffSection, which needs the weekly rows only to show the shop's hours
+// alongside a staff member's — and would otherwise fire three queries on the
+// settings page for providers who have no staff at all.
+export function useProviderAvailability(enabled = true) {
   const { profile } = useProviderProfile();
   const queryClient = useQueryClient();
 
@@ -18,7 +25,7 @@ export function useProviderAvailability() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!profile,
+    enabled: !!profile && enabled,
   });
 
   const upsertAvailability = useMutation({
@@ -67,7 +74,7 @@ export function useProviderAvailability() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!profile,
+    enabled: !!profile && enabled,
   });
 
   // Blocking/unblocking a date must refresh not just the provider's own list but
@@ -119,7 +126,7 @@ export function useProviderAvailability() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!profile,
+    enabled: !!profile && enabled,
   });
 
   const invalidateOverrides = () => {
