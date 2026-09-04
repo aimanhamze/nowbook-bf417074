@@ -21,11 +21,17 @@ interface Props {
   availability: AvailabilityRow[];
   blockedDates: string[];
   status: ProviderStatus;
+  /**
+   * The provider runs per-staff booking, so these SHOP hours may be wider than
+   * any individual member's. Required rather than optional: this table has one
+   * caller, and a silently-omitted flag is exactly how the note would go missing.
+   */
+  staffEnabled: boolean;
   lang: Lang;
   t: (key: string) => string;
 }
 
-export default function WeeklyHoursTable({ availability, status, t }: Props) {
+export default function WeeklyHoursTable({ availability, status, staffEnabled, t }: Props) {
   if (!status.hasSchedule) return null;
 
   const todayDow = new Date().getDay();
@@ -111,6 +117,17 @@ export default function WeeklyHoursTable({ availability, status, t }: Props) {
           );
         })}
       </div>
+
+      {/* Per-staff availability: these are the SHOP's hours, and a member's own
+          hours sit inside them. Without this the customer reads 09:00–20:00
+          here, picks a member, and finds 10:00–14:00 — the support ticket this
+          one line exists to prevent. Rendered ONLY for staff-enabled providers,
+          so everyone else sees this table exactly as before. */}
+      {staffEnabled && (
+        <p className="border-t border-border/40 px-3.5 pb-2 pt-2.5 text-[11px] leading-relaxed text-muted-foreground">
+          {t("hoursShopWideNote")}
+        </p>
+      )}
     </div>
   );
 }

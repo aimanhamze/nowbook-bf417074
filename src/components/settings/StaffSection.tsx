@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Pencil, Users, UserX, UserCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -25,9 +25,22 @@ import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderStaff } from "@/hooks/useProviderStaff";
 import { useProviderStaffServices } from "@/hooks/useProviderStaffServices";
+import { useProviderStaffHours } from "@/hooks/useProviderStaffHours";
 import { useProviderServices } from "@/hooks/useProviderServices";
+import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { SettingsSection } from "@/components/settings/SettingsSection";
+import { StaffHoursEditor } from "@/components/settings/StaffHoursEditor";
+import {
+  draftFromRows,
+  rowsFromDraft,
+  sameDraft,
+  hoursSummary,
+  isInvalidRange,
+  toTimeInput,
+  type DayHours,
+  type StaffHoursDraft,
+} from "@/lib/staffHours";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -38,7 +51,13 @@ const GUARD_TOKEN = "STAFF_ENABLE_BLOCKED_BY_FUTURE_BOOKINGS";
 // serviceIds is the member's RESTRICTION set, edited locally and committed on
 // save. EMPTY is a meaningful value, not an unset one: it means "performs every
 // service" (inheritance rule), and it is stored as zero rows.
-type EditState = { id?: string; name: string; serviceIds: string[] };
+//
+// `hours` is the same idea one level up, and its NULL is just as meaningful:
+// null means "works all shop hours" (zero rows), an array means a configured
+// week. It is derived from ROWS on open (draftFromRows) and committed only on
+// save, so opening this sheet can never write a configuration — see
+// lib/staffHours.ts for the three states involved.
+type EditState = { id?: string; name: string; serviceIds: string[]; hours: StaffHoursDraft };
 
 // Order-insensitive set comparison — lets save skip the assignment write
 // entirely when the owner only renamed the member.
@@ -63,6 +82,41 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
   const hasStaff = staff.length > 0;
   const { servicesByStaff, setStaffServices } = useProviderStaffServices(hasStaff);
   const { services, isLoading: servicesLoading } = useProviderServices(hasStaff);
+  // Per-staff working hours. Gated on hasStaff like the two above — the list
+  // subtitles need every member's state at once, so this is one query for the
+  // whole provider, and a provider with no staff fires nothing new on this page.
+  const { hoursByStaff, isLoading: hoursLoading, setStaffHours } = useProviderStaffHours(hasStaff);
+  // The shop's own week is needed ONLY inside the edit sheet, so it is gated on
+  // the sheet being open rather than on hasStaff. Two reasons, and the second is
+  // the important one: nothing fires on the settings page until an owner
+  // actually opens a member, AND a provider adding their very FIRST member still
+  // gets real shop hours — hasStaff is false at that moment (no rows yet), which
+  // would have left the editor reporting "Shop closed" for all seven days.
+  const { availability, isLoading: shopLoading } = useProviderAvailability(!!editing);
+
+  // Monthly-mode shops have no per-weekday hours, so the editor suppresses its
+  // per-day shop reference and explains the weekly limit instead.
+  const isMonthly = profile?.availability_mode === "monthly";
+
+  // The shop's week, indexed by day_of_week (0 = Sunday). null = no row for that
+  // weekday, which the editor reads the same as closed. This is REFERENCE ONLY:
+  // nothing here constrains what can be saved, because the shop's hours change
+  // and Phase 3's intersection is what actually enforces the subset at booking
+  // time. Showing it is what makes "always inside the shop's hours" concrete for
+  // the owner rather than a claim in a help line.
+  const shopDays = useMemo<(DayHours | null)[]>(
+    () =>
+      Array.from({ length: 7 }, (_, dow) => {
+        const row = availability.find((a) => a.day_of_week === dow);
+        if (!row) return null;
+        return {
+          is_available: row.is_available,
+          start_time: toTimeInput(row.start_time),
+          end_time: toTimeInput(row.end_time),
+        };
+      }),
+    [availability]
+  );
 
   // Assignable services = ACTIVE (the hook already filters) and NON-GROUP.
   // Group/class services are excluded from the customer staff step entirely, so
@@ -88,6 +142,22 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
     if (!assigned || assigned.size === 0) return t("staffServicesAll");
     const count = assignableServices.filter((s) => assigned.has(s.id)).length;
     return `${count} ${t("staffServicesOf")} ${assignableServices.length} ${t("staffServicesUnit")}`;
+  };
+
+  // Hours state, legible from the list without opening the sheet. The three
+  // states are reported honestly and separately:
+  //   "All shop hours"       → zero rows, the default and the common case
+  //   "Not working any day"  → configured with every day off. A real
+  //                            misconfiguration (this member can never be
+  //                            booked), surfaced rather than normalised into
+  //                            "all" — same reasoning as the "0 of N" services
+  //                            summary above.
+  //   "N working days"       → a normal configured week
+  const hoursSummaryLabel = (staffId: string) => {
+    const summary = hoursSummary(draftFromRows(hoursByStaff.get(staffId)));
+    if (summary === "all") return t("staffHoursAll");
+    if (summary === "none") return t("staffHoursNone");
+    return t("staffHoursDays").replace("{n}", String(summary));
   };
 
   const toggleEditingService = (serviceId: string, next: boolean) => {
@@ -145,6 +215,15 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
       toast.error(t("staffNameRequired"));
       return;
     }
+    // Refuse a window that can never produce a slot. Checked BEFORE anything is
+    // written, so a broken day cannot leave the member half-saved. This is the
+    // only save-blocking validation on hours: a window that merely pokes outside
+    // the shop's is flagged inline and allowed through, because shop hours
+    // change and Phase 3's intersection trims it anyway.
+    if (editing.hours?.some(isInvalidRange)) {
+      toast.error(t("staffHoursInvalidRange"));
+      return;
+    }
     try {
       // Name FIRST, assignments second — the composite FK on
       // provider_staff_services requires the staff row to exist before any
@@ -168,6 +247,28 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
           // The member was saved; only the assignment write failed. Say exactly
           // that rather than a generic error the owner can't act on.
           toast.error(t("staffServicesSaveFailed"));
+          setEditing(null);
+          return;
+        }
+      }
+
+      // Hours last, same failure-open reasoning as the assignments above: a
+      // member left with no hours rows works all of the shop's hours, which is
+      // the state they were already in.
+      //
+      // The write is SKIPPED when the draft is unchanged — and crucially, an
+      // untouched member opens on exactly what draftFromRows produced, so
+      // sameDraft is true and NOTHING is written. That is what makes "open the
+      // sheet, press Save, walk away" a no-op rather than a configuration.
+      //
+      // When the draft IS null and rows existed, rowsFromDraft returns [] and
+      // the mutation deletes them — the one path back to "works all shop hours".
+      const currentHours = editing.id ? draftFromRows(hoursByStaff.get(editing.id)) : null;
+      if (!sameDraft(editing.hours, currentHours)) {
+        try {
+          await setStaffHours.mutateAsync({ staffId, days: rowsFromDraft(editing.hours) });
+        } catch {
+          toast.error(t("staffHoursSaveFailed"));
           setEditing(null);
           return;
         }
@@ -197,7 +298,10 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
       title={t("staffSectionTitle")}
       delay={delay}
       action={
-        <Button size="sm" variant="outline" onClick={() => setEditing({ name: "", serviceIds: [] })} className="gap-1.5">
+        /* A NEW member starts unrestricted on both axes: no service rows and no
+           hours rows. `hours: null` is not a placeholder — it is the state that
+           gets saved, and it saves as zero rows. */
+        <Button size="sm" variant="outline" onClick={() => setEditing({ name: "", serviceIds: [], hours: null })} className="gap-1.5">
           <Plus className="h-4 w-4" />
           {t("addStaff")}
         </Button>
@@ -259,6 +363,7 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
                 {!servicesLoading && (
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                     {assignmentSummary(member.id)}
+                    {!hoursLoading && <> · {hoursSummaryLabel(member.id)}</>}
                   </p>
                 )}
               </div>
@@ -272,6 +377,10 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
                       id: member.id,
                       name: member.name,
                       serviceIds: [...(servicesByStaff.get(member.id) ?? [])],
+                      // Derived from ROWS, never from a form default. A member
+                      // with no rows opens on null (= works all shop hours) and
+                      // stays there unless the owner explicitly switches modes.
+                      hours: draftFromRows(hoursByStaff.get(member.id)),
                     })
                   }
                 >
@@ -372,6 +481,18 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
                   </div>
                 </div>
               )}
+
+              {/* Working hours. Rendered for every member, including inactive
+                  ones and brand-new ones — an owner setting up a team should be
+                  able to fill in hours before the member goes live, exactly as
+                  they can with services. */}
+              <StaffHoursEditor
+                draft={editing.hours}
+                onChange={(hours) => setEditing((prev) => (prev ? { ...prev, hours } : prev))}
+                shopDays={shopDays}
+                shopLoading={shopLoading}
+                isMonthly={isMonthly}
+              />
             </div>
           )}
 
@@ -379,7 +500,12 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
             <div className="flex gap-2">
               <Button
                 onClick={handleSave}
-                disabled={createStaff.isPending || renameStaff.isPending || setStaffServices.isPending}
+                disabled={
+                  createStaff.isPending ||
+                  renameStaff.isPending ||
+                  setStaffServices.isPending ||
+                  setStaffHours.isPending
+                }
                 className="h-12 flex-1 text-base font-semibold"
               >
                 {t("save")}

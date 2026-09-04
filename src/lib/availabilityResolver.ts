@@ -117,6 +117,147 @@ export function resolveDayHours(
   };
 }
 
+// ── PER-STAFF AVAILABILITY (Phase 3) ─────────────────────────────────────────
+//
+// THE SUBSET RULE: a staff member's hours NARROW the shop's window and can never
+// EXTEND it. If the shop is closed, nobody is bookable, whatever the staff table
+// says.
+//
+// That guarantee is STRUCTURAL, not a check someone has to remember:
+//
+//   1. resolveDayHours above is NOT MODIFIED and gains no parameter. The staff
+//      layer is a SEPARATE function that composes over its OUTPUT. The four
+//      call sites that must stay shop-level (group slots, the provider
+//      calendar's out-of-hours badge, and both profile hours tables) do not
+//      merely happen to skip it — they never reference it, so scope containment
+//      is enforced by the call graph rather than by discipline.
+//
+//   2. narrowToStaff's only boundary operators are max-of-starts and
+//      min-of-ends. A function whose entire arithmetic is max on starts and min
+//      on ends is incapable of returning a window wider than either input.
+//      There is no branch that returns the staff window unclamped, because the
+//      staff window is never returned — only the max/min of the pair is.
+//
+//   3. "Shop closed wins" is the FIRST statement, before staffWindow is even
+//      inspected — the same shape resolveDayHours uses for its blocked-date
+//      check.
+//
+//   4. The no-configuration path returns the shop's window OBJECT ITSELF, not a
+//      copy. For a provider with no staff hours configured, the result is not
+//      "tested and found equal" to today's — it IS today's value.
+
+/** One provider_staff_availability weekday row (fields the resolver reads). */
+export interface StaffWeeklyRow {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_available: boolean;
+}
+
+/**
+ * A staff member's own window for `date`, BEFORE it meets the shop's.
+ *
+ * Returns THREE states, and the difference between them is the whole feature:
+ *
+ *   undefined → NOT CONFIGURED. The member has no rows at all, so they work
+ *               every hour the shop is open. This is what every existing member
+ *               is, and what makes an empty table a genuine no-op.
+ *   null      → CONFIGURED AND OFF. Either the weekday has no row, or its row
+ *               says is_available=false. A MISSING weekday on a configured
+ *               member means NOT WORKING — it does NOT fall back to the shop's
+ *               hours. An owner who fills in Mon–Fri means weekends off; the
+ *               other reading would make partial configuration silently
+ *               useless.
+ *   DayWindow → CONFIGURED AND WORKING, within the stated window.
+ *
+ * break_start/break_end are always null: provider_staff_availability carries no
+ * break columns (a per-staff break would need TWO holes in a DayWindow, which
+ * the type cannot express — see the Phase 1 migration header). Staff inherit
+ * the SHOP's break, which narrowToStaff preserves.
+ *
+ * Weekday lookup is `date.getDay()` — the same LOCAL weekday resolveDayHours
+ * uses, so the two sides of the intersection can never disagree about which day
+ * it is.
+ */
+export function staffDayWindow(
+  date: Date,
+  staffRows: ReadonlyMap<number, StaffWeeklyRow> | undefined,
+): DayWindow | null | undefined {
+  // Absent and empty are spelled out separately, not collapsed: the writer
+  // deletes rows rather than storing an empty set, so an empty map should be
+  // unreachable from our own data — but the reading that would silently strand
+  // a working member ("present, therefore configured, therefore off") is the one
+  // worth being explicit about.
+  if (staffRows === undefined) return undefined;
+  if (staffRows.size === 0) return undefined;
+
+  const row = staffRows.get(date.getDay());
+  if (!row || !row.is_available) return null;
+  return {
+    start_time: row.start_time,
+    end_time: row.end_time,
+    break_start: null,
+    break_end: null,
+  };
+}
+
+/**
+ * Intersect a staff member's window with the shop's. See the block comment
+ * above for why this cannot widen the shop's window.
+ *
+ * `shopWindow` is whatever resolveDayHours returned — so this composes over the
+ * WEEKLY and the MONTHLY branch identically, without knowing or caring which
+ * produced it. That is why monthly-mode shops need no separate staff data model.
+ */
+export function narrowToStaff(
+  shopWindow: DayWindow | null,
+  staffWindow: DayWindow | null | undefined,
+): DayWindow | null {
+  // SHOP CLOSED WINS — checked FIRST, before staffWindow is inspected at all.
+  if (shopWindow === null) return null;
+
+  // NOT CONFIGURED → the shop's own window, BY REFERENCE. Returning the same
+  // object (never a copy) is what makes "unchanged for providers with no staff
+  // hours" an identity rather than an equality that could drift.
+  if (staffWindow === undefined) return shopWindow;
+
+  // Configured, but not working this weekday.
+  if (staffWindow === null) return null;
+
+  const shopStart = toMinutes(shopWindow.start_time);
+  const shopEnd = toMinutes(shopWindow.end_time);
+  const staffStart = toMinutes(staffWindow.start_time);
+  const staffEnd = toMinutes(staffWindow.end_time);
+
+  // Unparseable input → fall back to the shop's window unchanged, matching
+  // isOutsideDayWindow's posture on malformed data. Closing the day instead
+  // would make one bad row silently unbook a whole staff member, which is far
+  // worse than briefly ignoring a narrowing we cannot compute.
+  if (shopStart === null || shopEnd === null || staffStart === null || staffEnd === null) {
+    return shopWindow;
+  }
+
+  // THE INTERSECTION: latest start, earliest end. The winning ORIGINAL string is
+  // re-emitted rather than a reformatted one, so a window that is entirely the
+  // shop's comes back byte-identical to what resolveDayHours produced.
+  const start = staffStart > shopStart ? staffWindow.start_time : shopWindow.start_time;
+  const end = staffEnd < shopEnd ? staffWindow.end_time : shopWindow.end_time;
+
+  // Disjoint or touching windows leave nothing bookable. Note `>=`: a zero-width
+  // window is closed, not a window of length zero, so the slot loop is never
+  // handed a degenerate range.
+  if (Math.max(shopStart, staffStart) >= Math.min(shopEnd, staffEnd)) return null;
+
+  return {
+    start_time: start,
+    end_time: end,
+    // The SHOP's break, carried through. Staff rows have no break columns, so
+    // there is nothing here to combine — the member takes the shop's break.
+    break_start: shopWindow.break_start,
+    break_end: shopWindow.break_end,
+  };
+}
+
 /** "HH:MM" (or "HH:MM:SS") → minutes since midnight; null when unparseable. */
 function toMinutes(time: string): number | null {
   const m = /^(\d{1,2}):(\d{2})/.exec(time);

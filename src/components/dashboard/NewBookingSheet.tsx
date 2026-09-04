@@ -38,9 +38,12 @@ import { useProviderActiveStaff, useProviderStaffAssignments } from "@/hooks/use
 import { eligibleStaffForService } from "@/lib/staffServices";
 import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useRealAvailability } from "@/hooks/useAllProviders";
+import { usePublicStaffHours } from "@/hooks/useProviderStaffHours";
 import {
   resolveDayHours,
   isOutsideDayWindow,
+  narrowToStaff,
+  staffDayWindow,
   type DateOverrideRow,
   type MonthlySettings,
   type WeeklyRow,
@@ -226,7 +229,11 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     monthly_default_start: profile?.monthly_default_start ?? "09:00",
     monthly_default_end: profile?.monthly_default_end ?? "17:00",
   };
-  const resolveWindow = (d: Date) =>
+  // The SHOP's own window, un-narrowed. Kept separate from the narrowed one
+  // below because that separation is the only thing that can tell "the shop is
+  // shut" apart from "this member isn't working" — collapse them and the sheet
+  // goes back to saying "closed" for both.
+  const resolveShopWindow = (d: Date) =>
     resolveDayHours(
       d,
       monthlySettings,
@@ -234,6 +241,26 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
       blockedDateStrs,
       dateOverrides as DateOverrideRow[],
     );
+
+  // Per-staff hours for the narrowing (Phase 3, risk item 18). SAME query key as
+  // the slot pipeline mounts one line above, so React Query dedupes it — no
+  // extra round trip — and the two can never disagree about a member's week.
+  const { hoursByStaff: staffHoursByStaff } = usePublicStaffHours(profile?.id, !!effectiveStaffId);
+  const selectedStaffDays = effectiveStaffId
+    ? staffHoursByStaff.get(effectiveStaffId)
+    : undefined;
+
+  // Does the CHOSEN member have hours of their own? Only then can a dashed day
+  // mean "not working" rather than closed/blocked/full — a member with no rows
+  // works all of the shop's hours, so for them the original legend is still
+  // exactly right and saying otherwise would invent a restriction.
+  const staffHasOwnHours = !!selectedStaffDays && selectedStaffDays.size > 0;
+
+  // What the slot pipeline actually sees: the shop's window narrowed to the
+  // chosen member. With nobody selected — or a member with no hours rows — this
+  // is the identity and the sheet behaves exactly as it did before Phase 3.
+  const resolveWindow = (d: Date) =>
+    narrowToStaff(resolveShopWindow(d), staffDayWindow(d, selectedStaffDays));
 
   // A day the provider may OVERRIDE: inside the SAME [today, booking window]
   // range the calendar already enforces, but with nothing bookable — closed,
@@ -247,16 +274,28 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     return !dayHasAvailability(d);
   };
 
-  // Why the CHOSEN day has no slots — only resolveDayHours can tell these apart,
+  // Why the CHOSEN day has no slots — only the resolver can tell these apart,
   // which is exactly why the predicate above can't live in the slot pipeline.
+  //
+  // THREE causes, not two, since Phase 3. The shop window and the narrowed one
+  // are both consulted so each gets its own answer:
+  //   shop null              → the shop is closed or the date is blocked
+  //   shop open, narrowed null → the chosen member is not working that day
+  //   both open, no slots     → genuinely fully booked
+  // Reporting "closed" for the middle case is the support ticket this split
+  // exists to prevent.
   const chosenDayWindow = resolveWindow(date);
+  const chosenShopIsClosed = resolveShopWindow(date) === null;
   const chosenDayIsClosed = chosenDayWindow === null;
+  const chosenDayStaffOff = !chosenShopIsClosed && chosenDayIsClosed;
   const selectedDayOverridable = dateChosen && dayIsOverridable(date);
 
-  // The SAME closed-vs-full distinction as chosenDayIsClosed, asked of the day
-  // awaiting confirmation rather than the chosen one — `date` deliberately has
-  // not moved yet at that point, so it cannot answer for the pending day.
+  // The SAME three-way distinction, asked of the day awaiting confirmation
+  // rather than the chosen one — `date` deliberately has not moved yet at that
+  // point, so it cannot answer for the pending day.
+  const pendingOffShopIsClosed = pendingOffDay ? resolveShopWindow(pendingOffDay) === null : false;
   const pendingOffDayIsClosed = pendingOffDay ? resolveWindow(pendingOffDay) === null : false;
+  const pendingOffDayStaffOff = !pendingOffShopIsClosed && pendingOffDayIsClosed;
 
   // Does the displayed month contain any marked day? Drives the legend under
   // the calendar, so the dashed cells are explained before one is tapped.
@@ -606,10 +645,24 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                       <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <p className="text-[11px] leading-relaxed text-muted-foreground">
                         {selectedDayOverridable
-                          ? chosenDayIsClosed
-                            ? t("walkInOverrideClosedNote")
-                            : t("walkInOverrideFullNote")
-                          : t("walkInOverrideLegend")}
+                          ? chosenDayStaffOff
+                            ? t("walkInOverrideStaffOffNote").replace(
+                                "{name}",
+                                selectedStaff?.name ?? ""
+                              )
+                            : chosenDayIsClosed
+                              ? t("walkInOverrideClosedNote")
+                              : t("walkInOverrideFullNote")
+                          : staffHasOwnHours
+                            ? // Since Phase 3 a member's non-working days dash
+                              // too, so the month-level legend has to name that
+                              // third reason — otherwise it contradicts the
+                              // day-specific note directly above it.
+                              t("walkInOverrideLegendStaff").replace(
+                                "{name}",
+                                selectedStaff?.name ?? ""
+                              )
+                            : t("walkInOverrideLegend")}
                       </p>
                     </div>
                   )}
@@ -669,7 +722,15 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                     selectedDayOverridable ? null : (
                       <div className="rounded-2xl border border-dashed border-border p-8 text-center">
                         <CalendarX className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" />
-                        <p className="text-sm text-muted-foreground">{t("walkInNoSlots")}</p>
+                        {/* "No times" is not one fact. A member who isn't working
+                            that day is a different problem from a booked-out one,
+                            and the fix differs too — pick another member vs pick
+                            another day. */}
+                        <p className="text-sm text-muted-foreground">
+                          {chosenDayStaffOff
+                            ? t("walkInStaffOffDay").replace("{name}", selectedStaff?.name ?? "")
+                            : t("walkInNoSlots")}
+                        </p>
                       </div>
                     )
                   ) : isGroup ? (
@@ -944,9 +1005,11 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
           <AlertDialogDescription>
             {/* Same closed-vs-full distinction the inline note uses, resolved
                 for the pending day. */}
-            {pendingOffDayIsClosed
-              ? t("walkInOffDayConfirmClosed")
-              : t("walkInOffDayConfirmFull")}
+            {pendingOffDayStaffOff
+              ? t("walkInOffDayConfirmStaffOff").replace("{name}", selectedStaff?.name ?? "")
+              : pendingOffDayIsClosed
+                ? t("walkInOffDayConfirmClosed")
+                : t("walkInOffDayConfirmFull")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {pendingOffDay && (

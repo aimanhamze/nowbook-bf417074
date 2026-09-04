@@ -5,14 +5,14 @@ import { eligibleStaffForService } from "@/lib/staffServices";
 import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import { useProviderClassScheduleById, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
 import type { Service } from "@/lib/mock-data";
-import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote, UserRound } from "lucide-react";
+import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote, UserRound, Info } from "lucide-react";
 import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
 import { Fragment, useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { format, parseISO, addDays, getDay } from "date-fns";
+import { format, parseISO, addDays, getDay, eachDayOfInterval } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
 import { z } from "zod";
 
@@ -89,7 +89,7 @@ const BookAppointment = () => {
   // is why this is resolved here rather than at each use site.
   const effectiveStaffId =
     selectedStaffId && eligibleStaff.some((s) => s.id === selectedStaffId) ? selectedStaffId : "";
-  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(id, effectiveStaffId || undefined);
+  const { getAvailableSlots, getGroupSlotsWithCapacity, staffOffOnDate } = useRealAvailability(id, effectiveStaffId || undefined);
   const { data: allSessions = [], isLoading: sessionsLoading } = useProviderSessionsById(id);
   const { data: classSchedule = [], isLoading: scheduleLoading } = useProviderClassScheduleById(id);
   // Blocked dates for the FITNESS class path. The class flow builds its dates from
@@ -379,6 +379,23 @@ const BookAppointment = () => {
     const usable = isSameDayAsNow(date) ? raw.filter((s) => slotMins(s) > leadTimeCutoff) : raw;
     return usable.length > 0;
   };
+
+  // COPY ONLY. The shop is open on the chosen day but the chosen member is not
+  // working — the middle of the three reasons a time step can come back empty.
+  const selectedDayStaffOff = staffOffOnDate(selectedDate);
+
+  // A member with NOTHING bookable anywhere in the window is a dead end: the
+  // month calendar greys out every day and says nothing about why. Checked over
+  // the SAME selectable range the calendar enforces, and only once a member is
+  // chosen, so it costs nothing for anyone else. dayHasAvailability is already
+  // called per rendered cell by the calendar itself — this reuses that same
+  // in-memory path, adding no queries.
+  const staffHasNoDayInWindow =
+    !!effectiveStaffId &&
+    !isGroupBooking &&
+    !hasScheduledSessions &&
+    !!primaryService &&
+    !eachDayOfInterval({ start: todayStart, end: bookingWindowEnd }).some(dayHasAvailability);
 
   const effectiveDate = selectedSession
     ? selectedSession.session_date
@@ -1321,6 +1338,19 @@ const BookAppointment = () => {
                       }}
                     />
                   </div>
+
+                  {/* Every day greyed out with no explanation is a dead end —
+                      the customer cannot tell a fully-booked month from a member
+                      who does not work at all in it, and the way out (go back
+                      and pick someone else) is not obvious from a disabled grid. */}
+                  {staffHasNoDayInWindow && (
+                    <div className="mt-3 flex items-start gap-2 rounded-2xl border border-white/60 bg-white/70 p-3 backdrop-blur-md">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        {t("staffNoDaysInWindow").replace("{name}", selectedStaff?.name ?? "")}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -1436,8 +1466,15 @@ const BookAppointment = () => {
                 ) : (
                   <div className="glass-card-md rounded-2xl p-8 text-center">
                     <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                    {/* Three causes, three messages. "Closed" for a member who
+                        simply isn't working that day sends the customer looking
+                        for another DATE when the fix is another PERSON. */}
                     <p className="text-sm text-muted-foreground">
-                      {allSlotsPassed ? t("noSlotsToday") : t("unavailable")}
+                      {allSlotsPassed
+                        ? t("noSlotsToday")
+                        : selectedDayStaffOff
+                          ? t("staffOffDay").replace("{name}", selectedStaff?.name ?? "")
+                          : t("unavailable")}
                     </p>
                   </div>
                 )
