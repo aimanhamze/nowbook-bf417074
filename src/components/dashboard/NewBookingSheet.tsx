@@ -250,6 +250,12 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     ? staffHoursByStaff.get(effectiveStaffId)
     : undefined;
 
+  // Does the CHOSEN member have hours of their own? Only then can a dashed day
+  // mean "not working" rather than closed/blocked/full — a member with no rows
+  // works all of the shop's hours, so for them the original legend is still
+  // exactly right and saying otherwise would invent a restriction.
+  const staffHasOwnHours = !!selectedStaffDays && selectedStaffDays.size > 0;
+
   // What the slot pipeline actually sees: the shop's window narrowed to the
   // chosen member. With nobody selected — or a member with no hours rows — this
   // is the identity and the sheet behaves exactly as it did before Phase 3.
@@ -647,7 +653,16 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                             : chosenDayIsClosed
                               ? t("walkInOverrideClosedNote")
                               : t("walkInOverrideFullNote")
-                          : t("walkInOverrideLegend")}
+                          : staffHasOwnHours
+                            ? // Since Phase 3 a member's non-working days dash
+                              // too, so the month-level legend has to name that
+                              // third reason — otherwise it contradicts the
+                              // day-specific note directly above it.
+                              t("walkInOverrideLegendStaff").replace(
+                                "{name}",
+                                selectedStaff?.name ?? ""
+                              )
+                            : t("walkInOverrideLegend")}
                       </p>
                     </div>
                   )}

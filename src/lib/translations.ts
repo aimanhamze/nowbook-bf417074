@@ -497,6 +497,7 @@ export const translations = {
     walkInFailed: "יצירת התור נכשלה",
     walkInNoSlots: "אין שעות פנויות ביום זה",
     walkInOverrideLegend: "ימים מקווקווים סגורים או חסומים — אפשר לקבוע בהם תור ידנית",
+    walkInOverrideLegendStaff: "ימים מקווקווים סגורים, חסומים, או ש{name} לא עובד/ת בהם — אפשר לקבוע בהם תור ידנית",
     walkInOverrideClosedNote: "היום הזה סגור או חסום. אפשר לקבוע בו שעה ידנית בשלב הבא.",
     walkInOverrideFullNote: "כל השעות ביום הזה תפוסות. אפשר לקבוע בו שעה ידנית בשלב הבא.",
     // Per-staff availability (Phase 3): "לא עובד" must never read as "סגור"
@@ -676,6 +677,7 @@ export const translations = {
     // Per-staff availability (Phase 3) — customer-facing empty states
     staffOffDay: "{name} לא עובד/ת ביום זה",
     staffNoDaysInWindow: "ל{name} אין ימים פנויים בתקופה הזו. חזור אחורה ובחר איש צוות אחר.",
+    hoursShopWideNote: "שעות הפעילות של העסק. לאנשי צוות מסוימים ייתכנו שעות שונות — הזמנים הזמינים יוצגו בקביעת התור.",
 
     pickStaff: "בחירת איש צוות",
     staffMemberLabel: "איש צוות",
@@ -1182,6 +1184,7 @@ export const translations = {
     walkInFailed: "فشل إنشاء الموعد",
     walkInNoSlots: "لا توجد أوقات متاحة في هذا اليوم",
     walkInOverrideLegend: "الأيام المتقطّعة مغلقة أو محجوبة — يمكن حجز موعد فيها يدويًا",
+    walkInOverrideLegendStaff: "الأيام المتقطّعة مغلقة أو محجوبة أو {name} لا يعمل فيها — يمكن حجز موعد فيها يدويًا",
     walkInOverrideClosedNote: "هذا اليوم مغلق أو محجوب. يمكنك تحديد وقت يدويًا في الخطوة التالية.",
     walkInOverrideFullNote: "كل الأوقات في هذا اليوم محجوزة. يمكنك تحديد وقت يدويًا في الخطوة التالية.",
     // Per-staff availability (Phase 3): "لا يعمل" must never read as "مغلق"
@@ -1360,6 +1363,7 @@ export const translations = {
     // Per-staff availability (Phase 3) — customer-facing empty states
     staffOffDay: "{name} لا يعمل في هذا اليوم",
     staffNoDaysInWindow: "لا توجد أيام متاحة لدى {name} في هذه الفترة. ارجع واختر عضو طاقم آخر.",
+    hoursShopWideNote: "ساعات عمل المحل. قد يعمل بعض أعضاء الطاقم بساعات مختلفة — ستظهر أوقاتهم المتاحة عند الحجز.",
 
     pickStaff: "اختيار عضو الطاقم",
     staffMemberLabel: "عضو الطاقم",
@@ -1866,6 +1870,7 @@ export const translations = {
     walkInFailed: "Failed to create the booking",
     walkInNoSlots: "No available times on this day",
     walkInOverrideLegend: "Dashed days are closed or blocked — you can still book them manually",
+    walkInOverrideLegendStaff: "Dashed days are closed, blocked, or days {name} isn't working — you can still book them manually",
     walkInOverrideClosedNote: "This day is closed or blocked. You can set a time manually in the next step.",
     walkInOverrideFullNote: "Every time on this day is taken. You can set a time manually in the next step.",
     // Per-staff availability (Phase 3): "not working" must never read as "closed"
@@ -2044,6 +2049,7 @@ export const translations = {
     // Per-staff availability (Phase 3) — customer-facing empty states
     staffOffDay: "{name} isn't working this day",
     staffNoDaysInWindow: "{name} has no available days in this period. Go back and pick another staff member.",
+    hoursShopWideNote: "Shop hours. Individual team members may work different hours — you'll see their available times when you book.",
 
     pickStaff: "Choose staff member",
     staffMemberLabel: "Staff member",
