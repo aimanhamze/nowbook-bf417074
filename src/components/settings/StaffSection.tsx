@@ -26,11 +26,13 @@ import { useLang } from "@/contexts/LangContext";
 import { useProviderStaff } from "@/hooks/useProviderStaff";
 import { useProviderStaffServices } from "@/hooks/useProviderStaffServices";
 import { useProviderStaffHours } from "@/hooks/useProviderStaffHours";
+import { useProviderStaffTimeOff } from "@/hooks/useProviderStaffTimeOff";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { StaffHoursEditor } from "@/components/settings/StaffHoursEditor";
+import { StaffTimeOffEditor } from "@/components/settings/StaffTimeOffEditor";
 import {
   draftFromRows,
   rowsFromDraft,
@@ -41,6 +43,11 @@ import {
   type DayHours,
   type StaffHoursDraft,
 } from "@/lib/staffHours";
+import {
+  timeOffDraftFromRows,
+  sameDates,
+  timeOffSummary,
+} from "@/lib/staffTimeOff";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -57,7 +64,18 @@ const GUARD_TOKEN = "STAFF_ENABLE_BLOCKED_BY_FUTURE_BOOKINGS";
 // week. It is derived from ROWS on open (draftFromRows) and committed only on
 // save, so opening this sheet can never write a configuration — see
 // lib/staffHours.ts for the three states involved.
-type EditState = { id?: string; name: string; serviceIds: string[]; hours: StaffHoursDraft };
+//
+// `timeOff` is a plain string[] of upcoming "YYYY-MM-DD" days off. Unlike
+// `hours` it needs no null state: absence and emptiness both mean "no time off".
+// It holds FUTURE dates ONLY — past days off are history, never loaded here and
+// never rewritten (see the range-scoped delete in useProviderStaffTimeOff).
+type EditState = {
+  id?: string;
+  name: string;
+  serviceIds: string[];
+  hours: StaffHoursDraft;
+  timeOff: string[];
+};
 
 // Order-insensitive set comparison — lets save skip the assignment write
 // entirely when the owner only renamed the member.
@@ -86,6 +104,13 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
   // subtitles need every member's state at once, so this is one query for the
   // whole provider, and a provider with no staff fires nothing new on this page.
   const { hoursByStaff, isLoading: hoursLoading, setStaffHours } = useProviderStaffHours(hasStaff);
+  // Per-staff time off. Same hasStaff gate as its two siblings.
+  const {
+    timeOffByStaff,
+    todayKey,
+    isLoading: timeOffLoading,
+    setStaffTimeOff,
+  } = useProviderStaffTimeOff(hasStaff);
   // The shop's own week is needed ONLY inside the edit sheet, so it is gated on
   // the sheet being open rather than on hasStaff. Two reasons, and the second is
   // the important one: nothing fires on the settings page until an owner
@@ -159,6 +184,12 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
     if (summary === "none") return t("staffHoursNone");
     return t("staffHoursDays").replace("{n}", String(summary));
   };
+
+  // Upcoming days off, for the list subtitle. Counts FUTURE dates only — past
+  // days off are history, and counting them would read a long tail of last
+  // year's holidays as absence still to come.
+  const timeOffCount = (staffId: string) =>
+    timeOffSummary(timeOffByStaff.get(staffId), todayKey);
 
   const toggleEditingService = (serviceId: string, next: boolean) => {
     setEditing((prev) => {
@@ -274,6 +305,28 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
         }
       }
 
+      // Time off last. Same skip-when-unchanged discipline, and the same
+      // failure-open direction: a member left with no upcoming days off is
+      // bookable, which is the state they were in before this feature existed.
+      //
+      // The mutation's delete is RANGE-SCOPED to today and later — see the boxed
+      // note in useProviderStaffTimeOff. Both sides of that scoping meet here:
+      // `editing.timeOff` was built by timeOffDraftFromRows, which drops past
+      // dates, so the set being written describes exactly the range the delete
+      // clears. Widening one without the other is what would destroy history.
+      const currentTimeOff = editing.id
+        ? timeOffDraftFromRows(timeOffByStaff.get(editing.id), todayKey)
+        : [];
+      if (!sameDates(editing.timeOff, currentTimeOff)) {
+        try {
+          await setStaffTimeOff.mutateAsync({ staffId, dates: editing.timeOff });
+        } catch {
+          toast.error(t("staffTimeOffSaveFailed"));
+          setEditing(null);
+          return;
+        }
+      }
+
       toast.success(t("staffSaved"));
       setEditing(null);
     } catch (err) {
@@ -301,7 +354,7 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
         /* A NEW member starts unrestricted on both axes: no service rows and no
            hours rows. `hours: null` is not a placeholder — it is the state that
            gets saved, and it saves as zero rows. */
-        <Button size="sm" variant="outline" onClick={() => setEditing({ name: "", serviceIds: [], hours: null })} className="gap-1.5">
+        <Button size="sm" variant="outline" onClick={() => setEditing({ name: "", serviceIds: [], hours: null, timeOff: [] })} className="gap-1.5">
           <Plus className="h-4 w-4" />
           {t("addStaff")}
         </Button>
@@ -364,6 +417,11 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                     {assignmentSummary(member.id)}
                     {!hoursLoading && <> · {hoursSummaryLabel(member.id)}</>}
+                    {/* Only when there IS upcoming time off. Absence is the
+                        common case and does not deserve a "0 days off" label. */}
+                    {!timeOffLoading && timeOffCount(member.id) > 0 && (
+                      <> · {t("staffTimeOffDays").replace("{n}", String(timeOffCount(member.id)))}</>
+                    )}
                   </p>
                 )}
               </div>
@@ -381,6 +439,10 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
                       // with no rows opens on null (= works all shop hours) and
                       // stays there unless the owner explicitly switches modes.
                       hours: draftFromRows(hoursByStaff.get(member.id)),
+                      // Future dates only — timeOffDraftFromRows drops any past
+                      // row, so history cannot enter the draft and therefore
+                      // cannot be rewritten by a save.
+                      timeOff: timeOffDraftFromRows(timeOffByStaff.get(member.id), todayKey),
                     })
                   }
                 >
@@ -493,6 +555,13 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
                 shopLoading={shopLoading}
                 isMonthly={isMonthly}
               />
+
+              {/* Days off, below the weekly hours they sit on top of. Same
+                  draft-then-save discipline as everything above it. */}
+              <StaffTimeOffEditor
+                dates={editing.timeOff}
+                onChange={(timeOff) => setEditing((prev) => (prev ? { ...prev, timeOff } : prev))}
+              />
             </div>
           )}
 
@@ -504,7 +573,8 @@ export function StaffSection({ delay = 0 }: { delay?: number }) {
                   createStaff.isPending ||
                   renameStaff.isPending ||
                   setStaffServices.isPending ||
-                  setStaffHours.isPending
+                  setStaffHours.isPending ||
+                  setStaffTimeOff.isPending
                 }
                 className="h-12 flex-1 text-base font-semibold"
               >

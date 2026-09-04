@@ -674,6 +674,15 @@ export const translations = {
     staffHoursNone: "לא עובד באף יום",
     staffHoursDays: "{n} ימי עבודה",
     staffHoursSaveFailed: "איש הצוות נשמר, אך שמירת שעות העבודה נכשלה. נסה שוב מעריכת איש הצוות.",
+    // Per-staff TIME OFF (Phase 5b) — owner-facing only; the customer keeps
+    // reading staffOffDay, which is true for a day off and a non-working weekday alike.
+    staffTimeOffLabel: "ימי חופש",
+    staffTimeOffHelp: "ימים שבהם איש הצוות לא עובד, מעבר לשעות השבועיות. שאר הצוות והעסק אינם מושפעים.",
+    staffTimeOffAdd: "בחר תאריכים",
+    staffTimeOffNone: "אין ימי חופש קרובים",
+    staffTimeOffRemove: "הסר",
+    staffTimeOffDays: "{n} ימי חופש",
+    staffTimeOffSaveFailed: "איש הצוות נשמר, אך שמירת ימי החופש נכשלה. נסה שוב מעריכת איש הצוות.",
     // Per-staff availability (Phase 3) — customer-facing empty states
     staffOffDay: "{name} לא עובד/ת ביום זה",
     staffNoDaysInWindow: "ל{name} אין ימים פנויים בתקופה הזו. חזור אחורה ובחר איש צוות אחר.",
@@ -1360,6 +1369,14 @@ export const translations = {
     staffHoursNone: "لا يعمل في أي يوم",
     staffHoursDays: "{n} أيام عمل",
     staffHoursSaveFailed: "تم حفظ عضو الطاقم، لكن حفظ ساعات العمل فشل. حاول مرة أخرى من تعديل عضو الطاقم.",
+    // Per-staff TIME OFF (Phase 5b) — owner-facing only.
+    staffTimeOffLabel: "أيام الإجازة",
+    staffTimeOffHelp: "أيام لا يعمل فيها عضو الطاقم، إضافة إلى ساعاته الأسبوعية. لا تتأثر بقية الطاقم ولا المحل.",
+    staffTimeOffAdd: "اختر التواريخ",
+    staffTimeOffNone: "لا توجد أيام إجازة قادمة",
+    staffTimeOffRemove: "إزالة",
+    staffTimeOffDays: "{n} أيام إجازة",
+    staffTimeOffSaveFailed: "تم حفظ عضو الطاقم، لكن حفظ أيام الإجازة فشل. حاول مرة أخرى من تعديل عضو الطاقم.",
     // Per-staff availability (Phase 3) — customer-facing empty states
     staffOffDay: "{name} لا يعمل في هذا اليوم",
     staffNoDaysInWindow: "لا توجد أيام متاحة لدى {name} في هذه الفترة. ارجع واختر عضو طاقم آخر.",
@@ -2046,6 +2063,14 @@ export const translations = {
     staffHoursNone: "Not working any day",
     staffHoursDays: "{n} working days",
     staffHoursSaveFailed: "Staff member saved, but saving their working hours failed. Try again from the staff member's edit sheet.",
+    // Per-staff TIME OFF (Phase 5b) — owner-facing only.
+    staffTimeOffLabel: "Days off",
+    staffTimeOffHelp: "Days this member does not work, on top of their weekly hours. The rest of the team and the shop are unaffected.",
+    staffTimeOffAdd: "Pick dates",
+    staffTimeOffNone: "No upcoming days off",
+    staffTimeOffRemove: "Remove",
+    staffTimeOffDays: "{n} days off",
+    staffTimeOffSaveFailed: "Staff member saved, but saving their days off failed. Try again from the staff member's edit sheet.",
     // Per-staff availability (Phase 3) — customer-facing empty states
     staffOffDay: "{name} isn't working this day",
     staffNoDaysInWindow: "{name} has no available days in this period. Go back and pick another staff member.",
