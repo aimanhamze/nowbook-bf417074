@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       bookings: {
@@ -781,6 +756,35 @@ export type Database = {
           },
         ]
       }
+      provider_staff_blocked_dates: {
+        Row: {
+          blocked_date: string
+          created_at: string
+          provider_id: string
+          staff_id: string
+        }
+        Insert: {
+          blocked_date: string
+          created_at?: string
+          provider_id: string
+          staff_id: string
+        }
+        Update: {
+          blocked_date?: string
+          created_at?: string
+          provider_id?: string
+          staff_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "psbd_staff_fkey"
+            columns: ["staff_id", "provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_staff"
+            referencedColumns: ["id", "provider_id"]
+          },
+        ]
+      }
       provider_staff_services: {
         Row: {
           created_at: string
@@ -1285,9 +1289,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["admin", "provider", "user"],
