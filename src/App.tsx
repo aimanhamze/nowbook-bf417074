@@ -33,8 +33,8 @@ const ProviderCalendar = lazy(() => import("./pages/ProviderCalendar"));
 const Reviews = lazy(() => import("./pages/Reviews"));
 const ProviderQrCode = lazy(() => import("./pages/ProviderQrCode"));
 const ProviderCustomers = lazy(() => import("./pages/ProviderCustomers"));
-const ProviderStaff = lazy(() => import("./pages/ProviderStaff"));
-const ProviderStaffMember = lazy(() => import("./pages/ProviderStaffMember"));
+// One chunk for both staff pages: the slide between them must never suspend.
+const StaffRoutes = lazy(() => import("./pages/StaffRoutes"));
 const ProviderNotifications = lazy(() => import("./pages/ProviderNotifications"));
 const Statistics = lazy(() => import("./pages/Statistics"));
 const MonthlyReport = lazy(() => import("./pages/MonthlyReport"));
@@ -109,9 +109,9 @@ const App = () => (
                   <Route path="/reviews" element={<ProtectedRoute><ErrorBoundary><Reviews /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/qr-code" element={<ProtectedRoute><ErrorBoundary><ProviderQrCode /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/customers" element={<ProtectedRoute><ErrorBoundary><ProviderCustomers /></ErrorBoundary></ProtectedRoute>} />
-                  {/* Provider team: roster, then one member ("new" creates). */}
-                  <Route path="/staff" element={<ProtectedRoute><ErrorBoundary><ProviderStaff /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/staff/:id" element={<ProtectedRoute><ErrorBoundary><ProviderStaffMember /></ErrorBoundary></ProtectedRoute>} />
+                  {/* Provider team: /staff (roster) and /staff/:id ("new" creates),
+                      routed inside StaffRoutes so the two slide over each other. */}
+                  <Route path="/staff/*" element={<ProtectedRoute><ErrorBoundary><StaffRoutes /></ErrorBoundary></ProtectedRoute>} />
                   {/* Provider WhatsApp settings. Distinct from /notifications,
                       which is the customer's notification feed. */}
                   <Route path="/notification-settings" element={<ProtectedRoute><ErrorBoundary><ProviderNotifications /></ErrorBoundary></ProtectedRoute>} />
