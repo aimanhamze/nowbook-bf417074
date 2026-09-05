@@ -40,6 +40,8 @@ interface Props {
   shopLoading: boolean;
   /** Monthly-mode shops have no per-weekday hours to compare against. */
   isMonthly: boolean;
+  /** The Staff page's hours sheet already titles itself; skip the inline label there. */
+  hideLabel?: boolean;
 }
 
 /**
@@ -60,7 +62,7 @@ interface Props {
  * The mode is derived from the draft the parent computed from ROWS, never from
  * any form value, so opening the sheet can never look like a configuration.
  */
-export function StaffHoursEditor({ draft, onChange, shopDays, shopLoading, isMonthly }: Props) {
+export function StaffHoursEditor({ draft, onChange, shopDays, shopLoading, isMonthly, hideLabel = false }: Props) {
   const { t } = useLang();
 
   const configured = draft !== null;
@@ -91,7 +93,7 @@ export function StaffHoursEditor({ draft, onChange, shopDays, shopLoading, isMon
 
   return (
     <div className="space-y-2">
-      <Label>{t("staffHoursLabel")}</Label>
+      {!hideLabel && <Label>{t("staffHoursLabel")}</Label>}
 
       {/* Mode toggle. The helper line under it changes with the mode so the
           CURRENT state is always stated in words, and — when configured — so the
