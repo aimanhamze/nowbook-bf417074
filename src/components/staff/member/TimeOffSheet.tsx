@@ -23,7 +23,8 @@ interface Props {
  * sheet: a sheet is already the focused surface, and a second layer over it
  * left a 19rem picker floating in the middle of a phone screen.
  *
- * Data model and rules are unchanged from StaffTimeOffEditor: individual dates,
+ * Data model and rules are unchanged from the shop's own blocked-date picker
+ * and the settings editor this replaced: individual dates,
  * one row per date, multi-select, future only, and the draft is what gets
  * written on Save — never on pick. The chosen dates list under the calendar is
  * the same range the mutation's delete clears (see useProviderStaffTimeOff).

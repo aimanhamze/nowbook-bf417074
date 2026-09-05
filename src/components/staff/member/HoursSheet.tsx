@@ -61,7 +61,6 @@ export function HoursSheet({ open, onClose, memberName, initialDraft, shopDays, 
         shopDays={shopDays}
         shopLoading={shopLoading}
         isMonthly={isMonthly}
-        hideLabel
       />
     </FacetSheet>
   );

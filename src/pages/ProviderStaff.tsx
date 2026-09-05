@@ -40,8 +40,8 @@ export default function ProviderStaff() {
   const { profile, isLoading: profileLoading } = useProviderProfile();
   const { staff, activeStaff, isLoading: staffLoading } = useProviderStaff();
 
-  // Same enabled-gating discipline as StaffSection: a provider with no members
-  // fires none of the per-staff queries.
+  // Enabled-gating discipline shared by every per-staff hook: a provider with no
+  // members fires none of the per-staff queries.
   const hasStaff = staff.length > 0;
   const { servicesByStaff } = useProviderStaffServices(hasStaff);
   const { services } = useProviderServices(hasStaff);

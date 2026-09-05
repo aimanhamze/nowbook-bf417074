@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { AvailabilityModeSection } from "@/components/settings/AvailabilityModeSection";
-import { StaffSection } from "@/components/settings/StaffSection";
 import { StaffPageLink } from "@/components/settings/StaffPageLink";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -128,10 +127,8 @@ const Settings = () => {
                 {t("settingsGroupBusiness")}
               </h2>
               <AvailabilityModeSection delay={0} />
-              {/* New Staff page entry. The old inline section below stays until
-                  the page is tested and merged, then comes out. */}
+              {/* Team management lives on its own page (/staff); this row is the way in. */}
               <StaffPageLink delay={0.06} />
-              <StaffSection delay={0.12} />
             </div>
 
             <div className="space-y-3">

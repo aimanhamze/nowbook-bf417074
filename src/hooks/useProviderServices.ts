@@ -14,9 +14,9 @@ function toLocalDateStr(date: Date): string {
 
 // `enabled` (default true — every existing caller is unchanged) lets a caller
 // that only *conditionally* needs the service list avoid firing the query at
-// all. Used by StaffSection, which needs services only once the provider has
-// staff members: a provider with none must not gain a fetch on the settings
-// page it did not make before.
+// all. Used by the Staff page roster, which needs services only once the
+// provider has staff members: a provider with none must not gain a fetch it
+// did not make before.
 export function useProviderServices(enabled = true) {
   const { profile } = useProviderProfile();
   const queryClient = useQueryClient();

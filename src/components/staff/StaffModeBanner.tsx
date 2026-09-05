@@ -17,7 +17,7 @@ interface Props {
 /**
  * The customer-facing staff_enabled switch, at the top of the Staff page.
  *
- * Logic is lifted unchanged from StaffSection (settings): turning ON is gated on
+ * Logic is unchanged from the old settings section it replaced: turning ON is gated on
  * at least one active member and on the DB trigger above; turning OFF is never
  * gated. The Switch is controlled by profile.staff_enabled from the query cache,
  * which only changes on success — so on failure it simply stays where it was.
@@ -34,8 +34,11 @@ export function StaffModeBanner({ activeCount, staffLoading }: Props) {
       await updateStaffEnabled.mutateAsync(next);
       toast.success(t("profileSaved"));
     } catch (err) {
-      // The thrown value is the PLAIN PostgREST response object, not an Error —
-      // read the fields directly (see StaffSection for the supabase-js note).
+      // The thrown value is the PLAIN PostgREST response object
+      // ({ message, details, hint, code }), NOT an Error instance — verified
+      // against supabase-js 2.99.3, where `instanceof Error` is false and
+      // String(err) is "[object Object]". Never gate on instanceof here; read
+      // the fields directly (same reason RescheduleSheet reads .code via cast).
       const e = (err ?? {}) as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
       const haystack = [e.message, e.details, e.hint, e.code]
         .filter((v): v is string => typeof v === "string")

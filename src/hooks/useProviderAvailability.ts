@@ -6,9 +6,9 @@ import { useProviderProfile } from "./useProviderProfile";
 // useProviderStaffServices(enabled). It DEFAULTS TO TRUE, so all four existing
 // callers (AvailabilityTab, CalendarTab, MonthlyAvailabilityCalendar,
 // NewBookingSheet) pass nothing and are completely unaffected. It exists for
-// StaffSection, which needs the weekly rows only to show the shop's hours
-// alongside a staff member's — and would otherwise fire three queries on the
-// settings page for providers who have no staff at all.
+// the Staff page (useStaffToday), which needs the shop's rows only once the
+// provider has staff members — and would otherwise fire three queries for
+// providers who have no staff at all.
 export function useProviderAvailability(enabled = true) {
   const { profile } = useProviderProfile();
   const queryClient = useQueryClient();

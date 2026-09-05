@@ -55,7 +55,8 @@ const DOW_DATES = weekDates(new Date(2024, 0, 7), 7);
  *
  * /staff/new is the one place with a form: a name, and a button. Everything else
  * is configured after the row exists, because the composite FKs on the three
- * child tables need the staff id first (see StaffSection's save ordering).
+ * child tables need the staff id first — so the member is created alone, and
+ * the three facet writes only ever run against an existing row.
  */
 export default function ProviderStaffMember() {
   const { t, lang } = useLang();
@@ -85,7 +86,8 @@ export default function ProviderStaffMember() {
   const isMonthly = profile?.availability_mode === "monthly";
 
   // The shop's week for the hours editor's reference lines — REFERENCE ONLY,
-  // nothing here constrains what can be saved (see StaffSection).
+  // nothing here constrains what can be saved: shop hours change, and the
+  // resolver's intersection is what enforces the subset at booking time.
   const shopDays = useMemo<(DayHours | null)[]>(
     () =>
       Array.from({ length: 7 }, (_, dow) => {

@@ -9,9 +9,8 @@ import { useProviderStaff } from "@/hooks/useProviderStaff";
  * Navigation row from the settings hub to the Staff page (/staff).
  *
  * Same chip/title/description anatomy as SettingsSection so it reads as one of
- * the list, but the whole card is a link rather than a container. Ships
- * ALONGSIDE the old StaffSection until the page is tested and merged; the
- * section is removed after, and this row stays.
+ * the list, but the whole card is a link rather than a container. It replaced
+ * the inline staff section that used to live here once /staff shipped.
  */
 export function StaffPageLink({ delay = 0 }: { delay?: number }) {
   const { t } = useLang();

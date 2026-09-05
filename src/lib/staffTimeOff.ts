@@ -90,7 +90,7 @@ export function toggleDate(dates: readonly string[], key: string): string[] {
  * the sheet and changed nothing — which, combined with the draft being derived
  * from rows, is what makes "open, press Save, walk away" a genuine no-op.
  *
- * Order-insensitive, matching sameSet in StaffSection: both sides are sorted in
+ * Order-insensitive, matching sameSet in ProviderStaffMember: both sides are sorted in
  * practice, but a comparison that depends on that would be a trap for a future
  * caller that builds a draft some other way.
  */

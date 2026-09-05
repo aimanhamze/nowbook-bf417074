@@ -17,7 +17,7 @@ interface Props {
   pending: boolean;
 }
 
-/** Deactivate confirmation — explains that booking history survives. Lifted from StaffSection. */
+/** Deactivate confirmation — explains that booking history survives. */
 export function DeactivateDialog({ open, onOpenChange, onConfirm, pending }: Props) {
   const { t } = useLang();
   return (

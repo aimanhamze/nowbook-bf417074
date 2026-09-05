@@ -1,6 +1,5 @@
 import { AlertTriangle, Store } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useLang } from "@/contexts/LangContext";
 import {
@@ -40,15 +39,14 @@ interface Props {
   shopLoading: boolean;
   /** Monthly-mode shops have no per-weekday hours to compare against. */
   isMonthly: boolean;
-  /** The Staff page's hours sheet already titles itself; skip the inline label there. */
-  hideLabel?: boolean;
 }
 
 /**
- * The per-staff working-hours editor, rendered inside StaffSection's edit sheet.
+ * The per-staff working-hours editor, rendered inside the Staff page's hours
+ * sheet (components/staff/member/HoursSheet.tsx), which supplies the title.
  *
  * PURELY PRESENTATIONAL — it owns no state and performs no writes. Everything
- * it produces goes into StaffSection's `editing` draft and reaches the database
+ * it produces goes into the sheet's draft and reaches the database
  * only if the owner presses Save. That separation is what makes the "never write
  * rows on first open" guarantee structural rather than remembered: this
  * component has no mutation to call.
@@ -62,7 +60,7 @@ interface Props {
  * The mode is derived from the draft the parent computed from ROWS, never from
  * any form value, so opening the sheet can never look like a configuration.
  */
-export function StaffHoursEditor({ draft, onChange, shopDays, shopLoading, isMonthly, hideLabel = false }: Props) {
+export function StaffHoursEditor({ draft, onChange, shopDays, shopLoading, isMonthly }: Props) {
   const { t } = useLang();
 
   const configured = draft !== null;
@@ -93,8 +91,6 @@ export function StaffHoursEditor({ draft, onChange, shopDays, shopLoading, isMon
 
   return (
     <div className="space-y-2">
-      {!hideLabel && <Label>{t("staffHoursLabel")}</Label>}
-
       {/* Mode toggle. The helper line under it changes with the mode so the
           CURRENT state is always stated in words, and — when configured — so the
           way back to "all shop hours" is spelled out rather than inferred. */}
