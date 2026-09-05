@@ -154,6 +154,10 @@ export interface StaffWeeklyRow {
   is_available: boolean;
 }
 
+/** Shared empty set for "this member has no time off" — avoids allocating one
+ *  per render at the call sites, and gives the no-staff-selected case a name. */
+export const NO_BLOCKED_DATES: ReadonlySet<string> = new Set();
+
 /**
  * A staff member's own window for `date`, BEFORE it meets the shop's.
  *
@@ -163,12 +167,25 @@ export interface StaffWeeklyRow {
  *               every hour the shop is open. This is what every existing member
  *               is, and what makes an empty table a genuine no-op.
  *   null      → CONFIGURED AND OFF. Either the weekday has no row, or its row
- *               says is_available=false. A MISSING weekday on a configured
- *               member means NOT WORKING — it does NOT fall back to the shop's
- *               hours. An owner who fills in Mon–Fri means weekends off; the
- *               other reading would make partial configuration silently
- *               useless.
+ *               says is_available=false, or the date is one of the member's
+ *               days off. A MISSING weekday on a configured member means NOT
+ *               WORKING — it does NOT fall back to the shop's hours. An owner
+ *               who fills in Mon–Fri means weekends off; the other reading would
+ *               make partial configuration silently useless.
  *   DayWindow → CONFIGURED AND WORKING, within the stated window.
+ *
+ * STAFF TIME OFF (`staffBlockedDates`) is checked FIRST, above the
+ * not-configured return, and that ordering is load-bearing. Below it, a member
+ * with days off but NO weekly hours configured — the single most likely user of
+ * time off, since it is the simpler feature — would return `undefined` from the
+ * not-configured branch and have their day off silently ignored. Checking it
+ * first also mirrors resolveDayHours, where the shop's blocked-date check is the
+ * first statement for exactly the same reason.
+ *
+ * The parameter is REQUIRED rather than optional. There are three call sites,
+ * all internal, and a missed one is then a compile error instead of a feature
+ * that silently does nothing at whichever site forgot. Pass NO_BLOCKED_DATES
+ * when there is no member selected.
  *
  * break_start/break_end are always null: provider_staff_availability carries no
  * break columns (a per-staff break would need TWO holes in a DayWindow, which
@@ -182,7 +199,20 @@ export interface StaffWeeklyRow {
 export function staffDayWindow(
   date: Date,
   staffRows: ReadonlyMap<number, StaffWeeklyRow> | undefined,
+  staffBlockedDates: ReadonlySet<string>,
 ): DayWindow | null | undefined {
+  // STAFF TIME OFF CLOSES THE DAY — checked FIRST, ABOVE the not-configured
+  // return below, so that a member with days off but no weekly hours still gets
+  // their day off honoured. See the note above; moving this line down is the one
+  // change that would break time off for the members most likely to use it.
+  //
+  // The shop's own blocked dates are NOT consulted here: they are already
+  // handled first inside resolveDayHours, and narrowToStaff returns on a closed
+  // shop window before this function's result is even inspected. A staff day off
+  // closes the day for THIS member only; the shop and every other member are
+  // unaffected.
+  if (staffBlockedDates.has(toLocalDateStr(date))) return null;
+
   // Absent and empty are spelled out separately, not collapsed: the writer
   // deletes rows rather than storing an empty set, so an empty map should be
   // unreachable from our own data — but the reading that would silently strand

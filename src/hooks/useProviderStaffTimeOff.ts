@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
 import { toDateKey, toDateKeyString, futureOnly } from "@/lib/staffTimeOff";
+import { availabilityWindow } from "@/lib/availabilityWindow";
 
 // Per-staff time off (per-staff-availability Phase 5b). Mirrors
 // useProviderStaffHours: owner-scoped query + one small single-purpose mutation.
@@ -140,4 +141,65 @@ export function useProviderStaffTimeOff(enabled = true) {
     error: timeOffQuery.error,
     setStaffTimeOff,
   };
+}
+
+// Customer-side read of a provider's per-staff time off (Phase 5c).
+// provider_staff_blocked_dates has public SELECT RLS, so this works pre-auth
+// like the other "-public" queries, and it shares its cache with the walk-in
+// sheet.
+//
+// WINDOWED, unlike the shop's own customer-side blocked-dates query
+// (useAllProviders.ts), which has no date filter at all and fetches every
+// blocked date a provider has ever set. That is a known wart; this query
+// deliberately does not repeat it. The bound is the SHARED availabilityWindow —
+// both callers derive fromStr/toStr from the same function, so their query keys
+// are identical strings and the cache stays single rather than splitting in two.
+//
+// The window is IN the key, not only in the filter, so the boundary moving at
+// midnight actually refetches — the same reason the bookings query keys on its
+// own window. Keying on the window is a different axis from keying per staff
+// member, which this query must never do:
+//
+//   1. NOT keyed per staff member. One request returns EVERY member's days off.
+//   2. NOT queried per calendar day. The rows are indexed into a Map once, in a
+//      useMemo, and the slot builder closes over it — resolving a day is a
+//      Set.has, never a round trip. dayHasAvailability runs once per rendered
+//      calendar cell, so anything else fans out across a whole month grid.
+//   3. NOT mounted unconditionally. `enabled` should be "a staff member is
+//      actually selected"; with nobody selected there is nothing to narrow.
+export function usePublicStaffTimeOff(providerId: string | undefined, enabled: boolean) {
+  const { fromStr, toStr } = availabilityWindow();
+
+  const query = useQuery({
+    queryKey: ["provider-staff-blocked-dates-public", providerId, fromStr, toStr],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      if (!providerId) return [];
+      const { data, error } = await supabase
+        .from("provider_staff_blocked_dates")
+        .select("staff_id, blocked_date")
+        .eq("provider_id", providerId)
+        .gte("blocked_date", fromStr)
+        .lte("blocked_date", toStr);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!providerId && enabled,
+  });
+
+  // staff_id → Set of "YYYY-MM-DD". A member ABSENT from this map simply has no
+  // time off in the window; callers pass NO_BLOCKED_DATES for them, which
+  // staffDayWindow reads as "nothing to close" and falls through to the hours
+  // check exactly as before.
+  const timeOffByStaff = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const row of query.data || []) {
+      const set = map.get(row.staff_id) ?? new Set<string>();
+      set.add(toDateKeyString(row.blocked_date));
+      map.set(row.staff_id, set);
+    }
+    return map;
+  }, [query.data]);
+
+  return { timeOffByStaff, isLoading: query.isLoading };
 }

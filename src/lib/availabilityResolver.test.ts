@@ -4,7 +4,12 @@ import {
   staffDayWindow,
   type DayWindow,
   type StaffWeeklyRow,
+  NO_BLOCKED_DATES,
 } from "./availabilityResolver";
+
+// The no-time-off case, which is what every test below uses unless it is
+// specifically about time off.
+const NO_TIME_OFF: ReadonlySet<string> = NO_BLOCKED_DATES;
 
 // Scoped DELIBERATELY to the Phase 3 additions. resolveDayHours is untouched by
 // this phase and is exercised through its existing call sites; retro-testing it
@@ -45,11 +50,11 @@ describe("staffDayWindow — the three-state producer", () => {
     // empty, so this is what every member resolves to until an owner configures
     // one, and it is what narrowToStaff turns into the identity path.
     it("returns undefined for a member with NO rows at all", () => {
-      expect(staffDayWindow(monday, undefined)).toBeUndefined();
+      expect(staffDayWindow(monday, undefined, NO_TIME_OFF)).toBeUndefined();
     });
 
     it("returns undefined for an EMPTY map, not a closed day", () => {
-      expect(staffDayWindow(monday, new Map())).toBeUndefined();
+      expect(staffDayWindow(monday, new Map(), NO_TIME_OFF)).toBeUndefined();
     });
   });
 
@@ -59,19 +64,19 @@ describe("staffDayWindow — the three-state producer", () => {
     it("returns null for a weekday with NO row on a configured member", () => {
       // Configured for Monday only → Sunday and Saturday are OFF, not inherited.
       const week = staffWeek({ [MON]: {} });
-      expect(staffDayWindow(sunday, week)).toBeNull();
-      expect(staffDayWindow(saturday, week)).toBeNull();
+      expect(staffDayWindow(sunday, week, NO_TIME_OFF)).toBeNull();
+      expect(staffDayWindow(saturday, week, NO_TIME_OFF)).toBeNull();
     });
 
     it("returns null for an explicit is_available=false row", () => {
-      expect(staffDayWindow(monday, staffWeek({ [MON]: { is_available: false } }))).toBeNull();
+      expect(staffDayWindow(monday, staffWeek({ [MON]: { is_available: false } }), NO_TIME_OFF)).toBeNull();
     });
   });
 
   describe("state 2: configured and working", () => {
     it("returns the row's window", () => {
       const week = staffWeek({ [MON]: { start_time: "10:00", end_time: "14:00" } });
-      expect(staffDayWindow(monday, week)).toEqual({
+      expect(staffDayWindow(monday, week, NO_TIME_OFF)).toEqual({
         start_time: "10:00",
         end_time: "14:00",
         break_start: null,
@@ -80,7 +85,7 @@ describe("staffDayWindow — the three-state producer", () => {
     });
 
     it("always reports null breaks — staff rows carry no break columns", () => {
-      const window = staffDayWindow(monday, staffWeek({ [MON]: {} }))!;
+      const window = staffDayWindow(monday, staffWeek({ [MON]: {} }), NO_TIME_OFF)!;
       expect(window.break_start).toBeNull();
       expect(window.break_end).toBeNull();
     });
@@ -88,9 +93,75 @@ describe("staffDayWindow — the three-state producer", () => {
     it("looks the weekday up with the LOCAL getDay(), matching resolveDayHours", () => {
       // Saturday's row must be found for a Saturday date and not for a Monday one.
       const week = staffWeek({ [SAT]: {} });
-      expect(staffDayWindow(saturday, week)).not.toBeNull();
-      expect(staffDayWindow(monday, week)).toBeNull();
+      expect(staffDayWindow(saturday, week, NO_TIME_OFF)).not.toBeNull();
+      expect(staffDayWindow(monday, week, NO_TIME_OFF)).toBeNull();
     });
+  });
+});
+
+describe("staffDayWindow — staff TIME OFF (Phase 5c)", () => {
+  const MONDAY_KEY = "2026-09-07";
+  const off = (...keys: string[]): ReadonlySet<string> => new Set(keys);
+
+  // THE ORDERING REQUIREMENT. The blocked check sits ABOVE the not-configured
+  // return, so a member who has days off but NO weekly hours — the most likely
+  // user of time off, since it is the simpler feature — still gets their day off
+  // honoured. Move the check below that return and this is the test that fails.
+  it("closes the day for an UNCONFIGURED member (no hours rows at all)", () => {
+    expect(staffDayWindow(monday, undefined, off(MONDAY_KEY))).toBeNull();
+  });
+
+  it("...while that same member stays UNCONFIGURED on every other date", () => {
+    // The identity path must survive: one day off must not turn a member into a
+    // configured one for the rest of the week.
+    expect(staffDayWindow(sunday, undefined, off(MONDAY_KEY))).toBeUndefined();
+    expect(staffDayWindow(saturday, undefined, off(MONDAY_KEY))).toBeUndefined();
+  });
+
+  it("closes a day the member would otherwise be WORKING", () => {
+    const week = staffWeek({ [MON]: {} });
+    expect(staffDayWindow(monday, week, NO_TIME_OFF)).not.toBeNull();
+    expect(staffDayWindow(monday, week, off(MONDAY_KEY))).toBeNull();
+  });
+
+  it("leaves other dates of a configured member untouched", () => {
+    const week = staffWeek({ [MON]: { start_time: "10:00", end_time: "14:00" } });
+    expect(staffDayWindow(monday, week, off("2026-09-14"))).toEqual({
+      start_time: "10:00",
+      end_time: "14:00",
+      break_start: null,
+      break_end: null,
+    });
+  });
+
+  it("an empty set changes nothing", () => {
+    const week = staffWeek({ [MON]: {} });
+    expect(staffDayWindow(monday, week, off())).toEqual(
+      staffDayWindow(monday, week, NO_TIME_OFF)
+    );
+    expect(staffDayWindow(monday, undefined, off())).toBeUndefined();
+  });
+
+  it("matches on the LOCAL calendar date, not a UTC one", () => {
+    // Local midnight is the hazard: a UTC-derived key would be the previous day
+    // for a UTC+2/+3 timezone and the day off would land on the wrong date.
+    const localMidnight = new Date(2026, 8, 7, 0, 0);
+    expect(staffDayWindow(localMidnight, undefined, off("2026-09-07"))).toBeNull();
+  });
+
+  it("composed: the shop stays open for everyone else", () => {
+    // Layer 2 of the precedence — a staff day off closes the day for THIS member
+    // only. The shop window is untouched, which is what the other members resolve
+    // against.
+    const shop = win("09:00", "17:00");
+    expect(narrowToStaff(shop, staffDayWindow(monday, undefined, off(MONDAY_KEY)))).toBeNull();
+    expect(narrowToStaff(shop, staffDayWindow(monday, undefined, NO_TIME_OFF))).toBe(shop);
+  });
+
+  it("composed: a shop closure still wins over a member with no time off", () => {
+    // Layer 1 — nothing about time off can reopen a day the shop has closed.
+    expect(narrowToStaff(null, staffDayWindow(monday, undefined, NO_TIME_OFF))).toBeNull();
+    expect(narrowToStaff(null, staffDayWindow(monday, undefined, off(MONDAY_KEY)))).toBeNull();
   });
 });
 
@@ -221,22 +292,22 @@ describe("narrowToStaff", () => {
     const shop = win("09:00", "17:00");
 
     it("a member with no rows gets the shop's window itself", () => {
-      expect(narrowToStaff(shop, staffDayWindow(monday, undefined))).toBe(shop);
+      expect(narrowToStaff(shop, staffDayWindow(monday, undefined, NO_TIME_OFF))).toBe(shop);
     });
 
     it("a member configured Mon-only is narrowed on Monday", () => {
       const week = staffWeek({ [MON]: { start_time: "10:00", end_time: "14:00" } });
-      expect(narrowToStaff(shop, staffDayWindow(monday, week))).toEqual(win("10:00", "14:00"));
+      expect(narrowToStaff(shop, staffDayWindow(monday, week, NO_TIME_OFF))).toEqual(win("10:00", "14:00"));
     });
 
     it("...and CLOSED on Sunday, rather than falling back to shop hours", () => {
       const week = staffWeek({ [MON]: { start_time: "10:00", end_time: "14:00" } });
-      expect(narrowToStaff(shop, staffDayWindow(sunday, week))).toBeNull();
+      expect(narrowToStaff(shop, staffDayWindow(sunday, week, NO_TIME_OFF))).toBeNull();
     });
 
     it("...and still closed on Monday when the shop itself is shut", () => {
       const week = staffWeek({ [MON]: {} });
-      expect(narrowToStaff(null, staffDayWindow(monday, week))).toBeNull();
+      expect(narrowToStaff(null, staffDayWindow(monday, week, NO_TIME_OFF))).toBeNull();
     });
   });
 });

@@ -12,11 +12,14 @@ import {
   resolveDayHours,
   narrowToStaff,
   staffDayWindow,
+  NO_BLOCKED_DATES,
   toLocalDateStr,
   type MonthlySettings,
   type DateOverrideRow,
 } from "@/lib/availabilityResolver";
 import { usePublicStaffHours } from "./useProviderStaffHours";
+import { usePublicStaffTimeOff } from "./useProviderStaffTimeOff";
+import { availabilityWindow } from "@/lib/availabilityWindow";
 
 export interface DbProvider {
   id: string;
@@ -317,23 +320,20 @@ export function useAllProviderSchedules() {
 }
 
 /** Fetch real availability for a provider */
-// The availability window the client fetches busy slots for. Must be >= the
-// booking date strip shown in the UI (currently 14 days in both BookAppointment
-// and NewBookingSheet) so every bookable day's conflicts are covered.
-const AVAILABILITY_WINDOW_DAYS = 60;
+// AVAILABILITY_WINDOW_DAYS and the [fromStr, toStr] derivation now live in
+// lib/availabilityWindow, because usePublicStaffTimeOff needs the SAME window to
+// build the SAME query key — two independent derivations could split one cache
+// into two. The value and the resulting strings are unchanged.
 
 // selectedStaffId (multi-staff Phase 3): OPTIONAL staff filter for the private
 // slot builder. Omitted / null → NO filtering, byte-identical to the pre-staff
 // behavior — every existing caller passes one argument and is unaffected. The
 // customer staff picker (Phase 4) will thread the chosen provider_staff.id.
 export function useRealAvailability(providerId: string | undefined, selectedStaffId?: string | null) {
-  // Local date window [today, today + AVAILABILITY_WINDOW_DAYS]. Use LOCAL date
-  // strings (toLocalDateStr, NOT toISOString) so the window matches how
+  // Local date window [today, today + AVAILABILITY_WINDOW_DAYS], from the shared
+  // helper. LOCAL date strings (never toISOString) so the window matches how
   // booking_date is stored/compared and the queryKey stays stable within a day.
-  const windowEnd = new Date();
-  windowEnd.setDate(windowEnd.getDate() + AVAILABILITY_WINDOW_DAYS);
-  const fromStr = toLocalDateStr(new Date());
-  const toStr = toLocalDateStr(windowEnd);
+  const { fromStr, toStr } = availabilityWindow();
 
   const availabilityQuery = useQuery({
     queryKey: ["provider-availability-public", providerId],
@@ -483,6 +483,20 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
   // travel all the way to the resolver intact.
   const selectedStaffDays = selectedStaffId ? staffHoursByStaff.get(selectedStaffId) : undefined;
 
+  // ── PER-STAFF TIME OFF (Phase 5c) ───────────────────────────────────────────
+  // Same shape and the same three constraints as the hours query above: ONE
+  // request for EVERY member, indexed into a Map once, gated on a member being
+  // selected. Windowed to [fromStr, toStr] via the shared availabilityWindow, so
+  // this key and the walk-in sheet's are identical strings.
+  const { timeOffByStaff: staffTimeOffByStaff, isLoading: staffTimeOffLoading } =
+    usePublicStaffTimeOff(providerId, !!selectedStaffId);
+
+  // NO_BLOCKED_DATES rather than a fresh Set: with nobody selected, or a member
+  // with no days off in the window, there is nothing to close and staffDayWindow
+  // falls straight through to the hours check.
+  const selectedStaffTimeOff =
+    (selectedStaffId ? staffTimeOffByStaff.get(selectedStaffId) : undefined) ?? NO_BLOCKED_DATES;
+
   // Per-date overrides for monthly mode (mirrors blockedDatesQuery). Only
   // consulted when availability_mode==='monthly'; irrelevant to weekly providers.
   const overridesQuery = useQuery({
@@ -546,14 +560,19 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     // identity, so every existing provider gets byte-identical behaviour.
     // Deliberately NOT applied in getGroupSlotsWithCapacity below: group
     // capacity is pooled shop-wide and the trigger's group branch is staff-blind.
-    const dayWindow = narrowToStaff(shopWindow, staffDayWindow(date, selectedStaffDays));
+    const dayWindow = narrowToStaff(
+      shopWindow,
+      staffDayWindow(date, selectedStaffDays, selectedStaffTimeOff),
+    );
     if (!dayWindow) return [];
 
-    // A member is selected but their hours have not arrived yet. Fail CLOSED
-    // rather than offering the un-narrowed shop window and retracting it a
-    // moment later: this is an offering rule, and briefly showing nothing is the
-    // same thing the page already does while the weekly rows load.
-    if (selectedStaffId && staffHoursLoading) return [];
+    // A member is selected but their hours or days off have not arrived yet.
+    // Fail CLOSED rather than offering the un-narrowed shop window and retracting
+    // it a moment later: this is an offering rule, and briefly showing nothing is
+    // the same thing the page already does while the weekly rows load. Time off
+    // is included for the same reason — offering a day the member is away and
+    // then withdrawing it is the worst of the available behaviours.
+    if (selectedStaffId && (staffHoursLoading || staffTimeOffLoading)) return [];
 
     const services = servicesQuery.data || [];
 
@@ -716,7 +735,10 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
       overridesQuery.data || [],
     );
     if (!shopWindow) return false;
-    return narrowToStaff(shopWindow, staffDayWindow(date, selectedStaffDays)) === null;
+    return (
+      narrowToStaff(shopWindow, staffDayWindow(date, selectedStaffDays, selectedStaffTimeOff)) ===
+      null
+    );
   };
 
   return {

@@ -39,11 +39,13 @@ import { eligibleStaffForService } from "@/lib/staffServices";
 import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useRealAvailability } from "@/hooks/useAllProviders";
 import { usePublicStaffHours } from "@/hooks/useProviderStaffHours";
+import { usePublicStaffTimeOff } from "@/hooks/useProviderStaffTimeOff";
 import {
   resolveDayHours,
   isOutsideDayWindow,
   narrowToStaff,
   staffDayWindow,
+  NO_BLOCKED_DATES,
   type DateOverrideRow,
   type MonthlySettings,
   type WeeklyRow,
@@ -250,6 +252,16 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     ? staffHoursByStaff.get(effectiveStaffId)
     : undefined;
 
+  // Per-staff time off (Phase 5c). Same shared query key as the slot pipeline
+  // mounts, so React Query dedupes it — no extra round trip — and the sheet's
+  // closed-vs-off messaging can never disagree with the slots it is describing.
+  const { timeOffByStaff: staffTimeOffByStaff } = usePublicStaffTimeOff(
+    profile?.id,
+    !!effectiveStaffId
+  );
+  const selectedStaffTimeOff =
+    (effectiveStaffId ? staffTimeOffByStaff.get(effectiveStaffId) : undefined) ?? NO_BLOCKED_DATES;
+
   // Does the CHOSEN member have hours of their own? Only then can a dashed day
   // mean "not working" rather than closed/blocked/full — a member with no rows
   // works all of the shop's hours, so for them the original legend is still
@@ -260,7 +272,10 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   // chosen member. With nobody selected — or a member with no hours rows — this
   // is the identity and the sheet behaves exactly as it did before Phase 3.
   const resolveWindow = (d: Date) =>
-    narrowToStaff(resolveShopWindow(d), staffDayWindow(d, selectedStaffDays));
+    narrowToStaff(
+      resolveShopWindow(d),
+      staffDayWindow(d, selectedStaffDays, selectedStaffTimeOff),
+    );
 
   // A day the provider may OVERRIDE: inside the SAME [today, booking window]
   // range the calendar already enforces, but with nothing bookable — closed,
