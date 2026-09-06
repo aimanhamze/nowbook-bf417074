@@ -753,7 +753,8 @@ export const translations = {
     privacyBackHomeAria: "חזרה לדף הבית",
 
     privacyWhoTitle: "מי אנחנו",
-    privacyWhoBody: "אחג'זלי (Ehjezly) היא פלטפורמה לקביעת תורים אצל נותני שירות מקומיים — מספרות, קליניקות, סטודיו לכושר ועוד.\n\nהשירות מופעל על ידי {legalName}, עוסק פטור {vat}.\n\nלכל שאלה בנושא פרטיות, או כדי לממש אחת מהזכויות המפורטות בעמוד הזה, אפשר לפנות אלינו במייל {email} או בטלפון {phone}.",
+    privacyWhoBody: "אחג'זלי (Ehjezly) היא פלטפורמה לקביעת תורים אצל נותני שירות מקומיים — מספרות, קליניקות, סטודיו לכושר ועוד.\n\nהשירות מופעל על ידי {tradeName}, עוסק פטור רשום על שם {legalName}.\n\nלכל שאלה בנושא פרטיות, או כדי לממש אחת מהזכויות המפורטות בעמוד הזה, אפשר לפנות אלינו במייל {email}.",
+    privacyWhoVat: "מספר עוסק פטור: {vat}",
 
     privacyCustomerDataTitle: "איזה מידע אנחנו אוספים מלקוחות",
     privacyCustomerDataBody: "• שם מלא — כדי שנותן השירות יידע מי מגיע לתור.\n• מספר טלפון — לאימות ההתחברות באמצעות קוד חד-פעמי, ולשליחת אישורים ותזכורות.\n• כתובת אימייל — אם נרשמתם באמצעות אימייל או חשבון Google.\n• תמונת פרופיל — רק אם בחרתם להעלות אחת.\n• פרטי התורים שלכם — נותן השירות, השירותים שבחרתם, תאריך, שעה, מחיר וסטטוס התור.\n• מועדפים והתראות — העסקים שסימנתם וההודעות שנשלחו אליכם.\n• מנוי להתראות דחיפה — אם אישרתם התראות בדפדפן, נשמר מזהה טכני של הדפדפן שלכם כדי שנוכל לשלוח אותן.\n\nאיננו אוספים ואיננו שומרים את המיקום שלכם. עמוד 'בקרבת מקום' מבקש מהדפדפן את המיקום רק כדי למרכז את המפה סביבכם — הוא נשאר במכשיר ואינו נשלח לשרתים שלנו.",
@@ -780,7 +781,8 @@ export const translations = {
     privacyChangesBody: "אם נעדכן את המדיניות הזו, נעדכן גם את התאריך שבראש העמוד. על שינוי מהותי נודיע גם בתוך האפליקציה.",
 
     privacyContactTitle: "יצירת קשר",
-    privacyContactBody: "{legalName}\nעוסק פטור {vat}\nאימייל: {email}\nטלפון: {phone}",
+    privacyContactBody: "{tradeName}\nאימייל: {email}",
+    privacyContactPhone: "טלפון: {phonePrimary}",
   },
   ar: {
     appName: "Ehjezly",
@@ -1530,7 +1532,8 @@ export const translations = {
     privacyBackHomeAria: "العودة إلى الصفحة الرئيسية",
 
     privacyWhoTitle: "من نحن",
-    privacyWhoBody: "إحجزلي (Ehjezly) هي منصّة لحجز المواعيد لدى مقدّمي الخدمات المحليّين — صالونات الحلاقة والتجميل، العيادات، استوديوهات اللياقة وغيرها.\n\nيُدار هذا الخدمة من قبل {legalName}، مرخّص معفى {vat}.\n\nلأي سؤال يتعلّق بالخصوصية، أو لممارسة أي حق من الحقوق المذكورة في هذه الصفحة، يمكنكم مراسلتنا على {email} أو الاتصال بنا على {phone}.",
+    privacyWhoBody: "إحجزلي (Ehjezly) هي منصّة لحجز المواعيد لدى مقدّمي الخدمات المحليّين — صالونات الحلاقة والتجميل، العيادات، استوديوهات اللياقة وغيرها.\n\nيُشغّل الخدمة {tradeName}، وهو مرخّص معفى مسجّل باسم {legalName}.\n\nلأي سؤال يتعلّق بالخصوصية، أو لممارسة أي حق من الحقوق المذكورة في هذه الصفحة، يمكنكم مراسلتنا على {email}.",
+    privacyWhoVat: "رقم المرخّص المعفى: {vat}",
 
     privacyCustomerDataTitle: "ما الذي نجمعه من الزبائن",
     privacyCustomerDataBody: "• الاسم الكامل — ليعرف مقدّم الخدمة من سيصل إلى الموعد.\n• رقم الهاتف — للتحقّق من تسجيل الدخول عبر رمز لمرّة واحدة، ولإرسال التأكيدات والتذكيرات.\n• البريد الإلكتروني — إذا سجّلتم عبر البريد الإلكتروني أو حساب Google.\n• صورة الملف الشخصي — فقط إذا اخترتم رفع واحدة.\n• تفاصيل مواعيدكم — مقدّم الخدمة، الخدمات التي اخترتموها، التاريخ والساعة والسعر وحالة الموعد.\n• المفضّلة والإشعارات — الأعمال التي أضفتموها للمفضّلة والرسائل التي أُرسلت إليكم.\n• الاشتراك بإشعارات الدفع — إذا سمحتم بالإشعارات في المتصفّح، نحفظ معرّفاً تقنياً للمتصفّح كي نتمكّن من إرسالها.\n\nنحن لا نجمع موقعكم ولا نحفظه. صفحة 'بالقرب مني' تطلب الموقع من المتصفّح فقط لتوسيط الخريطة حولكم — ويبقى الموقع على جهازكم ولا يُرسل إلى خوادمنا.",
@@ -1557,7 +1560,8 @@ export const translations = {
     privacyChangesBody: "إذا حدّثنا هذه السياسة، سنحدّث أيضاً التاريخ الظاهر في أعلى الصفحة. وفي حال كان التغيير جوهرياً، سننوّه إليه داخل التطبيق أيضاً.",
 
     privacyContactTitle: "التواصل معنا",
-    privacyContactBody: "{legalName}\nمرخّص معفى {vat}\nالبريد الإلكتروني: {email}\nهاتف: {phone}",
+    privacyContactBody: "{tradeName}\nالبريد الإلكتروني: {email}",
+    privacyContactPhone: "هاتف: {phonePrimary}",
   },
   en: {
     appName: "Ehjezly",
@@ -2307,7 +2311,8 @@ export const translations = {
     privacyBackHomeAria: "Back to home",
 
     privacyWhoTitle: "Who we are",
-    privacyWhoBody: "Ehjezly is a platform for booking appointments with local service providers — barbers and salons, clinics, fitness studios and more.\n\nThe service is operated by {legalName}, exempt dealer (osek patur) {vat}.\n\nFor any privacy question, or to exercise any of the rights described on this page, contact us at {email} or by phone at {phone}.",
+    privacyWhoBody: "Ehjezly is a platform for booking appointments with local service providers — barbers and salons, clinics, fitness studios and more.\n\nThe service is operated by {tradeName}, a registered exempt dealer (osek patur) under {legalName}.\n\nFor any privacy question, or to exercise any of the rights described on this page, contact us at {email}.",
+    privacyWhoVat: "Exempt dealer number: {vat}",
 
     privacyCustomerDataTitle: "What we collect from customers",
     privacyCustomerDataBody: "• Full name — so the provider knows who is coming to the appointment.\n• Phone number — to verify your sign-in with a one-time code, and to send confirmations and reminders.\n• Email address — if you signed up with email or a Google account.\n• Profile photo — only if you chose to upload one.\n• Your booking details — the provider, the services you selected, the date, time, price and booking status.\n• Favourites and notifications — the businesses you saved and the messages sent to you.\n• Push notification subscription — if you allowed browser notifications, we store a technical identifier for your browser so we can send them.\n\nWe do not collect or store your location. The 'Nearby' page asks your browser for your location only to centre the map around you — it stays on your device and is never sent to our servers.",
@@ -2334,7 +2339,8 @@ export const translations = {
     privacyChangesBody: "If we update this policy, we will also update the date at the top of this page. If a change is significant, we will also tell you inside the app.",
 
     privacyContactTitle: "Contact",
-    privacyContactBody: "{legalName}\nExempt dealer (osek patur) {vat}\nEmail: {email}\nPhone: {phone}",
+    privacyContactBody: "{tradeName}\nEmail: {email}",
+    privacyContactPhone: "Phone: {phonePrimary}",
   },
 } as const;
 
