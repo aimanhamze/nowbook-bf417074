@@ -742,6 +742,7 @@ export const translations = {
 
     // ── Site footer + privacy policy (public — Meta business verification) ──
     footerBrand: "אחג'זלי",
+    footerLogoAlt: "לוגו אחג'זלי",
     footerVatLabel: "עוסק פטור",
     footerCallAria: "התקשרו אלינו",
     footerEmailAria: "שלחו לנו אימייל",
@@ -1521,6 +1522,7 @@ export const translations = {
 
     // ── Site footer + privacy policy (public — Meta business verification) ──
     footerBrand: "إحجزلي",
+    footerLogoAlt: "شعار إحجزلي",
     footerVatLabel: "مرخّص معفى",
     footerCallAria: "اتصلوا بنا",
     footerEmailAria: "راسلونا بالبريد الإلكتروني",
@@ -2300,6 +2302,7 @@ export const translations = {
 
     // ── Site footer + privacy policy (public — Meta business verification) ──
     footerBrand: "Ehjezly",
+    footerLogoAlt: "Ehjezly logo",
     footerVatLabel: "Exempt dealer (osek patur)",
     footerCallAria: "Call us",
     footerEmailAria: "Email us",
