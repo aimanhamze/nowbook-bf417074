@@ -4,25 +4,53 @@ import { useLang } from "@/contexts/LangContext";
 import { BUSINESS, hasValue, telHref } from "@/lib/businessInfo";
 import logoLight from "@/assets/e_logo_light.png";
 
-/**
- * Site footer — V2, "warm charcoal".
+/*
+ * =============================================================================
+ *  DELIBERATE EXCEPTION TO THE APP'S RTL RULE — THIS FOOTER IS AN LTR ISLAND
+ * =============================================================================
  *
- * A full-bleed dark block that ends the page. The surface takes the accent's
- * hue (24°) and drives it down to a near-black — hsl(24 30% 12%) — so the
- * footer is kin to the peach gradient above it rather than a cool slab
- * dropped onto a warm page. Where V1 centres, V2 is set start-aligned like a
- * letterhead: logo, name, then the contact details as an address block flush
- * under it, icons paired tight to their labels. One hairline separates the
- * bottom bar instead of a darker strip.
+ * The root <footer> sets dir="ltr" and does NOT inherit the page direction.
+ * The layout is therefore identical in Hebrew, Arabic and English: logo
+ * top-left, address block left, trade name bottom-left, privacy link
+ * bottom-right — in every language. Only the STRINGS switch language; their
+ * positions never move.
  *
- * Composition, top to bottom, all inline-start aligned:
+ * Why: this is a brand block, not UI. The wordmark is a Latin logo, the contact
+ * details are LTR data (an email, +972 numbers), and the owner wants one fixed
+ * signature that reads the same on every device and in every language, like a
+ * letterhead. Mirroring it per language made three different footers out of
+ * one brand.
+ *
+ * Consequences for anyone editing this file:
+ *  - PHYSICAL properties (pl-/pr-/ml-/text-left/justify-between) are CORRECT
+ *    and EXPECTED here. Do not "fix" them to ps-/pe-/text-start: under
+ *    dir="ltr" they resolve identically, and physical makes the intent
+ *    unmissable to the next reader.
+ *  - Localised strings (brand name, trade name, privacy link) carry dir="auto"
+ *    so Hebrew/Arabic glyphs keep their own reading order inside the LTR
+ *    layout. Position is fixed; the text is not garbled.
+ *  - The exception is scoped to SiteFooter only. /privacy, BottomNav and
+ *    everything else keep the normal document direction.
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * Design — V2, "warm charcoal". A full-bleed dark block that ends the page.
+ * The surface takes the accent's hue (24°) and drives it down to a near-black,
+ * hsl(24 30% 12%), so the footer is kin to the peach gradient above it. Set
+ * left-aligned like a letterhead: logo, name, then the contact details as an
+ * address block, icons paired tight to their labels. One hairline separates
+ * the bottom bar.
+ *
+ * Composition, top to bottom, all left-aligned:
  *   logo      the light variant of the login wordmark (see
  *             scripts/gen-logo-light.mjs) — cream word, orange mark
- *   name      the localised brand name, only where the logo doesn't already
- *             spell it (it says "ehjezly", so English skips this line)
- *   contact   email, then both phones on one row with a short rule between
+ *   name      the localised brand name — shown in EVERY language, English
+ *             included, so the rows below it sit at the same y everywhere
+ *   contact   email, then both phones — side by side from 368px up with a
+ *             short rule between; stacked below that (at 320px the pair needs
+ *             313px and only 272px exist inside the padding)
  *   hairline
- *   bar       trade name at inline-start, privacy link at inline-end
+ *   bar       trade name left, privacy link right
  *
  * Public surface: trading name only — never BUSINESS.legalName, never the VAT
  * number. The second phone is optional and takes its cell and rule with it.
@@ -35,16 +63,14 @@ import logoLight from "@/assets/e_logo_light.png";
  * metrics leave a sub-pixel seam of gradient showing on 3× screens. The bar's
  * pb-1 is a dead zone so its 44px link boxes end above that seam. If BottomNav
  * ever gains safe-area padding, this offset must follow.
- *
- * Phone numbers and the email are dir="ltr" (the "+" would reorder in he/ar);
- * the trade name is dir="auto" so it keeps its own direction on an English page.
  */
 
 /** (66px BottomNav − 1px seam overlap) − 7rem Index padding = −47px. See "Geometry". */
 const CLOSE_NAV_GAP = "mb-[calc(65px_-_7rem)]";
 
-/** What the logo raster already reads as, in Latin. */
-const LOGO_SPELLS = "ehjezly";
+// Breakpoint note: both phones fit on one row from 368px up (313px + 48px
+// padding). The min-[368px]: classes below are written out in full on purpose
+// — Tailwind's scanner only emits CSS for class names that appear literally.
 
 const SURFACE = "bg-[hsl(24_30%_12%)]";
 const CREAM = "text-[hsl(40_30%_96%)]";
@@ -60,13 +86,12 @@ const ICON = "h-3.5 w-3.5 shrink-0 text-[hsl(24_80%_55%/0.8)]";
 
 export function SiteFooter() {
   const { t } = useLang();
-  const brand = t("footerBrand");
-  const showName = brand.trim().toLowerCase() !== LOGO_SPELLS;
   const callLabel = t("footerCallAria");
 
   return (
-    <footer className={`mt-14 ${CLOSE_NAV_GAP} ${SURFACE} ${CREAM}`}>
-      <div className="mx-auto w-full max-w-md px-6 pb-7 pt-12 text-start">
+    // dir="ltr": the LTR island. Read the header comment before changing this.
+    <footer dir="ltr" className={`mt-14 ${CLOSE_NAV_GAP} ${SURFACE} ${CREAM}`}>
+      <div className="mx-auto w-full max-w-md px-6 pb-7 pt-12 text-left">
         {/* width/height are the asset's intrinsic px — reserves the box before
             the lazy image arrives, so the footer never shifts on load. */}
         <img
@@ -79,28 +104,30 @@ export function SiteFooter() {
           draggable={false}
           className="block h-10 w-auto select-none"
         />
-        {showName && (
-          <p className="mt-3 text-[15px] font-semibold leading-6 tracking-tight">{brand}</p>
-        )}
+        {/* Always rendered, English included: dropping it there would move
+            every row below by 36px and break the cross-language identity. */}
+        <p dir="auto" className="mt-3 text-left text-[15px] font-semibold leading-6 tracking-tight">
+          {t("footerBrand")}
+        </p>
 
-        {/* Address block, flush start like a letterhead. The -ms-1/ps-1 pair
-            keeps the icons optically on the logo's start edge while the tap
+        {/* Address block, flush left like a letterhead. The -ml-1/pl-1 pair
+            keeps the icons optically on the logo's left edge while the tap
             box still extends 4px into the margin. */}
         <address className="mt-5 flex flex-col items-start not-italic text-[13px] text-[hsl(40_30%_96%/0.8)]">
           <a
             href={`mailto:${BUSINESS.email}`}
             aria-label={t("footerEmailAria")}
-            className={`${LINK} -ms-1 ps-1 pe-2`}
+            className={`${LINK} -ml-1 pl-1 pr-2`}
           >
             <Mail aria-hidden className={ICON} />
             <span dir="ltr">{BUSINESS.email}</span>
           </a>
-          <div className="flex items-center">
+          <div className="flex flex-col items-start min-[368px]:flex-row min-[368px]:items-center">
             {hasValue(BUSINESS.phonePrimary) && (
               <a
                 href={telHref(BUSINESS.phonePrimary)}
                 aria-label={`${callLabel} ${BUSINESS.phonePrimary}`}
-                className={`${LINK} -ms-1 ps-1 pe-2`}
+                className={`${LINK} -ml-1 pl-1 pr-1`}
               >
                 <Phone aria-hidden className={ICON} />
                 <span dir="ltr">{BUSINESS.phonePrimary}</span>
@@ -108,13 +135,14 @@ export function SiteFooter() {
             )}
             {hasValue(BUSINESS.phoneSecondary) && (
               <>
-                {/* A standalone rule, not a border on the link: a border-s on
-                    a rounded link follows its corners and reads as a bracket. */}
-                <span aria-hidden className="h-4 w-px shrink-0 bg-[hsl(40_30%_96%/0.15)]" />
+                {/* A standalone rule, not a border on the link: a border on a
+                    rounded link follows its corners and reads as a bracket.
+                    Hidden when the phones stack. */}
+                <span aria-hidden className={`hidden h-4 w-px shrink-0 ml-1 ${RULE} min-[368px]:block`} />
                 <a
                   href={telHref(BUSINESS.phoneSecondary)}
                   aria-label={`${callLabel} ${BUSINESS.phoneSecondary}`}
-                  className={`${LINK} ps-2 pe-1`}
+                  className={`${LINK} -ml-1 pl-1 pr-1 min-[368px]:ml-0 min-[368px]:pl-2`}
                 >
                   <Phone aria-hidden className={ICON} />
                   <span dir="ltr">{BUSINESS.phoneSecondary}</span>
@@ -131,6 +159,7 @@ export function SiteFooter() {
         <span dir="auto" className="flex min-h-[44px] items-center">{BUSINESS.tradeName}</span>
         <Link
           to="/privacy"
+          dir="auto"
           className={`${LINK} underline decoration-[hsl(40_30%_96%/0.3)] underline-offset-4`}
         >
           {t("privacyTitle")}
