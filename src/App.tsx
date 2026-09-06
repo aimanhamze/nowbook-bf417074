@@ -24,6 +24,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Install = lazy(() => import("./pages/Install"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Admin = lazy(() => import("./pages/Admin"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
@@ -68,6 +69,7 @@ function PageTitleUpdater() {
       "/calendar": `Ehjezly — ${t("bookingsCalendar")}`,
       "/admin": `Ehjezly — Admin`,
       "/booking-confirmed": `Ehjezly — ${t("bookingConfirmed")}`,
+      "/privacy": `Ehjezly — ${t("privacyTitle")}`,
     };
 
     const base = location.pathname.split("/").slice(0, 2).join("/");
@@ -122,6 +124,9 @@ const App = () => (
                   <Route path="/admin/providers" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
                   <Route path="/admin/customers" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
                   <Route path="/install" element={<ErrorBoundary><Install /></ErrorBoundary>} />
+                  {/* Public on purpose: a Meta Business Verification reviewer
+                      must reach the policy without an account. No guard. */}
+                  <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

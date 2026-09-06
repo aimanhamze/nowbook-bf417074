@@ -739,6 +739,48 @@ export const translations = {
     serviceColorsHelper: "הצג כל שירות בצבע שונה ביומן",
     serviceColor: "צבע השירות",
     chooseColor: "בחר צבע",
+
+    // ── Site footer + privacy policy (public — Meta business verification) ──
+    footerBrand: "אחג'זלי",
+    footerVatLabel: "עוסק פטור",
+    footerCallAria: "התקשרו אלינו",
+    footerEmailAria: "שלחו לנו אימייל",
+
+    privacyTitle: "מדיניות פרטיות",
+    privacyLastUpdated: "עודכן לאחרונה: 6 בספטמבר 2026",
+    privacyIntro: "העמוד הזה מסביר בשפה פשוטה איזה מידע אנחנו אוספים, למה, עם מי הוא משותף, ומה אתם יכולים לעשות בנוגע אליו.",
+    privacyLanguageLabel: "שפה",
+    privacyBackHomeAria: "חזרה לדף הבית",
+
+    privacyWhoTitle: "מי אנחנו",
+    privacyWhoBody: "אחג'זלי (Ehjezly) היא פלטפורמה לקביעת תורים אצל נותני שירות מקומיים — מספרות, קליניקות, סטודיו לכושר ועוד.\n\nהשירות מופעל על ידי {legalName}, עוסק פטור {vat}.\n\nלכל שאלה בנושא פרטיות, או כדי לממש אחת מהזכויות המפורטות בעמוד הזה, אפשר לפנות אלינו במייל {email} או בטלפון {phone}.",
+
+    privacyCustomerDataTitle: "איזה מידע אנחנו אוספים מלקוחות",
+    privacyCustomerDataBody: "• שם מלא — כדי שנותן השירות יידע מי מגיע לתור.\n• מספר טלפון — לאימות ההתחברות באמצעות קוד חד-פעמי, ולשליחת אישורים ותזכורות.\n• כתובת אימייל — אם נרשמתם באמצעות אימייל או חשבון Google.\n• תמונת פרופיל — רק אם בחרתם להעלות אחת.\n• פרטי התורים שלכם — נותן השירות, השירותים שבחרתם, תאריך, שעה, מחיר וסטטוס התור.\n• מועדפים והתראות — העסקים שסימנתם וההודעות שנשלחו אליכם.\n• מנוי להתראות דחיפה — אם אישרתם התראות בדפדפן, נשמר מזהה טכני של הדפדפן שלכם כדי שנוכל לשלוח אותן.\n\nאיננו אוספים ואיננו שומרים את המיקום שלכם. עמוד 'בקרבת מקום' מבקש מהדפדפן את המיקום רק כדי למרכז את המפה סביבכם — הוא נשאר במכשיר ואינו נשלח לשרתים שלנו.",
+
+    privacyProviderDataTitle: "איזה מידע אנחנו אוספים מנותני שירות",
+    privacyProviderDataBody: "עסק שנרשם כנותן שירות מוסר: שם העסק, תיאור, קטגוריה, כתובת ומיקום על המפה, שעות פעילות, רשימת שירותים ומחירים, תמונות, פרטי קשר לעסק, קישורים לרשתות חברתיות, ופרטי אנשי הצוות שהעסק מוסיף — שם, שירותים, שעות עבודה וימי חופשה.\n\nרוב המידע הזה מוצג ללקוחות בעמוד העסק — זו מטרתו. בנוסף, נותן השירות רואה את פרטי הלקוחות שקבעו אצלו תור.",
+
+    privacyWhatsappTitle: "הודעות WhatsApp",
+    privacyWhatsappBody: "אישורי תורים, תזכורות והודעות על ביטול נשלחים אליכם בוואטסאפ (WhatsApp — שירות של Meta).\n\nכדי לשלוח אותן, מספר הטלפון שלכם ופרטי התור הרלוונטיים מועברים ל-SendPulse, ספק שליחת ההודעות שלנו, שמעביר אותם ל-WhatsApp לצורך המסירה בלבד.\n\nההודעות נשלחות אך ורק בקשר לתורים שלכם. איננו שולחים בוואטסאפ דיוור פרסומי, ואיננו מעבירים את מספר הטלפון שלכם למפרסמים.",
+
+    privacyPaymentTitle: "תשלום",
+    privacyPaymentBody: "התשלום מתבצע במקום, ישירות מול נותן השירות.\n\nהאפליקציה אינה גובה תשלום, אינה מעבירה כספים, ואינה אוספת או שומרת פרטי כרטיס אשראי או חשבון בנק. המחירים המוצגים הם המחירים שנותן השירות פרסם.",
+
+    privacySharingTitle: "עם מי המידע משותף",
+    privacySharingBody: "איננו מוכרים מידע אישי ואיננו מעבירים אותו למפרסמים. המידע מועבר רק לגורמים הבאים:\n\n• נותן השירות שאצלו קבעתם תור — שמכם, מספר הטלפון ופרטי התור, כדי שיוכל לתת לכם את השירות.\n• Supabase — ספק התשתית שמאחסן את מסד הנתונים ומנהל את ההתחברות לחשבון.\n• SendPulse ו-WhatsApp/Meta — לצורך שליחת ההודעות שתוארו למעלה.\n• Google — רק אם בחרתם להתחבר באמצעות חשבון Google.\n• רשויות מוסמכות — רק אם נידרש לכך על פי חוק.",
+
+    privacyCookiesTitle: "עוגיות ואחסון מקומי",
+    privacyCookiesBody: "האתר אינו משתמש בעוגיות (cookies) למעקב, ואין בו כלי אנליטיקה, פיקסלים פרסומיים או כלי מעקב של צד שלישי מכל סוג.\n\nאנחנו משתמשים באחסון המקומי של הדפדפן (localStorage ו-sessionStorage) לצרכים הבאים בלבד:\n\n• שמירת ההתחברות שלכם, כדי שלא תצטרכו להתחבר מחדש בכל כניסה.\n• השפה שבחרתם.\n• מצב התצוגה האחרון של היומן — לנותני שירות בלבד.\n• המיקום האחרון שהוצג במפה — נמחק אוטומטית כשסוגרים את הלשונית.\n\nאפשר למחוק את כל אלה בכל עת דרך הגדרות הדפדפן. התוצאה היא ניתוק מהחשבון.",
+
+    privacyRightsTitle: "הזכויות שלכם ומחיקת מידע",
+    privacyRightsBody: "אתם רשאים לעיין במידע השמור עליכם, לתקן אותו, ולבקש את מחיקתו.\n\nחלק מהפרטים אפשר לעדכן ישירות באפליקציה, בעמוד הפרופיל.\n\nלמחיקת החשבון והמידע שלכם, שלחו בקשה לכתובת {email} מהאימייל או ממספר הטלפון הרשומים בחשבון, כדי שנוכל לוודא שהבקשה אכן שלכם. נטפל בבקשה תוך 30 יום ונאשר לכם בסיום.\n\nשימו לב: ייתכן שנשמור רישום מצומצם של תורים שכבר התקיימו, כאשר נותן השירות נדרש לכך לצורכי הנהלת חשבונות על פי חוק.",
+
+    privacyChangesTitle: "שינויים במדיניות",
+    privacyChangesBody: "אם נעדכן את המדיניות הזו, נעדכן גם את התאריך שבראש העמוד. על שינוי מהותי נודיע גם בתוך האפליקציה.",
+
+    privacyContactTitle: "יצירת קשר",
+    privacyContactBody: "{legalName}\nעוסק פטור {vat}\nאימייל: {email}\nטלפון: {phone}",
   },
   ar: {
     appName: "Ehjezly",
@@ -1474,6 +1516,48 @@ export const translations = {
     serviceColorsHelper: "عرض كل خدمة بلون مختلف في التقويم",
     serviceColor: "لون الخدمة",
     chooseColor: "اختر لوناً",
+
+    // ── Site footer + privacy policy (public — Meta business verification) ──
+    footerBrand: "إحجزلي",
+    footerVatLabel: "مرخّص معفى",
+    footerCallAria: "اتصلوا بنا",
+    footerEmailAria: "راسلونا بالبريد الإلكتروني",
+
+    privacyTitle: "سياسة الخصوصية",
+    privacyLastUpdated: "آخر تحديث: 6 أيلول (سبتمبر) 2026",
+    privacyIntro: "توضّح هذه الصفحة بلغة بسيطة ما هي المعلومات التي نجمعها، ولماذا، ومع من تُشارَك، وما الذي يمكنكم فعله بشأنها.",
+    privacyLanguageLabel: "اللغة",
+    privacyBackHomeAria: "العودة إلى الصفحة الرئيسية",
+
+    privacyWhoTitle: "من نحن",
+    privacyWhoBody: "إحجزلي (Ehjezly) هي منصّة لحجز المواعيد لدى مقدّمي الخدمات المحليّين — صالونات الحلاقة والتجميل، العيادات، استوديوهات اللياقة وغيرها.\n\nيُدار هذا الخدمة من قبل {legalName}، مرخّص معفى {vat}.\n\nلأي سؤال يتعلّق بالخصوصية، أو لممارسة أي حق من الحقوق المذكورة في هذه الصفحة، يمكنكم مراسلتنا على {email} أو الاتصال بنا على {phone}.",
+
+    privacyCustomerDataTitle: "ما الذي نجمعه من الزبائن",
+    privacyCustomerDataBody: "• الاسم الكامل — ليعرف مقدّم الخدمة من سيصل إلى الموعد.\n• رقم الهاتف — للتحقّق من تسجيل الدخول عبر رمز لمرّة واحدة، ولإرسال التأكيدات والتذكيرات.\n• البريد الإلكتروني — إذا سجّلتم عبر البريد الإلكتروني أو حساب Google.\n• صورة الملف الشخصي — فقط إذا اخترتم رفع واحدة.\n• تفاصيل مواعيدكم — مقدّم الخدمة، الخدمات التي اخترتموها، التاريخ والساعة والسعر وحالة الموعد.\n• المفضّلة والإشعارات — الأعمال التي أضفتموها للمفضّلة والرسائل التي أُرسلت إليكم.\n• الاشتراك بإشعارات الدفع — إذا سمحتم بالإشعارات في المتصفّح، نحفظ معرّفاً تقنياً للمتصفّح كي نتمكّن من إرسالها.\n\nنحن لا نجمع موقعكم ولا نحفظه. صفحة 'بالقرب مني' تطلب الموقع من المتصفّح فقط لتوسيط الخريطة حولكم — ويبقى الموقع على جهازكم ولا يُرسل إلى خوادمنا.",
+
+    privacyProviderDataTitle: "ما الذي نجمعه من مقدّمي الخدمات",
+    privacyProviderDataBody: "العمل التجاري الذي يسجّل كمقدّم خدمة يزوّدنا بـ: اسم العمل، الوصف، الفئة، العنوان والموقع على الخريطة، ساعات العمل، قائمة الخدمات والأسعار، الصور، وسائل التواصل مع العمل، روابط مواقع التواصل الاجتماعي، وتفاصيل أفراد الطاقم الذين يضيفهم العمل — الاسم، الخدمات، ساعات العمل وأيام الإجازة.\n\nمعظم هذه المعلومات تُعرض للزبائن في صفحة العمل — وهذا هو الغرض منها. كما يرى مقدّم الخدمة تفاصيل الزبائن الذين حجزوا لديه.",
+
+    privacyWhatsappTitle: "رسائل WhatsApp",
+    privacyWhatsappBody: "تأكيدات المواعيد والتذكيرات ورسائل الإلغاء تُرسل إليكم عبر واتساب (WhatsApp — خدمة تابعة لـ Meta).\n\nلإرسالها، يُمرَّر رقم هاتفكم وتفاصيل الموعد ذات الصلة إلى SendPulse، وهي الجهة التي تتولّى إرسال الرسائل لدينا، والتي تمرّرها بدورها إلى WhatsApp لغرض التسليم فقط.\n\nتُرسل الرسائل حصراً بخصوص مواعيدكم. نحن لا نرسل رسائل دعائية عبر واتساب، ولا نمرّر رقم هاتفكم إلى المعلنين.",
+
+    privacyPaymentTitle: "الدفع",
+    privacyPaymentBody: "يتم الدفع في المكان، مباشرة لدى مقدّم الخدمة.\n\nالتطبيق لا يحصّل أي مبالغ، ولا يحوّل أموالاً، ولا يجمع أو يحفظ تفاصيل بطاقات ائتمان أو حسابات بنكية. الأسعار المعروضة هي الأسعار التي نشرها مقدّم الخدمة.",
+
+    privacySharingTitle: "مع من تُشارَك المعلومات",
+    privacySharingBody: "نحن لا نبيع المعلومات الشخصية ولا نمرّرها إلى المعلنين. تُمرَّر المعلومات فقط إلى الجهات التالية:\n\n• مقدّم الخدمة الذي حجزتم لديه — اسمكم ورقم هاتفكم وتفاصيل الموعد، ليتمكّن من تقديم الخدمة لكم.\n• Supabase — مزوّد البنية التحتية الذي يستضيف قاعدة البيانات ويدير تسجيل الدخول.\n• SendPulse و WhatsApp/Meta — لغرض إرسال الرسائل الموضّحة أعلاه.\n• Google — فقط إذا اخترتم تسجيل الدخول عبر حساب Google.\n• الجهات الرسمية المخوّلة — فقط إذا طُلب منّا ذلك بموجب القانون.",
+
+    privacyCookiesTitle: "ملفات تعريف الارتباط والتخزين المحلّي",
+    privacyCookiesBody: "الموقع لا يستخدم ملفات تعريف ارتباط (cookies) للتتبّع، ولا يحتوي على أدوات تحليلات أو بكسلات إعلانية أو أي أدوات تتبّع تابعة لطرف ثالث من أي نوع.\n\nنستخدم التخزين المحلّي في المتصفّح (localStorage و sessionStorage) للأغراض التالية فقط:\n\n• حفظ تسجيل دخولكم، كي لا تضطرّوا لتسجيل الدخول في كل مرّة.\n• اللغة التي اخترتموها.\n• آخر وضع عرض للتقويم — لمقدّمي الخدمات فقط.\n• آخر موقع عُرض على الخريطة — يُحذف تلقائياً عند إغلاق التبويب.\n\nيمكنكم حذف كل ذلك في أي وقت من إعدادات المتصفّح، وستكون النتيجة تسجيل الخروج من الحساب.",
+
+    privacyRightsTitle: "حقوقكم وحذف المعلومات",
+    privacyRightsBody: "يحقّ لكم الاطّلاع على المعلومات المحفوظة عنكم، وتصحيحها، وطلب حذفها.\n\nبعض التفاصيل يمكن تحديثها مباشرة في التطبيق، في صفحة الملف الشخصي.\n\nلحذف الحساب ومعلوماتكم، أرسلوا طلباً إلى {email} من البريد الإلكتروني أو رقم الهاتف المسجّلين في الحساب، كي نتمكّن من التأكّد أن الطلب صادر عنكم. سنعالج الطلب خلال 30 يوماً ونؤكّد لكم عند الانتهاء.\n\nملاحظة: قد نحتفظ بسجلّ محدود للمواعيد التي تمّت فعلاً، عندما يكون مقدّم الخدمة ملزماً بذلك لأغراض محاسبية بموجب القانون.",
+
+    privacyChangesTitle: "تغييرات على هذه السياسة",
+    privacyChangesBody: "إذا حدّثنا هذه السياسة، سنحدّث أيضاً التاريخ الظاهر في أعلى الصفحة. وفي حال كان التغيير جوهرياً، سننوّه إليه داخل التطبيق أيضاً.",
+
+    privacyContactTitle: "التواصل معنا",
+    privacyContactBody: "{legalName}\nمرخّص معفى {vat}\nالبريد الإلكتروني: {email}\nهاتف: {phone}",
   },
   en: {
     appName: "Ehjezly",
@@ -2209,6 +2293,48 @@ export const translations = {
     serviceColorsHelper: "Show each service in a different color in the calendar",
     serviceColor: "Service Color",
     chooseColor: "Choose Color",
+
+    // ── Site footer + privacy policy (public — Meta business verification) ──
+    footerBrand: "Ehjezly",
+    footerVatLabel: "Exempt dealer (osek patur)",
+    footerCallAria: "Call us",
+    footerEmailAria: "Email us",
+
+    privacyTitle: "Privacy Policy",
+    privacyLastUpdated: "Last updated: 6 September 2026",
+    privacyIntro: "This page explains, in plain language, what information we collect, why, who it is shared with, and what you can do about it.",
+    privacyLanguageLabel: "Language",
+    privacyBackHomeAria: "Back to home",
+
+    privacyWhoTitle: "Who we are",
+    privacyWhoBody: "Ehjezly is a platform for booking appointments with local service providers — barbers and salons, clinics, fitness studios and more.\n\nThe service is operated by {legalName}, exempt dealer (osek patur) {vat}.\n\nFor any privacy question, or to exercise any of the rights described on this page, contact us at {email} or by phone at {phone}.",
+
+    privacyCustomerDataTitle: "What we collect from customers",
+    privacyCustomerDataBody: "• Full name — so the provider knows who is coming to the appointment.\n• Phone number — to verify your sign-in with a one-time code, and to send confirmations and reminders.\n• Email address — if you signed up with email or a Google account.\n• Profile photo — only if you chose to upload one.\n• Your booking details — the provider, the services you selected, the date, time, price and booking status.\n• Favourites and notifications — the businesses you saved and the messages sent to you.\n• Push notification subscription — if you allowed browser notifications, we store a technical identifier for your browser so we can send them.\n\nWe do not collect or store your location. The 'Nearby' page asks your browser for your location only to centre the map around you — it stays on your device and is never sent to our servers.",
+
+    privacyProviderDataTitle: "What we collect from providers",
+    privacyProviderDataBody: "A business that registers as a provider gives us: business name, description, category, address and map location, opening hours, list of services and prices, photos, business contact details, social media links, and details of the staff members the business adds — name, services, working hours and days off.\n\nMost of this is shown to customers on the business page — that is its purpose. A provider also sees the details of customers who booked with them.",
+
+    privacyWhatsappTitle: "WhatsApp messages",
+    privacyWhatsappBody: "Booking confirmations, reminders and cancellation notices are sent to you over WhatsApp (a Meta service).\n\nTo send them, your phone number and the relevant booking details are passed to SendPulse, our messaging delivery provider, which passes them on to WhatsApp for delivery only.\n\nThese messages are sent solely in connection with your own bookings. We do not send marketing messages over WhatsApp, and we do not pass your phone number to advertisers.",
+
+    privacyPaymentTitle: "Payment",
+    privacyPaymentBody: "Payment is made at the venue, directly to the service provider.\n\nThe app does not charge you, does not transfer money, and does not collect or store credit card or bank account details. The prices shown are the prices the provider published.",
+
+    privacySharingTitle: "Who we share information with",
+    privacySharingBody: "We do not sell personal information and we do not pass it to advertisers. Information is shared only with:\n\n• The provider you booked with — your name, phone number and booking details, so they can serve you.\n• Supabase — the infrastructure provider that hosts our database and handles account sign-in.\n• SendPulse and WhatsApp/Meta — for sending the messages described above.\n• Google — only if you chose to sign in with a Google account.\n• Authorities — only where we are required to by law.",
+
+    privacyCookiesTitle: "Cookies and local storage",
+    privacyCookiesBody: "This site does not use cookies for tracking, and contains no analytics tools, advertising pixels, or third-party tracking of any kind.\n\nWe use your browser's local storage (localStorage and sessionStorage) for these purposes only:\n\n• Keeping you signed in, so you don't have to log in every time.\n• The language you selected.\n• The last calendar view mode — for providers only.\n• The last map position shown — automatically discarded when you close the tab.\n\nYou can clear all of these at any time from your browser settings; the result is that you are signed out.",
+
+    privacyRightsTitle: "Your rights and deleting your data",
+    privacyRightsBody: "You have the right to see the information we hold about you, correct it, and ask us to delete it.\n\nSome details can be updated directly in the app, on the Profile page.\n\nTo delete your account and your data, send a request to {email} from the email address or phone number registered on the account, so we can confirm the request is yours. We will handle it within 30 days and confirm once it is done.\n\nPlease note: we may keep a limited record of appointments that already took place, where the provider is required to retain it for accounting purposes under law.",
+
+    privacyChangesTitle: "Changes to this policy",
+    privacyChangesBody: "If we update this policy, we will also update the date at the top of this page. If a change is significant, we will also tell you inside the app.",
+
+    privacyContactTitle: "Contact",
+    privacyContactBody: "{legalName}\nExempt dealer (osek patur) {vat}\nEmail: {email}\nPhone: {phone}",
   },
 } as const;
 

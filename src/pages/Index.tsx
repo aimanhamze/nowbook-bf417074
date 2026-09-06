@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SearchBar } from "@/components/home/SearchBar";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 import { CategoryRow } from "@/components/home/CategoryRow";
 import { ProviderCardGrid } from "@/components/home/ProviderCardGrid";
 import { ForwardArrow } from "@/components/ui/directional-icon";
@@ -537,6 +538,10 @@ const Index = () => {
             </section>
           )
         ))}
+
+        {/* Business identity + privacy policy, reachable logged out. Sits
+            inside the page's pb-28, so the fixed BottomNav never covers it. */}
+        <SiteFooter />
       </div>
     </div>
   );
