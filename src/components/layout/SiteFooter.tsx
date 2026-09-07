@@ -26,7 +26,7 @@ import logoLight from "@/assets/e_logo_light.png";
  *    and EXPECTED here. Do not "fix" them to ps-/pe-/text-start: under
  *    dir="ltr" they resolve identically, and physical makes the intent
  *    unmissable to the next reader.
- *  - Localised strings (brand name, trade name, privacy link) carry dir="auto"
+ *  - Localised strings (trade name, privacy link) carry dir="auto"
  *    so Hebrew/Arabic glyphs keep their own reading order inside the LTR
  *    layout. Position is fixed; the text is not garbled.
  *  - The exception is scoped to SiteFooter only. /privacy, BottomNav and
@@ -37,15 +37,14 @@ import logoLight from "@/assets/e_logo_light.png";
  * Design — V2, "warm charcoal". A full-bleed dark block that ends the page.
  * The surface takes the accent's hue (24°) and drives it down to a near-black,
  * hsl(24 30% 12%), so the footer is kin to the peach gradient above it. Set
- * left-aligned like a letterhead: logo, name, then the contact details as an
+ * left-aligned like a letterhead: logo, then the contact details as an
  * address block, icons paired tight to their labels. One hairline separates
- * the bottom bar.
+ * the bottom bar, which gets room to breathe above the nav.
  *
  * Composition, top to bottom, all left-aligned:
  *   logo      the light variant of the login wordmark (see
- *             scripts/gen-logo-light.mjs) — cream word, orange mark
- *   name      the localised brand name — shown in EVERY language, English
- *             included, so the rows below it sit at the same y everywhere
+ *             scripts/gen-logo-light.mjs) — cream word, orange mark. It
+ *             already spells the name, so no text wordmark sits under it.
  *   contact   email, then both phones — side by side from 368px up with a
  *             short rule between; stacked below that (at 320px the pair needs
  *             313px and only 272px exist inside the padding)
@@ -61,8 +60,8 @@ import logoLight from "@/assets/e_logo_light.png";
  * margin. It overshoots by exactly 1px so the block's empty bottom edge tucks
  * under the nav's own opaque 1px border-t: without that, fractional text
  * metrics leave a sub-pixel seam of gradient showing on 3× screens. The bar's
- * pb-1 is a dead zone so its 44px link boxes end above that seam. If BottomNav
- * ever gains safe-area padding, this offset must follow.
+ * pb-3 keeps its 44px link boxes 12px clear of that seam. If BottomNav ever
+ * gains safe-area padding, this offset must follow.
  */
 
 /** (66px BottomNav − 1px seam overlap) − 7rem Index padding = −47px. See "Geometry". */
@@ -91,7 +90,7 @@ export function SiteFooter() {
   return (
     // dir="ltr": the LTR island. Read the header comment before changing this.
     <footer dir="ltr" className={`mt-14 ${CLOSE_NAV_GAP} ${SURFACE} ${CREAM}`}>
-      <div className="mx-auto w-full max-w-md px-6 pb-7 pt-12 text-left">
+      <div className="mx-auto w-full max-w-md px-6 pb-9 pt-12 text-left">
         {/* width/height are the asset's intrinsic px — reserves the box before
             the lazy image arrives, so the footer never shifts on load. */}
         <img
@@ -104,16 +103,10 @@ export function SiteFooter() {
           draggable={false}
           className="block h-10 w-auto select-none"
         />
-        {/* Always rendered, English included: dropping it there would move
-            every row below by 36px and break the cross-language identity. */}
-        <p dir="auto" className="mt-3 text-left text-[15px] font-semibold leading-6 tracking-tight">
-          {t("footerBrand")}
-        </p>
-
         {/* Address block, flush left like a letterhead. The -ml-1/pl-1 pair
             keeps the icons optically on the logo's left edge while the tap
             box still extends 4px into the margin. */}
-        <address className="mt-5 flex flex-col items-start not-italic text-[13px] text-[hsl(40_30%_96%/0.8)]">
+        <address className="mt-4 flex flex-col items-start not-italic text-[13px] text-[hsl(40_30%_96%/0.8)]">
           <a
             href={`mailto:${BUSINESS.email}`}
             aria-label={t("footerEmailAria")}
@@ -155,7 +148,7 @@ export function SiteFooter() {
 
       {/* One hairline, inset to the text margin, then the quiet bar. */}
       <div aria-hidden className={`mx-6 h-px ${RULE}`} />
-      <div className="mx-auto flex w-full max-w-md items-center justify-between gap-4 px-6 pb-1 text-[11px] text-[hsl(40_30%_96%/0.6)]">
+      <div className="mx-auto flex w-full max-w-md items-center justify-between gap-4 px-6 pb-3 pt-1 text-[11px] text-[hsl(40_30%_96%/0.6)]">
         <span dir="auto" className="flex min-h-[44px] items-center">{BUSINESS.tradeName}</span>
         <Link
           to="/privacy"
