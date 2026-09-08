@@ -31,11 +31,25 @@ import logoLight from "@/assets/e_logo_light.png";
  *
  * -----------------------------------------------------------------------------
  *
- * Design — a centred signature on the warm charcoal, hsl(24 30% 12%): the
- * accent's hue driven down to near-black so the block is kin to the peach
- * gradient above it. Two low-opacity orange waves sit in the bottom corners,
- * drawn inline as SVG (no image asset), tapering to nothing toward the centre
- * so the copyright line never sits on them.
+ * Design — a centred signature on the warm charcoal: the accent's hue driven
+ * down to near-black so the block is kin to the peach gradient above it. The
+ * surface is a shallow vertical gradient (hsl 24 26% 15% at the top, down to
+ * hsl 24 34% 9% at the bottom) so the block has depth instead of reading flat.
+ * Two orange waves rise from each bottom corner, drawn inline as SVG (no image
+ * asset): a tall back wave that is the readable shape, and a low swell that
+ * hugs the bottom edge.
+ *
+ * Contrast geometry — the waves are sized so that NO text ever sits over more
+ * than ONE wave layer, because the numbers say two layers cannot be made
+ * legible: cream/70 over two stacked layers is 4.65:1 at best, and four
+ * layers (where both sides' tails would meet) fails for any cream. So:
+ *   - each tall wave is exactly half the width; the two meet at the centre
+ *     and never overlap;
+ *   - the low swell is 20px tall; every glyph ends ≥24px above the bottom,
+ *     so the swell is under nothing but the tall wave's foot.
+ * With one layer as the worst case, copyright cream/65 measures 5.27:1 and
+ * the trade name cream/75 higher still. Re-run the pixel check if the wave
+ * paths, opacities, or text opacities change.
  *
  * Composition, top to bottom, all centred:
  *   logo      the light variant of the login wordmark (see
@@ -65,7 +79,9 @@ import logoLight from "@/assets/e_logo_light.png";
 /** (66px BottomNav − 1px seam overlap) − 7rem Index padding = −47px. See "Geometry". */
 const CLOSE_NAV_GAP = "mb-[calc(65px_-_7rem)]";
 
-const SURFACE = "bg-[hsl(24_30%_12%)]";
+/** Top-lighter → bottom-darker charcoal. The lightest stop sits under the
+    logo and tagline; the waves sit over the darkest. */
+const SURFACE = "bg-[linear-gradient(180deg,hsl(24_26%_15%)_0%,hsl(24_30%_12%)_55%,hsl(24_34%_9%)_100%)]";
 const CREAM = "text-[hsl(40_30%_96%)]";
 const RULE = "bg-[hsl(40_30%_96%/0.12)]";
 
@@ -101,20 +117,37 @@ const DIVIDER = `hidden min-[368px]:block mx-3 mt-[10px] h-6 w-px shrink-0 self-
 const CONTACT_MIN_W = "min-w-[56px]";
 const PRIVACY_MIN_W = "min-w-[100px]";
 
-/** Corner wave: thick at the outer edge, tapering to zero toward the centre. */
+/**
+ * Corner waves. Two SVGs per side (see "Contrast geometry" in the header):
+ *   back   96px tall (crest level with the hairline), exactly half the
+ *          footer's width, tapering to zero at the centre so the two sides
+ *          never overlap — this is the shape
+ *   swell  low, 20px, hugging the bottom edge under every glyph
+ * The left/right classes are written literally on purpose — Tailwind's
+ * scanner cannot see template-built names.
+ */
+const WAVE_FILL = "hsl(24 80% 55%)";
 function CornerWave({ side }: { side: "left" | "right" }) {
+  const place = side === "left" ? "left-0" : "right-0 -scale-x-100";
   return (
-    <svg
-      aria-hidden
-      viewBox="0 0 180 64"
-      preserveAspectRatio="none"
-      className={`pointer-events-none absolute bottom-0 h-16 w-[46%] max-w-[220px] ${
-        side === "left" ? "left-0" : "right-0 -scale-x-100"
-      }`}
-    >
-      <path d="M0 64 V26 C 34 12, 78 18, 112 40 C 136 55, 158 62, 180 64 Z" fill="hsl(24 80% 55%)" fillOpacity="0.10" />
-      <path d="M0 64 V44 C 30 36, 70 42, 104 54 C 128 62, 150 64, 180 64 Z" fill="hsl(24 80% 55%)" fillOpacity="0.08" />
-    </svg>
+    <>
+      <svg
+        aria-hidden
+        viewBox="0 0 200 120"
+        preserveAspectRatio="none"
+        className={`pointer-events-none absolute bottom-0 h-24 w-1/2 ${place}`}
+      >
+        <path d="M0 120 V18 C 40 4, 80 8, 112 44 C 140 76, 168 104, 200 120 Z" fill={WAVE_FILL} fillOpacity="0.30" />
+      </svg>
+      <svg
+        aria-hidden
+        viewBox="0 0 200 20"
+        preserveAspectRatio="none"
+        className={`pointer-events-none absolute bottom-0 h-5 w-[62%] ${place}`}
+      >
+        <path d="M0 20 V6 C 50 0, 110 4, 150 12 C 170 16, 186 19, 200 20 Z" fill={WAVE_FILL} fillOpacity="0.18" />
+      </svg>
+    </>
   );
 }
 
@@ -141,7 +174,7 @@ export function SiteFooter() {
           draggable={false}
           className="mx-auto block h-12 w-auto select-none"
         />
-        <p dir="auto" className="mt-3 text-[13px] leading-5 text-[hsl(40_30%_96%/0.6)]">
+        <p dir="auto" className="mt-3 text-[13px] leading-5 text-[hsl(40_30%_96%/0.65)]">
           {t("footerTagline")}
         </p>
 
@@ -184,10 +217,10 @@ export function SiteFooter() {
 
         <div aria-hidden className={`mt-8 h-px ${RULE}`} />
 
-        <p dir="auto" className="mt-5 text-[12px] leading-4 text-[hsl(40_30%_96%/0.7)]">
+        <p dir="auto" className="mt-5 text-[12px] leading-4 text-[hsl(40_30%_96%/0.75)]">
           {BUSINESS.tradeName}
         </p>
-        <p dir="auto" className="mt-1.5 pb-6 text-[11px] leading-4 text-[hsl(40_30%_96%/0.55)]">
+        <p dir="auto" className="mt-1.5 pb-6 text-[11px] leading-4 text-[hsl(40_30%_96%/0.65)]">
           {t("footerCopyright").replace("{year}", year)}
         </p>
       </div>
