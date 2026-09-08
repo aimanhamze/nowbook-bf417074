@@ -39,27 +39,40 @@ import logoLight from "@/assets/e_logo_light.png";
  * asset): a tall back wave that is the readable shape, and a low swell that
  * hugs the bottom edge.
  *
- * Contrast geometry — the waves are sized so that NO text ever sits over more
- * than ONE wave layer, because the numbers say two layers cannot be made
- * legible: cream/70 over two stacked layers is 4.65:1 at best, and four
- * layers (where both sides' tails would meet) fails for any cream. So:
- *   - each tall wave is exactly half the width; the two meet at the centre
- *     and never overlap;
- *   - the low swell is 20px tall; every glyph ends ≥24px above the bottom,
- *     so the swell is under nothing but the tall wave's foot.
- * With one layer as the worst case, copyright cream/65 measures 5.27:1 and
- * the trade name cream/75 higher still. Re-run the pixel check if the wave
- * paths, opacities, or text opacities change.
+ * Contrast geometry — even after the 2026-09-09 pass that toned the waves
+ * down to a hint (0.30→0.09, 0.18→0.06, and shorter — see CornerWave), no
+ * text ever sits over more than ONE wave layer, so the worst case is still a
+ * single layer: cream/65 copyright over it measures comfortably above AA.
+ * Re-run the pixel check (waves.cjs in the working notes) if the wave paths,
+ * opacities, or text opacities change again.
  *
  * Composition, top to bottom, all centred:
  *   logo      the light variant of the login wordmark (see
- *             scripts/gen-logo-light.mjs) — the centrepiece, h-12
- *   tagline   one quiet line
+ *             scripts/gen-logo-light.mjs) — the centrepiece, h-12, sitting
+ *             directly above the action row (no tagline underneath it)
  *   actions   three circular icon buttons with labels, thin rules between:
  *             Instagram (new tab) · email (label = the address) · privacy
  *             policy
  *   hairline
  *   trade name, then the copyright line as the quietest tier
+ *
+ * Centring — the row LOOKS centred only if the three DISCS are symmetric
+ * around the middle; centring the row's total bounding box (justify-center)
+ * is not the same thing when the items' own widths differ. Each action
+ * centres its disc within its own box (flex-col items-center), so with
+ * unequal box widths — Instagram's box was only as wide as "Instagram"
+ * (~63px) while Privacy's was padded to fit Arabic (~100px) — the row's
+ * bounding box came out centred (0px offset) while the discs themselves sat
+ * ~9px left of true centre. Verified three independent ways (DOM rects,
+ * per-language comparison, and a raw pixel scan of the rendered PNG) before
+ * touching anything, so the fix targets the real cause: WING_MIN_W is now
+ * applied to BOTH Instagram and Privacy, making them the same width. Email
+ * stays in the middle at its own natural width. Three items where the two
+ * outer ones are equal is a mirror-symmetric (palindromic) sequence of
+ * widths, so centring the total automatically puts the middle disc exactly
+ * on the true centre and the two outer discs symmetric around it — this
+ * holds for ANY value shared by the two wings, not just this one, which is
+ * why a shared constant is a structural fix rather than a tuned offset.
  *
  * Public surface: trading name only — never BUSINESS.legalName, never the VAT
  * number, and no phone number anywhere (the numbers live in the privacy
@@ -103,27 +116,40 @@ const DISC_ICON = "h-[18px] w-[18px] text-[hsl(24_80%_55%)]";
 const LABEL = "whitespace-nowrap text-[12px] leading-4 text-[hsl(40_30%_96%/0.7)] transition-colors group-hover:text-[hsl(40_30%_96%)]";
 /**
  * Rule between actions, aligned with the discs rather than the labels. Shown
- * from 368px up only: below that the three items fit on one row solely
+ * from 375px up only: below that the three items fit on one row solely
  * because the rules and their margins are gone (see the fit note on the row).
+ * mx-1, not the more generous mx-3 an earlier pass used: with both wings now
+ * WING_MIN_W wide (needed for centring — see the header comment), the row is
+ * already close to the 375px budget, and the wider margin would push it over.
+ * The breakpoint is 375, not the round-looking 368: at 368 the row (with
+ * dividers) needs 320.83px against 320 available — 0.83px too wide, so it
+ * silently wrapped to two lines right at that width. 375 has 6px to spare;
+ * verified empirically across 320-414px, not just by this arithmetic.
  * Written out literally — Tailwind's scanner cannot see template-built names.
  */
-const DIVIDER = `hidden min-[368px]:block mx-3 mt-[10px] h-6 w-px shrink-0 self-start ${RULE}`;
+const DIVIDER = `hidden min-[375px]:block mx-1 mt-[10px] h-6 w-px shrink-0 self-start ${RULE}`;
 
 /**
- * Minimum width for the privacy action, set to the widest of the three
- * translations (Arabic) so the disc positions are byte-identical in he/ar/en
- * instead of drifting with the label's natural width. Re-measure if that
- * string changes. "Instagram" and the email are the same in every language
- * and keep their natural widths.
+ * Shared minimum width for the two OUTER actions (Instagram, Privacy) — the
+ * actual centring fix, not a cosmetic constant. See "Centring" in the header
+ * comment: making the two wings equal width is what makes the row symmetric,
+ * regardless of the shared value's size, so this is set to the widest content
+ * either wing ever needs to hold — Arabic "سياسة الخصوصية" (~98px natural) —
+ * so neither wing clips. Email, the middle item, is untouched and keeps its
+ * own natural width. Re-measure this if either wing's label changes; verify
+ * the row still holds one line at 375px afterwards (see the fit note below).
  */
-const PRIVACY_MIN_W = "min-w-[100px]";
+const WING_MIN_W = "min-w-[100px]";
 
 /**
- * Corner waves. Two SVGs per side (see "Contrast geometry" in the header):
- *   back   96px tall (crest level with the hairline), exactly half the
- *          footer's width, tapering to zero at the centre so the two sides
- *          never overlap — this is the shape
- *   swell  low, 20px, hugging the bottom edge under every glyph
+ * Corner waves — texture, not a shape competing with the text. A previous
+ * pass (0.30/0.18 opacity, 96px/20px tall) read as a heavy, distinct band
+ * across the bottom rather than a hint of colour. Both layers are now
+ * smaller in every dimension and much fainter:
+ *   back   40px tall (was 96), 2/5 of the footer's width (was 1/2), tapering
+ *          to zero at the centre so the two sides never overlap
+ *   swell  12px tall (was 20), under half the footer's width (was 62%),
+ *          hugging the bottom edge under every glyph
  * The left/right classes are written literally on purpose — Tailwind's
  * scanner cannot see template-built names.
  */
@@ -136,17 +162,17 @@ function CornerWave({ side }: { side: "left" | "right" }) {
         aria-hidden
         viewBox="0 0 200 120"
         preserveAspectRatio="none"
-        className={`pointer-events-none absolute bottom-0 h-24 w-1/2 ${place}`}
+        className={`pointer-events-none absolute bottom-0 h-10 w-2/5 ${place}`}
       >
-        <path d="M0 120 V18 C 40 4, 80 8, 112 44 C 140 76, 168 104, 200 120 Z" fill={WAVE_FILL} fillOpacity="0.30" />
+        <path d="M0 120 V18 C 40 4, 80 8, 112 44 C 140 76, 168 104, 200 120 Z" fill={WAVE_FILL} fillOpacity="0.09" />
       </svg>
       <svg
         aria-hidden
         viewBox="0 0 200 20"
         preserveAspectRatio="none"
-        className={`pointer-events-none absolute bottom-0 h-5 w-[62%] ${place}`}
+        className={`pointer-events-none absolute bottom-0 h-3 w-[45%] ${place}`}
       >
-        <path d="M0 20 V6 C 50 0, 110 4, 150 12 C 170 16, 186 19, 200 20 Z" fill={WAVE_FILL} fillOpacity="0.18" />
+        <path d="M0 20 V6 C 50 0, 110 4, 150 12 C 170 16, 186 19, 200 20 Z" fill={WAVE_FILL} fillOpacity="0.06" />
       </svg>
     </>
   );
@@ -175,20 +201,21 @@ export function SiteFooter() {
           draggable={false}
           className="mx-auto block h-12 w-auto select-none"
         />
-        <p dir="auto" className="mt-3 text-[13px] leading-5 text-[hsl(40_30%_96%/0.65)]">
-          {t("footerTagline")}
-        </p>
-
-        {/* Action row. Sized to content and centred — NOT equal columns — so
-            the email label (the widest) gets the room it needs and the row
-            never truncates. No column gap: the rules carry their own mx-3,
-            and when they hide the discs' px-1 keeps the items apart. Measured
-            fit at 12px labels: 375px holds all three with the rules (316px of
-            327px); 320px holds all three with the rules hidden (266px of
-            272px). flex-wrap stays as the safety net: if a device font
-            renders a label wider, the last item drops to a second centred row
-            rather than anything shrinking or truncating. */}
-        <nav aria-label={t("footerContact")} className="mt-8 flex flex-wrap items-start justify-center gap-y-3">
+        {/* Action row, sitting directly under the logo now that the tagline is
+            gone (mt-9, not the tighter mt-8 the tagline's own margin used to
+            leave). Sized to content and centred — NOT equal columns — so
+            email (the widest, uncapped) gets the room it needs and the row
+            never truncates. Instagram and Privacy share WING_MIN_W (see its
+            comment: that equality is what makes the row actually centred, not
+            just its bounding box). No column gap: the rules carry their own
+            mx-1, and when they hide the discs' px-1 keeps the items apart.
+            Measured fit at 12px labels, WIDEST case (Arabic, both wings at
+            WING_MIN_W): 375px holds all three with the rules (321px of
+            327px); below ~351px the three boxes alone (no rules — hidden
+            under 368px) no longer fit (303px needed), and flex-wrap drops the
+            last item to its own centred second line rather than shrinking or
+            truncating anything. */}
+        <nav aria-label={t("footerContact")} className="mt-9 flex flex-wrap items-start justify-center gap-y-3">
           {hasValue(BUSINESS.instagramUrl) && (
             <>
               {/* External profile: new tab, and rel guards the opener. */}
@@ -196,7 +223,7 @@ export function SiteFooter() {
                 href={BUSINESS.instagramUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={ACTION}
+                className={`${ACTION} ${WING_MIN_W}`}
               >
                 <span className={DISC}><Instagram aria-hidden className={DISC_ICON} /></span>
                 <span dir="ltr" className={LABEL}>{t("footerInstagram")}</span>
@@ -211,7 +238,7 @@ export function SiteFooter() {
           </a>
 
           <span aria-hidden className={DIVIDER} />
-          <Link to="/privacy" className={`${ACTION} ${PRIVACY_MIN_W}`}>
+          <Link to="/privacy" className={`${ACTION} ${WING_MIN_W}`}>
             <span className={DISC}><ShieldCheck aria-hidden className={DISC_ICON} /></span>
             <span dir="auto" className={LABEL}>{t("privacyTitle")}</span>
           </Link>
