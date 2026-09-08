@@ -743,6 +743,9 @@ export const translations = {
     // ── Site footer + privacy policy (public — Meta business verification) ──
     footerBrand: "אחג'זלי",
     footerLogoAlt: "לוגו אחג'זלי",
+    footerTagline: "התורים שלך, פשוט יותר.",
+    footerContact: "צור קשר",
+    footerCopyright: "© {year} Ehjezly. כל הזכויות שמורות",
     footerVatLabel: "עוסק פטור",
     footerCallAria: "התקשרו אלינו",
     footerEmailAria: "שלחו לנו אימייל",
@@ -1523,6 +1526,9 @@ export const translations = {
     // ── Site footer + privacy policy (public — Meta business verification) ──
     footerBrand: "إحجزلي",
     footerLogoAlt: "شعار إحجزلي",
+    footerTagline: "مواعيدك، بشكل أبسط.",
+    footerContact: "اتصل بنا",
+    footerCopyright: "© {year} Ehjezly. جميع الحقوق محفوظة",
     footerVatLabel: "مرخّص معفى",
     footerCallAria: "اتصلوا بنا",
     footerEmailAria: "راسلونا بالبريد الإلكتروني",
@@ -2303,6 +2309,9 @@ export const translations = {
     // ── Site footer + privacy policy (public — Meta business verification) ──
     footerBrand: "Ehjezly",
     footerLogoAlt: "Ehjezly logo",
+    footerTagline: "Your appointments, simpler.",
+    footerContact: "Contact",
+    footerCopyright: "© {year} Ehjezly. All rights reserved.",
     footerVatLabel: "Exempt dealer (osek patur)",
     footerCallAria: "Call us",
     footerEmailAria: "Email us",
