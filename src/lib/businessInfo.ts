@@ -33,6 +33,8 @@ export const BUSINESS = {
   phoneSecondary: "+972-54-786-8325",
   /** Public contact mailbox. */
   email: "info@ehjezly.co.il",
+  /** Public Instagram profile. Shown in the footer as an action disc. */
+  instagramUrl: "https://www.instagram.com/ehjezlyy/",
 } as const;
 
 /** True when an optional business field is actually set. */

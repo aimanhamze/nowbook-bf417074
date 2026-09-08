@@ -1,7 +1,7 @@
-import { Mail, Phone, ShieldCheck } from "lucide-react";
+import { Instagram, Mail, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
-import { BUSINESS, hasValue, telHref } from "@/lib/businessInfo";
+import { BUSINESS, hasValue } from "@/lib/businessInfo";
 import logoLight from "@/assets/e_logo_light.png";
 
 /*
@@ -56,15 +56,14 @@ import logoLight from "@/assets/e_logo_light.png";
  *             scripts/gen-logo-light.mjs) — the centrepiece, h-12
  *   tagline   one quiet line
  *   actions   three circular icon buttons with labels, thin rules between:
- *             email (label = the address) · contact (tel: to the primary
- *             number, label = the word only — the number is never shown) ·
- *             privacy policy
+ *             Instagram (new tab) · email (label = the address) · privacy
+ *             policy
  *   hairline
  *   trade name, then the copyright line as the quietest tier
  *
  * Public surface: trading name only — never BUSINESS.legalName, never the VAT
- * number, and no phone number is displayed (it lives behind the Contact
- * button and in the privacy policy).
+ * number, and no phone number anywhere (the numbers live in the privacy
+ * policy only).
  *
  * Geometry: Index pads the page bottom with pb-28 (112px) so content clears
  * the 66px fixed BottomNav with 46px to spare. A dark block must not float
@@ -87,12 +86,14 @@ const RULE = "bg-[hsl(40_30%_96%/0.12)]";
 
 /**
  * One action: a lifted charcoal disc with the accent icon, label beneath. The
- * whole <a> is the tap target — never smaller than the 44px disc, and taller
- * once the label is counted. Labels are 12px and must never truncate; the
+ * whole <a> is the tap target — the 44px disc alone guarantees the width, and
+ * the label makes it taller. Labels are 12px and must never truncate; the
  * row is sized to its content (see the fit note on the row below).
+ * No min-w here on purpose: the privacy item carries its own, and two min-w
+ * utilities on one element leave the winner to Tailwind's emission order.
  */
 const ACTION =
-  "group flex min-w-[44px] flex-col items-center gap-1.5 rounded-xl px-1 pb-1 pt-0.5 " +
+  "group flex flex-col items-center gap-1.5 rounded-xl px-1 pb-1 pt-0.5 " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
   "focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(24_30%_12%)]";
 const DISC =
@@ -109,12 +110,12 @@ const LABEL = "whitespace-nowrap text-[12px] leading-4 text-[hsl(40_30%_96%/0.7)
 const DIVIDER = `hidden min-[368px]:block mx-3 mt-[10px] h-6 w-px shrink-0 self-start ${RULE}`;
 
 /**
- * Minimum widths for the two word-labelled actions, set to the widest of the
- * three translations (Arabic) so the disc positions are byte-identical in
- * he/ar/en instead of drifting with each label's natural width. Re-measure
- * if those strings change. Email keeps its natural width (the widest label).
+ * Minimum width for the privacy action, set to the widest of the three
+ * translations (Arabic) so the disc positions are byte-identical in he/ar/en
+ * instead of drifting with the label's natural width. Re-measure if that
+ * string changes. "Instagram" and the email are the same in every language
+ * and keep their natural widths.
  */
-const CONTACT_MIN_W = "min-w-[56px]";
 const PRIVACY_MIN_W = "min-w-[100px]";
 
 /**
@@ -180,33 +181,34 @@ export function SiteFooter() {
 
         {/* Action row. Sized to content and centred — NOT equal columns — so
             the email label (the widest) gets the room it needs and the row
-            never truncates. Measured fit at 12px labels: 375px holds all three
-            with the rules (309px of 327px); 320px holds all three only with
-            the rules hidden (267px of 272px). flex-wrap stays as the safety
-            net: if a device font renders a label wider, the last item drops
-            to a second centred row rather than anything shrinking or
-            truncating. */}
-        <nav aria-label={t("footerContact")} className="mt-8 flex flex-wrap items-start justify-center gap-x-1 gap-y-3">
+            never truncates. No column gap: the rules carry their own mx-3,
+            and when they hide the discs' px-1 keeps the items apart. Measured
+            fit at 12px labels: 375px holds all three with the rules (316px of
+            327px); 320px holds all three with the rules hidden (266px of
+            272px). flex-wrap stays as the safety net: if a device font
+            renders a label wider, the last item drops to a second centred row
+            rather than anything shrinking or truncating. */}
+        <nav aria-label={t("footerContact")} className="mt-8 flex flex-wrap items-start justify-center gap-y-3">
+          {hasValue(BUSINESS.instagramUrl) && (
+            <>
+              {/* External profile: new tab, and rel guards the opener. */}
+              <a
+                href={BUSINESS.instagramUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={ACTION}
+              >
+                <span className={DISC}><Instagram aria-hidden className={DISC_ICON} /></span>
+                <span dir="ltr" className={LABEL}>{t("footerInstagram")}</span>
+              </a>
+              <span aria-hidden className={DIVIDER} />
+            </>
+          )}
+
           <a href={`mailto:${BUSINESS.email}`} className={ACTION}>
             <span className={DISC}><Mail aria-hidden className={DISC_ICON} /></span>
             <span dir="ltr" className={LABEL}>{BUSINESS.email}</span>
           </a>
-
-          {hasValue(BUSINESS.phonePrimary) && (
-            <>
-              <span aria-hidden className={DIVIDER} />
-              {/* The visible label is the word only; the accessible name adds
-                  the number so a screen-reader user knows what will dial. */}
-              <a
-                href={telHref(BUSINESS.phonePrimary)}
-                aria-label={`${t("footerCallAria")} ${BUSINESS.phonePrimary}`}
-                className={`${ACTION} ${CONTACT_MIN_W}`}
-              >
-                <span className={DISC}><Phone aria-hidden className={DISC_ICON} /></span>
-                <span dir="auto" className={LABEL}>{t("footerContact")}</span>
-              </a>
-            </>
-          )}
 
           <span aria-hidden className={DIVIDER} />
           <Link to="/privacy" className={`${ACTION} ${PRIVACY_MIN_W}`}>
