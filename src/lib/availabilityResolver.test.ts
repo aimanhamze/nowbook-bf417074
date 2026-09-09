@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  classifyDay,
   narrowToStaff,
   staffDayWindow,
   type DayWindow,
@@ -308,6 +309,87 @@ describe("narrowToStaff", () => {
     it("...and still closed on Monday when the shop itself is shut", () => {
       const week = staffWeek({ [MON]: {} });
       expect(narrowToStaff(null, staffDayWindow(monday, week, NO_TIME_OFF))).toBeNull();
+    });
+  });
+});
+
+describe("classifyDay", () => {
+  const shop = win("09:00", "17:00");
+
+  describe("the shop's verdict is asked first and wins", () => {
+    it("closed shop reads as closed, whatever the narrowed window says", () => {
+      expect(classifyDay(null, null, false)).toBe("closed");
+    });
+
+    // narrowToStaff cannot actually produce this pair (shop closed wins there
+    // too), but the ordering is pinned so a future caller that assembles the two
+    // windows differently still gets "closed" rather than "staffOff".
+    it("closed shop still reads as closed if a narrowed window is handed in", () => {
+      expect(classifyDay(null, shop, true)).toBe("closed");
+    });
+  });
+
+  describe("shop open, nothing left after narrowing → staffOff", () => {
+    it("names the member, not the shop, when only the narrowing closed the day", () => {
+      expect(classifyDay(shop, null, false)).toBe("staffOff");
+    });
+
+    // Disjoint windows are narrowToStaff's other null. From the booking flow's
+    // point of view that is still "this member is not working".
+    it("treats disjoint hours as staffOff", () => {
+      expect(classifyDay(shop, narrowToStaff(shop, win("18:00", "20:00")), false)).toBe("staffOff");
+    });
+  });
+
+  describe("both windows open → the grid's own verdict decides", () => {
+    it("is open when there are slots", () => {
+      expect(classifyDay(shop, shop, true)).toBe("open");
+    });
+
+    it("is full when there are none", () => {
+      expect(classifyDay(shop, shop, false)).toBe("full");
+    });
+
+    it("reads hasSlots rather than recomputing it, so it cannot contradict the grid", () => {
+      const narrowed = narrowToStaff(shop, win("10:00", "16:00"));
+      expect(classifyDay(shop, narrowed, true)).toBe("open");
+      expect(classifyDay(shop, narrowed, false)).toBe("full");
+    });
+  });
+
+  describe("no staff member selected", () => {
+    // narrowToStaff returns the shop's window BY REFERENCE on the
+    // not-configured path, so this is the exact pair such a caller passes.
+    it("collapses to the two-way closed/full split, never staffOff", () => {
+      const identity = narrowToStaff(shop, staffDayWindow(monday, undefined, NO_TIME_OFF));
+      expect(identity).toBe(shop);
+      expect(classifyDay(shop, identity, false)).toBe("full");
+      expect(classifyDay(shop, identity, true)).toBe("open");
+      expect(classifyDay(null, narrowToStaff(null, undefined), false)).toBe("closed");
+    });
+  });
+
+  describe("a member with no rows of their own", () => {
+    // The member exists but has configured nothing, so they work all of the
+    // shop's hours. Their off days must read as the SHOP's, or the sheet invents
+    // a restriction nobody set.
+    it("never reads as staffOff", () => {
+      const noRows = staffDayWindow(monday, undefined, NO_TIME_OFF);
+      expect(classifyDay(shop, narrowToStaff(shop, noRows), false)).toBe("full");
+      expect(classifyDay(null, narrowToStaff(null, noRows), false)).toBe("closed");
+    });
+  });
+
+  describe("staff time off", () => {
+    it("reads as staffOff on the day off, and not on other days", () => {
+      const week = staffWeek({ [MON]: {} });
+      const off: ReadonlySet<string> = new Set(["2026-09-07"]);
+      expect(classifyDay(shop, narrowToStaff(shop, staffDayWindow(monday, week, off)), false)).toBe(
+        "staffOff",
+      );
+      expect(
+        classifyDay(shop, narrowToStaff(shop, staffDayWindow(monday, week, NO_TIME_OFF)), false),
+      ).toBe("full");
     });
   });
 });

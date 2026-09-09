@@ -319,3 +319,51 @@ export function isOutsideDayWindow(window: DayWindow | null, time: string): bool
   if (t === null || start === null || end === null) return false;
   return t < start || t >= end;
 }
+
+// ── WHY A DAY HAS NO SLOTS ───────────────────────────────────────────────────
+//
+// The slot pipeline collapses "the shop is closed", "this member is not
+// working" and "every slot is taken" into the SAME empty array, so nothing
+// downstream can tell them apart from slots alone. Provider-side flows that let
+// the owner OVERRIDE an off day must tell them apart, because the remedies
+// differ: book anyway, pick another member, or pick another day. Naming the
+// wrong one — "closed" for a shop that is plainly open — is the support ticket
+// this distinction exists to prevent.
+//
+// The distinction is recoverable ONLY by keeping the SHOP's window and the
+// STAFF-NARROWED one separate and asking both. That is exactly what this
+// function consumes: resolveDayHours' output, and narrowToStaff's output over
+// it. Collapsing the two before this point destroys the answer irrecoverably,
+// which is why neither this function nor its callers may take a single window.
+
+/** Why a day is (or isn't) bookable. See the block comment above. */
+export type DayStatus = "open" | "closed" | "staffOff" | "full";
+
+/**
+ * Classify a day from the two windows plus the slot pipeline's own verdict.
+ *
+ * `hasSlots` is whatever getAvailableSlots / getGroupSlotsWithCapacity said for
+ * this same day — passed in rather than recomputed, so the classification can
+ * never disagree with the grid the caller is about to render.
+ *
+ * The shop's verdict is asked FIRST and wins, mirroring narrowToStaff's own
+ * "shop closed wins" ordering: with the shop shut, whether a member would
+ * otherwise have been working is not the useful thing to say.
+ *
+ * For a caller with no staff member selected, `narrowedWindow` IS `shopWindow`
+ * (narrowToStaff returns the shop's object by reference on the not-configured
+ * path), so "staffOff" is unreachable and this collapses to the two-way
+ * closed/full split those callers had before staff existed.
+ */
+export function classifyDay(
+  shopWindow: DayWindow | null,
+  narrowedWindow: DayWindow | null,
+  hasSlots: boolean,
+): DayStatus {
+  if (shopWindow === null) return "closed";
+  // Shop open but nothing left after narrowing: the member is off that day, or
+  // their hours do not meet the shop's at all (narrowToStaff returns null for
+  // disjoint windows too — also "not working", from the customer's point of view).
+  if (narrowedWindow === null) return "staffOff";
+  return hasSlots ? "open" : "full";
+}
