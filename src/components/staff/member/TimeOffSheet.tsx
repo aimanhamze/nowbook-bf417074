@@ -84,6 +84,7 @@ export function TimeOffSheet({ open, onClose, memberName, initialDates, onSave, 
           onMonthChange={setMonth}
           dir={isRtl ? "rtl" : "ltr"}
           locale={locale}
+          weekStartsOn={0}
           selected={dates.map(fromDateKey)}
           onDayClick={(day) => setDates((prev) => toggleDate(prev, toDateKey(day)))}
           disabled={(date) => date < today}

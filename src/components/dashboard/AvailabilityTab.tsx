@@ -284,6 +284,7 @@ export function AvailabilityTab() {
               onMonthChange={setBlockMonth}
               dir={isRtl ? "rtl" : "ltr"}
               locale={dateFnsLocale}
+              weekStartsOn={0}
               selected={blockingDate}
               onSelect={setBlockingDate}
               disabled={(date) => date < blockToday}
