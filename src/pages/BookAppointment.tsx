@@ -4,8 +4,9 @@ import { useProviderActiveStaff, useProviderStaffAssignments } from "@/hooks/use
 import { eligibleStaffForService } from "@/lib/staffServices";
 import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import { useProviderClassScheduleById, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
+import { useMyPackagesAt } from "@/hooks/usePublicPackages";
 import type { Service } from "@/lib/mock-data";
-import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote, UserRound } from "lucide-react";
+import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote, UserRound, Ticket } from "lucide-react";
 import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
@@ -108,6 +109,9 @@ const BookAppointment = () => {
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
 
   const isFitnessStudio = provider?.category === "fitness_studio";
+  // Must sit above every early return below -- rules-of-hooks. The derived
+  // package state stays further down with the other fitness helpers.
+  const { data: myPkgsHere = [] } = useMyPackagesAt(isFitnessStudio ? id : undefined);
 
   // ── Standard flow state ──
   // Standard (non-fitness) flow is 4 steps: services → day (month calendar) →
@@ -386,6 +390,24 @@ const BookAppointment = () => {
   const effectiveTime = selectedSession
     ? selectedSession.session_time.slice(0, 5)
     : selectedTime;
+
+  // ── Package gate (fitness_studio) ──────────────────────────────────────
+  // Classes are package-only: enforce_class_requires_package refuses a class
+  // booking from a customer with no usable package, so the UI must not offer
+  // one. Mirrors the trigger's rule exactly -- active, entries left, and not
+  // past its LOCAL expiry date.
+  const todayLocal = format(new Date(), "yyyy-MM-dd");
+  const activePackage = myPkgsHere.find(
+    (p) =>
+      p.status === "active" &&
+      p.entries_remaining > 0 &&
+      (!p.expires_at || p.expires_at.slice(0, 10) >= todayLocal),
+  );
+  // Distinguishes "you never had one" from "yours ran out", which are
+  // different messages and, for the second, a stronger nudge to re-buy.
+  const hasSpentPackage = myPkgsHere.some(
+    (p) => p.status === "exhausted" || (p.status === "active" && p.entries_remaining <= 0),
+  );
 
   // ── Fitness-studio flow helpers ──
   const fitnessEffectiveDate = selectedOccurrence ? format(selectedOccurrence, "yyyy-MM-dd") : "";
@@ -775,7 +797,26 @@ const BookAppointment = () => {
               transition={SPRING}
               className="px-5"
             >
-              {classSchedule.length === 0 ? (
+              {!activePackage ? (
+                /* Hard gate. The DB refuses these bookings anyway
+                   (NO_ACTIVE_PACKAGE / PACKAGE_EXHAUSTED), so showing the
+                   schedule would only lead to a guaranteed error. */
+                <div className="glass-card-md rounded-2xl p-8 text-center">
+                  <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                    <Ticket className="h-7 w-7" />
+                  </div>
+                  <p className="mb-1 text-sm font-semibold">{t("packageRequired")}</p>
+                  <p className="mb-4 text-xs text-muted-foreground">
+                    {hasSpentPackage ? t("packageExhaustedMessage") : t("packageRequiredMessage")}
+                  </p>
+                  <button
+                    onClick={() => navigate(`/provider/${id}`)}
+                    className="rounded-2xl bg-accent px-6 py-2.5 text-sm font-semibold text-accent-foreground transition-transform active:scale-[0.98]"
+                  >
+                    {t("purchasePackage")}
+                  </button>
+                </div>
+              ) : classSchedule.length === 0 ? (
                 <div className="glass-card-md rounded-2xl p-8 text-center">
                   <CalendarX className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
                   <p className="text-sm font-semibold mb-1">{t("classScheduleEmpty")}</p>
@@ -783,6 +824,11 @@ const BookAppointment = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* What this customer has left to spend here. */}
+                  <div className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+                    <Ticket className="h-3.5 w-3.5" />
+                    {activePackage.entries_remaining} {t("entriesLeft")}
+                  </div>
                   {DAY_KEYS.map((dayKey, dayIdx) => {
                     const dayClasses = scheduleByDay[dayIdx] || [];
                     if (dayClasses.length === 0) return null;

@@ -199,6 +199,7 @@ export function usePackageActions() {
  * back to null so the caller can show the raw message for anything unmapped.
  */
 export function packageErrorKey(message: string): string | null {
+  if (message.includes("NO_ACTIVE_PACKAGE")) return "packageRequiredMessage";
   if (message.includes("PACKAGES_FOR_CLASSES_ONLY")) return "packagesForClassesOnly";
   if (message.includes("PACKAGE_ALREADY_CANCELLED")) return "packageAlreadyCancelled";
   if (message.includes("PACKAGE_ALREADY_PENDING")) return "packageAlreadyPending";
