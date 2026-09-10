@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
+import { pkgFrom, type CustomerPackageRow } from "@/integrations/supabase/packageTypes";
 import {
   notifyBookingConfirmed,
   notifyBookingCancelled,
@@ -49,6 +50,21 @@ export interface EnrichedBooking {
    * write from anyone who is not this booking's provider.
    */
   duration_override: number | null;
+  /**
+   * Arrival timestamp. NULL until the provider (or the customer) checks in.
+   *
+   * Deliberately separate from `status` — see the migration comment on the
+   * column. Its one behavioural effect is on refunds: once set,
+   * handle_package_cancellation() stops returning the entry automatically, so
+   * a later cancellation needs the provider's explicit "return entry".
+   */
+  check_in_at: string | null;
+  /** The package paying for this booking. NULL = booked and paid normally. */
+  customer_package_id: string | null;
+  /** Resolved from customer_packages — null when no package is attached. */
+  package_name: string | null;
+  package_entries_remaining: number | null;
+  package_total_entries: number | null;
 }
 
 export function useProviderBookings() {
@@ -104,7 +120,38 @@ export function useProviderBookings() {
         : { data: [] };
       const staffMap = new Map((staffRows || []).map((s) => [s.id, s.name as string]));
 
-      return bookings.map((b): EnrichedBooking => {
+      // Package balances for the badge on each booking card. Same batch shape
+      // as classMap/staffMap above. customer_package_id is absent from the
+      // generated types (Phase 1 is DEV-only, and types.ts is generated from
+      // PROD), so the column is read through a narrow cast — see
+      // integrations/supabase/packageTypes.ts for why that file exists.
+      const withPkg = bookings as (typeof bookings[number] & {
+        check_in_at?: string | null;
+        customer_package_id?: string | null;
+      })[];
+      const packageIds = [
+        ...new Set(withPkg.map((b) => b.customer_package_id).filter(Boolean)),
+      ] as string[];
+      const { data: packageRows } = packageIds.length > 0
+        ? await pkgFrom("customer_packages")
+            .select("id, entries_remaining, total_entries, template_id")
+            .in("id", packageIds)
+        : { data: [] };
+      const packages = (packageRows ?? []) as unknown as Pick<
+        CustomerPackageRow, "id" | "entries_remaining" | "total_entries" | "template_id"
+      >[];
+      const { data: pkgTemplateRows } = packages.length > 0
+        ? await pkgFrom("package_templates")
+            .select("id, name")
+            .in("id", [...new Set(packages.map((p) => p.template_id))])
+        : { data: [] };
+      const pkgTemplateMap = new Map(
+        ((pkgTemplateRows ?? []) as unknown as { id: string; name: string }[])
+          .map((tpl) => [tpl.id, tpl.name]),
+      );
+      const packageMap = new Map(packages.map((p) => [p.id, p]));
+
+      return withPkg.map((b): EnrichedBooking => {
         // Walk-in: user_id is null → profileMap lookup is skipped (no account).
         const customer = b.user_id ? profileMap.get(b.user_id) : undefined;
         const primaryService = serviceMap.get(b.service_ids?.[0]);
@@ -126,6 +173,19 @@ export function useProviderBookings() {
           staff_id: b.staff_id ?? null,
           staff_name: b.staff_id ? (staffMap.get(b.staff_id) ?? null) : null,
           duration_override: b.duration_override ?? null,
+          check_in_at: b.check_in_at ?? null,
+          customer_package_id: b.customer_package_id ?? null,
+          package_name: b.customer_package_id
+            ? (pkgTemplateMap.get(
+                packageMap.get(b.customer_package_id)?.template_id ?? "",
+              ) ?? null)
+            : null,
+          package_entries_remaining: b.customer_package_id
+            ? (packageMap.get(b.customer_package_id)?.entries_remaining ?? null)
+            : null,
+          package_total_entries: b.customer_package_id
+            ? (packageMap.get(b.customer_package_id)?.total_entries ?? null)
+            : null,
         };
       });
     },

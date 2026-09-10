@@ -9,6 +9,13 @@ export interface ProviderCustomer {
   name: string | null;
   phone: string | null;
   bookingCount: number;
+  /**
+   * Most recent booking_date for this customer, "YYYY-MM-DD".
+   *
+   * Includes future bookings — it is the last date on their record, not
+   * strictly the last date they attended, which the schema cannot know.
+   */
+  lastVisit: string | null;
   /** Whether this customer has a registered account (vs. a provider-created walk-in). */
   registered: boolean;
 }
@@ -55,7 +62,7 @@ export function useProviderCustomers() {
       // and identify customers — no service/price/notes columns.
       const { data: bookings, error } = await supabase
         .from("bookings")
-        .select("id, user_id, linked_user_id, customer_name, customer_phone")
+        .select("id, user_id, linked_user_id, customer_name, customer_phone, booking_date")
         .eq("provider_id", profile.id);
       if (error) throw error;
       if (!bookings || bookings.length === 0) return [];
@@ -97,8 +104,13 @@ export function useProviderCustomers() {
           // Backfill any missing name/phone from a later row of the same customer.
           if (!existing.name && name) existing.name = name;
           if (!existing.phone && phone) existing.phone = phone;
+          // Plain string compare is safe: booking_date is a zero-padded
+          // YYYY-MM-DD, so lexical order is chronological order.
+          if (b.booking_date && (!existing.lastVisit || b.booking_date > existing.lastVisit)) {
+            existing.lastVisit = b.booking_date;
+          }
         } else {
-          customers.set(key, { key, name, phone, bookingCount: 1, registered });
+          customers.set(key, { key, name, phone, bookingCount: 1, registered, lastVisit: b.booking_date ?? null });
         }
       }
 

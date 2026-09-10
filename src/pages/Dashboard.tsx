@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Briefcase, User, Clock, Bell, BellOff, Images, SlidersHorizontal } from "lucide-react";
+import { Briefcase, User, Clock, Bell, BellOff, Images, SlidersHorizontal, Ticket } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -11,6 +11,7 @@ import { BusinessProfileTab } from "@/components/dashboard/BusinessProfileTab";
 import { BookingSettingsTab } from "@/components/dashboard/BookingSettingsTab";
 import { AvailabilityTab } from "@/components/dashboard/AvailabilityTab";
 import { PhotosTab } from "@/components/dashboard/PhotosTab";
+import { PackagesTab } from "@/components/dashboard/PackagesTab";
 import { Button } from "@/components/ui/button";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
@@ -21,6 +22,7 @@ const tabs = [
   { id: "availability", icon: Clock },
   { id: "services", icon: Briefcase },
   { id: "gallery", icon: Images },
+  { id: "packages", icon: Ticket },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -31,6 +33,7 @@ const TAB_LABELS: Record<TabId, string> = {
   booking: "bookingSettingsTitle",
   availability: "availability",
   gallery: "gallery",
+  packages: "packages",
 };
 
 export default function Dashboard() {
@@ -47,6 +50,11 @@ export default function Dashboard() {
     ? (requestedTab as TabId)
     : "profile";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+  // SCOPE: packages are a fitness_studio feature (group classes only), so the
+  // tab does not exist for any other provider type. Gated on the same exact
+  // string every other class-flow gate uses -- see BookAppointment.tsx:110.
+  const isFitnessStudio = profile?.category === "fitness_studio";
+  const visibleTabs = tabs.filter((tab) => tab.id !== "packages" || isFitnessStudio);
   const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
 
   if (!user || !isProvider) {
@@ -117,7 +125,7 @@ export default function Dashboard() {
 
           {/* Tab bar — segmented control */}
           <div className="flex gap-1 rounded-2xl border border-border/40 bg-secondary/80 p-1 backdrop-blur-sm">
-            {tabs.map(tab => {
+            {visibleTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               const label = t(TAB_LABELS[tab.id] as any);
@@ -167,6 +175,7 @@ export default function Dashboard() {
           {activeTab === "availability" && <AvailabilityTab />}
           {activeTab === "services" && <ServicesTab />}
           {activeTab === "gallery" && <PhotosTab />}
+          {activeTab === "packages" && isFitnessStudio && <PackagesTab />}
         </motion.div>
       </div>
     </div>

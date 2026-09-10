@@ -8,7 +8,7 @@ import WriteReviewSection from "@/components/reviews/WriteReviewSection";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
 import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
-import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight, Images, Sparkles, CalendarPlus } from "lucide-react";
+import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight, Images, Sparkles, CalendarPlus, Ticket } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { FaWhatsapp, FaInstagram, FaTiktok, FaFacebook, FaWaze } from "react-icons/fa6";
@@ -21,6 +21,8 @@ import ReviewCard from "@/components/reviews/ReviewCard";
 import type { SocialLinks } from "@/lib/socialLinks";
 import { buildWhatsAppLink } from "@/lib/socialLinks";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
+import { useProviderPackages, useMyPackagesAt, useRequestPackage } from "@/hooks/usePublicPackages";
+import { packageErrorKey } from "@/hooks/usePackageActions";
 
 interface SocialLinkEntry {
   href: string;
@@ -130,6 +132,17 @@ const ProviderDetail = () => {
   const { user } = useAuth();
   const { provider, isLoading } = useProviderById(id);
   const { data: dbReviews } = useProviderReviews(id);
+  // Packages are a fitness_studio feature (group classes only), so the section
+  // simply does not exist for any other provider type.
+  const showsPackages = provider?.category === "fitness_studio";
+  const { data: packageOffers = [] } = useProviderPackages(showsPackages ? id : undefined);
+  const { data: myPackages = [] } = useMyPackagesAt(showsPackages ? id : undefined);
+  const requestPackage = useRequestPackage();
+  // The RPC refuses a second outstanding request per provider; mirroring that
+  // here disables the button up front instead of failing after the round trip.
+  const hasLivePackage = myPackages.some(
+    (p) => p.status === "pending_activation" || p.status === "active",
+  );
   const { isFavorite, toggleFavorite } = useFavorites();
   const { data: photos = [] } = usePublicProviderPhotos(id);
   const { availability, blockedDates, monthlySettings, overrides } = usePublicProviderSchedule(id);
@@ -696,6 +709,71 @@ const ProviderDetail = () => {
               </motion.div>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Packages — fitness studios only. Purchase is a REQUEST: payment happens
+          outside the app, and the provider activates once they have it. */}
+      {showsPackages && packageOffers.length > 0 && (
+        <section className="mt-8 px-5">
+          <SectionLabel className="mb-3">{t("availablePackages")}</SectionLabel>
+          <div className="flex flex-col gap-2">
+            {packageOffers.map((pkg, i) => (
+              <motion.div
+                key={pkg.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 + i * 0.06, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                className="surface-soft flex items-center gap-3.5 rounded-2xl p-4"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                  <Ticket className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1 text-start">
+                  <p className="line-clamp-2 text-sm font-medium leading-snug">{pkg.name}</p>
+                  {pkg.description && (
+                    <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{pkg.description}</p>
+                  )}
+                  <span className="mt-1 inline-flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+                    <span>{pkg.total_entries} {t("entriesShort")}</span>
+                    <span>·</span>
+                    <span>{pkg.validity_days} {t("daysUnit")}</span>
+                  </span>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <div className="flex items-baseline gap-0.5">
+                    <span className="text-sm text-muted-foreground">₪</span>
+                    <span className="text-lg font-semibold tracking-tight tabular-nums">{pkg.price}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!user) {
+                        saveRedirectAfterLogin(`/provider/${id}`);
+                        navigate("/auth");
+                        return;
+                      }
+                      requestPackage.mutate(pkg.id, {
+                        onSuccess: () => toast.success(t("purchasePendingNote")),
+                        onError: (err) => {
+                          const key = packageErrorKey(err instanceof Error ? err.message : String(err));
+                          toast.error(key ? t(key as never) : String(err));
+                        },
+                      });
+                    }}
+                    disabled={requestPackage.isPending || hasLivePackage}
+                    className="rounded-xl bg-accent px-3 py-1.5 text-[11px] font-semibold text-accent-foreground transition-opacity active:scale-95 disabled:opacity-50"
+                  >
+                    {t("purchasePackage")}
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          {hasLivePackage && (
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              {t("packageAlreadyPending")}
+            </p>
+          )}
         </section>
       )}
 
