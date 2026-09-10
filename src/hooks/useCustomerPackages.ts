@@ -112,10 +112,10 @@ export function usePackageHistory(customerPackageId: string | null) {
  * The packages a given customer can still spend at this provider, for the
  * assign-to-booking dropdown.
  *
- * 'pending_activation' is included on purpose: handle_package_booking() accepts
- * both it and 'active', so a package the provider has not formally activated
- * yet still pays for a booking. Excluding it here would hide a package the
- * database would happily accept.
+ * ACTIVE ONLY. handle_package_booking() no longer accepts
+ * 'pending_activation' — payment happens outside the app, so activation is the
+ * provider's only leverage and an unactivated package must not be spendable.
+ * Offering one here would just guarantee a PACKAGE_NOT_ACTIVE error.
  */
 export function useAssignablePackages(customerId: string | null) {
   const { profile } = useProviderProfile();
@@ -128,7 +128,7 @@ export function useAssignablePackages(customerId: string | null) {
         .select("*")
         .eq("provider_id", profile.id)
         .eq("customer_id", customerId)
-        .in("status", ["pending_activation", "active"])
+        .eq("status", "active")
         .gt("entries_remaining", 0);
       if (error) throw error;
 

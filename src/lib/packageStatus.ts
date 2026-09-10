@@ -65,10 +65,16 @@ export function packageStatusClass(pkg: PackageStatusFields, now: number = Date.
   return BADGE_CLASSES[packageStatusLabel(pkg, now)];
 }
 
-/** Whether this package can still pay for a new booking. */
+/**
+ * Whether this package can still pay for a new booking.
+ *
+ * Mirrors handle_package_booking exactly: 'active' only. A package awaiting
+ * activation is NOT spendable — payment happens outside the app, so activating
+ * is how the provider confirms they were paid.
+ */
 export function isSpendable(pkg: PackageStatusFields, now: number = Date.now()): boolean {
   return (
-    (pkg.status === "active" || pkg.status === "pending_activation") &&
+    pkg.status === "active" &&
     pkg.entries_remaining > 0 &&
     !isPastExpiry(pkg, now)
   );
