@@ -60,6 +60,68 @@ export function useMyPackagesAt(providerId: string | undefined) {
   });
 }
 
+export interface MyPackage extends CustomerPackageRow {
+  provider_name: string | null;
+  template_name: string | null;
+}
+
+/**
+ * Every package the signed-in customer holds, across all providers, with the
+ * provider and template names resolved.
+ *
+ * Reads through the customer's own "Customer views own packages" policy — no
+ * provider involvement, no RPC. Exhausted, expired and cancelled packages are
+ * excluded: this backs a "what can I still use" strip, not a history view.
+ * Ordering puts the most-recently-bought first.
+ */
+export function useMyPackages() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["my-packages", user?.id],
+    queryFn: async () => {
+      if (!user) return [] as MyPackage[];
+
+      const { data, error } = await pkgFrom("customer_packages")
+        .select("*")
+        .eq("customer_id", user.id)
+        .in("status", ["pending_activation", "active"])
+        .order("purchased_at", { ascending: false });
+      if (error) throw error;
+
+      const rows = (data ?? []) as unknown as CustomerPackageRow[];
+      if (rows.length === 0) return [] as MyPackage[];
+
+      // provider_profiles is public-read; package_templates is public-read for
+      // active rows. A template the provider later deactivated resolves to
+      // null and the card falls back to showing just the balance.
+      const [{ data: providers }, { data: templates }] = await Promise.all([
+        supabase
+          .from("provider_profiles")
+          .select("id, business_name")
+          .in("id", [...new Set(rows.map((r) => r.provider_id))]),
+        pkgFrom("package_templates")
+          .select("id, name")
+          .in("id", [...new Set(rows.map((r) => r.template_id))]),
+      ]);
+
+      const providerMap = new Map(
+        (providers ?? []).map((p) => [p.id, p.business_name as string]),
+      );
+      const templateMap = new Map(
+        ((templates ?? []) as unknown as { id: string; name: string }[])
+          .map((tpl) => [tpl.id, tpl.name]),
+      );
+
+      return rows.map((r): MyPackage => ({
+        ...r,
+        provider_name: providerMap.get(r.provider_id) ?? null,
+        template_name: templateMap.get(r.template_id) ?? null,
+      }));
+    },
+    enabled: !!user,
+  });
+}
+
 /**
  * Ask the provider to sell you a package.
  *

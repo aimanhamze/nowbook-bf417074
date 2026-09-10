@@ -23,6 +23,7 @@ import { buildWhatsAppLink } from "@/lib/socialLinks";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { useProviderPackages, useMyPackagesAt, useRequestPackage } from "@/hooks/usePublicPackages";
 import { packageErrorKey } from "@/hooks/usePackageActions";
+import { MyPackageCard } from "@/components/packages/MyPackageCard";
 
 interface SocialLinkEntry {
   href: string;
@@ -140,9 +141,10 @@ const ProviderDetail = () => {
   const requestPackage = useRequestPackage();
   // The RPC refuses a second outstanding request per provider; mirroring that
   // here disables the button up front instead of failing after the round trip.
-  const hasLivePackage = myPackages.some(
+  const livePackages = myPackages.filter(
     (p) => p.status === "pending_activation" || p.status === "active",
   );
+  const hasLivePackage = livePackages.length > 0;
   const { isFavorite, toggleFavorite } = useFavorites();
   const { data: photos = [] } = usePublicProviderPhotos(id);
   const { availability, blockedDates, monthlySettings, overrides } = usePublicProviderSchedule(id);
@@ -716,6 +718,23 @@ const ProviderDetail = () => {
           outside the app, and the provider activates once they have it. */}
       {showsPackages && packageOffers.length > 0 && (
         <section className="mt-8 px-5">
+          {/* What this customer already has here, before what is on sale —
+              "how many classes do I have left" is the more common question. */}
+          {livePackages.length > 0 && (
+            <div className="mb-4 flex flex-col gap-2">
+              <h3 className="text-sm font-bold">{t("myPackages")}</h3>
+              {livePackages.map((pkg, i) => (
+                <MyPackageCard
+                  key={pkg.id}
+                  pkg={pkg}
+                  templateName={packageOffers.find((o) => o.id === pkg.template_id)?.name ?? null}
+                  showProvider={false}
+                  index={i}
+                />
+              ))}
+            </div>
+          )}
+
           <SectionLabel className="mb-3">{t("availablePackages")}</SectionLabel>
           <div className="flex flex-col gap-2">
             {packageOffers.map((pkg, i) => (
