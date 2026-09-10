@@ -31,8 +31,9 @@ export function MyPackageCard({
   const { t } = useLang();
   const remaining = pkg.entries_remaining;
   const total = pkg.total_entries;
-  // Manual grants can push the balance past the size originally sold, so clamp
-  // the bar rather than letting it overflow its track.
+  // Defensive clamp. package_add_entries raises total_entries alongside the
+  // balance, so remaining should never exceed total — but a bar that overflows
+  // its track is a worse failure than one that sits at 100%.
   const pct = total > 0 ? Math.min(100, Math.round((remaining / total) * 100)) : 0;
   const isPending = pkg.status === "pending_activation";
 
