@@ -54,7 +54,29 @@ export default function Dashboard() {
   // tab does not exist for any other provider type. Gated on the same exact
   // string every other class-flow gate uses -- see BookAppointment.tsx:110.
   const isFitnessStudio = profile?.category === "fitness_studio";
-  const visibleTabs = tabs.filter((tab) => tab.id !== "packages" || isFitnessStudio);
+
+  // A fitness studio runs on a fixed weekly class schedule, not per-service
+  // bookings, so two tabs are meaningless to it:
+  //   services     -- classes live in provider_class_schedule, not
+  //                   provider_services (useProviderServices already forces
+  //                   service_type for them)
+  //   availability -- the class grid IS the availability; the weekly hours
+  //                   editor drives the standard slot generator only
+  // Both are edited from /calendar for studios instead.
+  const HIDDEN_FOR_FITNESS: TabId[] = ["services", "availability"];
+  const visibleTabs = tabs.filter((tab) => {
+    if (tab.id === "packages") return isFitnessStudio;
+    if (isFitnessStudio && HIDDEN_FOR_FITNESS.includes(tab.id)) return false;
+    return true;
+  });
+
+  // A deep link (navigate("/dashboard", { state: { tab: "services" } })) can
+  // still name a tab this provider cannot see -- BookingSettingsTab links to
+  // the calendar that way. Fall back rather than render a hidden tab or an
+  // empty panel.
+  const effectiveTab: TabId = visibleTabs.some((tab) => tab.id === activeTab)
+    ? activeTab
+    : "profile";
   const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
 
   if (!user || !isProvider) {
@@ -127,7 +149,7 @@ export default function Dashboard() {
           <div className="flex gap-1 rounded-2xl border border-border/40 bg-secondary/80 p-1 backdrop-blur-sm">
             {visibleTabs.map(tab => {
               const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
+              const isActive = effectiveTab === tab.id;
               const label = t(TAB_LABELS[tab.id] as any);
               return (
                 <motion.button
@@ -164,18 +186,18 @@ export default function Dashboard() {
         </header>
 
         <motion.div
-          key={activeTab}
+          key={effectiveTab}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25 }}
           className="px-5 pt-5"
         >
-          {activeTab === "profile" && <BusinessProfileTab />}
-          {activeTab === "booking" && <BookingSettingsTab />}
-          {activeTab === "availability" && <AvailabilityTab />}
-          {activeTab === "services" && <ServicesTab />}
-          {activeTab === "gallery" && <PhotosTab />}
-          {activeTab === "packages" && isFitnessStudio && <PackagesTab />}
+          {effectiveTab === "profile" && <BusinessProfileTab />}
+          {effectiveTab === "booking" && <BookingSettingsTab />}
+          {effectiveTab === "availability" && <AvailabilityTab />}
+          {effectiveTab === "services" && <ServicesTab />}
+          {effectiveTab === "gallery" && <PhotosTab />}
+          {effectiveTab === "packages" && isFitnessStudio && <PackagesTab />}
         </motion.div>
       </div>
     </div>

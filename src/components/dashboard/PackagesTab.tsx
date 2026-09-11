@@ -198,6 +198,15 @@ export function PackagesTab() {
           </p>
         ) : (
           <div className="space-y-2">
+            {/* Column headers. Hidden on narrow screens where the cards stack
+                and the labels would wrap into noise. */}
+            <div className="hidden items-center gap-3 px-4 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:flex">
+              <span className="flex-1">{t("packageName")}</span>
+              <span className="w-16 text-center">{t("entriesShort")}</span>
+              <span className="w-16 text-center">{t("daysUnit")}</span>
+              <span className="w-16 text-center">₪</span>
+              <span className="w-[5.5rem] text-center">{t("packageActive")}</span>
+            </div>
             <AnimatePresence initial={false}>
               {templates.map((tpl, i) => (
                 <motion.div
@@ -210,11 +219,13 @@ export function PackagesTab() {
                 >
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{tpl.name}</p>
+                      <p className="truncate text-base font-bold leading-tight">{tpl.name}</p>
                       {tpl.description && (
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">{tpl.description}</p>
                       )}
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                      {/* Narrow screens: the inline summary, since the column
+                          headers above are hidden there. */}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground sm:hidden">
                         <span className="flex items-center gap-1">
                           <Ticket className="h-3 w-3" />
                           {tpl.total_entries} {t("entriesShort")}
@@ -226,7 +237,17 @@ export function PackagesTab() {
                         <span className="font-medium text-foreground">₪{tpl.price}</span>
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
+                    {/* Wide screens: values line up under their headers. */}
+                    <div className="hidden w-16 shrink-0 text-center text-sm font-semibold tabular-nums sm:block">
+                      {tpl.total_entries}
+                    </div>
+                    <div className="hidden w-16 shrink-0 text-center text-sm tabular-nums text-muted-foreground sm:block">
+                      {tpl.validity_days}
+                    </div>
+                    <div className="hidden w-16 shrink-0 text-center text-sm font-semibold tabular-nums sm:block">
+                      ₪{tpl.price}
+                    </div>
+                    <div className="flex w-[5.5rem] shrink-0 items-center justify-center gap-1">
                       <Switch
                         checked={tpl.is_active}
                         onCheckedChange={(v) =>
@@ -276,15 +297,14 @@ export function PackagesTab() {
           <h2 className="text-sm font-bold text-foreground">{t("customerPackages")}</h2>
           <Button
             size="sm"
-            variant="outline"
-            className="h-8 gap-1.5 text-xs"
+            className="h-9 gap-1.5 text-xs shadow-sm"
             onClick={() => {
               setSellForm({ customerKey: "", templateId: "" });
               setCustomerSearch("");
               setSelling(true);
             }}
           >
-            <UserPlus className="h-3.5 w-3.5" />
+            <UserPlus className="h-4 w-4" />
             {t("sellPackage")}
           </Button>
         </div>
@@ -324,24 +344,49 @@ export function PackagesTab() {
                     <Badge variant="outline" className={`text-[10px] ${packageStatusClass(pkg)}`}>
                       {t(packageStatusLabel(pkg) as never)}
                     </Badge>
-                    <span className="text-sm font-bold tabular-nums">
-                      {pkg.entries_remaining}/{pkg.total_entries}
+                    <span className="text-base font-bold leading-none tabular-nums">
+                      {pkg.entries_remaining}
+                      <span className="text-xs font-medium text-muted-foreground">
+                        /{pkg.total_entries}
+                      </span>
                     </span>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-muted-foreground">
-                  {pkg.expires_at
-                    ? `${t("expiresOn")} ${format(parseISO(pkg.expires_at), "dd/MM/yyyy")}`
-                    : t("notActivated")}
-                </p>
+                {/* Balance at a glance. Clamped because the bar should never
+                    overflow its track even if the data ever went out of range. */}
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-accent transition-[width] duration-500"
+                    style={{
+                      width: `${pkg.total_entries > 0
+                        ? Math.min(100, Math.round((pkg.entries_remaining / pkg.total_entries) * 100))
+                        : 0}%`,
+                    }}
+                  />
+                </div>
 
-                <div className="flex flex-wrap gap-1.5">
+                {/* The badge already says "awaiting activation", so repeating
+                    "not activated" underneath it is noise. Only show the line
+                    when it adds something: a real expiry date, or the fact
+                    that an ACTIVE package has not started its clock yet. */}
+                {pkg.status !== "pending_activation" && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {pkg.expires_at
+                      ? `${t("expiresOn")} ${format(parseISO(pkg.expires_at), "dd/MM/yyyy")}`
+                      : t("notActivated")}
+                  </p>
+                )}
+
+                <div className="space-y-1.5">
+                  {/* Primary action, and the only one that is time-critical:
+                      until the provider activates, the customer cannot spend
+                      a single entry (enforce_class_requires_package). Full
+                      width and solid green so it cannot be missed. */}
                   {pkg.status === "pending_activation" && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="h-7 gap-1 border-emerald-300 text-[11px] text-emerald-700 hover:bg-emerald-50"
+                      className="h-8 w-full gap-1.5 bg-emerald-600 text-[11px] text-white hover:bg-emerald-700"
                       disabled={activatePackage.isPending}
                       onClick={() =>
                         activatePackage.mutate(pkg.id, {
@@ -350,44 +395,49 @@ export function PackagesTab() {
                         })
                       }
                     >
-                      <CheckCircle2 className="h-3 w-3" />
+                      <CheckCircle2 className="h-3.5 w-3.5" />
                       {t("activatePackage")}
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 gap-1 text-[11px]"
-                    onClick={() => {
-                      setAddForm({ entries: 0, days: 0, note: "" });
-                      setAddingTo(pkg);
-                    }}
-                  >
-                    <PlusCircle className="h-3 w-3" />
-                    {t("addEntries")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 gap-1 text-[11px]"
-                    onClick={() => setHistoryFor(pkg)}
-                  >
-                    <History className="h-3 w-3" />
-                    {t("packageHistory")}
-                  </Button>
-                  {/* Cancelling a dead package would be a no-op the RPC
-                      rejects, so only offer it while the package is live. */}
-                  {pkg.status !== "cancelled" && pkg.status !== "expired" && (
+
+                  {/* Secondary row — equal-width so it reads as one control
+                      strip rather than three loose buttons. */}
+                  <div className="flex gap-1.5">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 gap-1 border-rose-300 text-[11px] text-rose-700 hover:bg-rose-50"
-                      onClick={() => setPendingCancel(pkg)}
+                      className="h-7 flex-1 gap-1 px-1 text-[11px]"
+                      onClick={() => {
+                        setAddForm({ entries: 0, days: 0, note: "" });
+                        setAddingTo(pkg);
+                      }}
                     >
-                      <Ban className="h-3 w-3" />
-                      {t("cancelPackage")}
+                      <PlusCircle className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{t("addEntries")}</span>
                     </Button>
-                  )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 flex-1 gap-1 px-1 text-[11px]"
+                      onClick={() => setHistoryFor(pkg)}
+                    >
+                      <History className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{t("packageHistory")}</span>
+                    </Button>
+                    {/* Cancelling a dead package would be a no-op the RPC
+                        rejects, so only offer it while the package is live. */}
+                    {pkg.status !== "cancelled" && pkg.status !== "expired" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 flex-1 gap-1 border-rose-300 px-1 text-[11px] text-rose-700 hover:bg-rose-50"
+                        onClick={() => setPendingCancel(pkg)}
+                      >
+                        <Ban className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{t("cancelPackage")}</span>
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </motion.div>
             ))}
