@@ -145,6 +145,24 @@ const ProviderDetail = () => {
     (p) => p.status === "pending_activation" || p.status === "active",
   );
   const hasLivePackage = livePackages.length > 0;
+
+  // SPENDABLE, not merely owned. Mirrors enforce_class_requires_package: only
+  // an active package with entries left and not past its local expiry can pay
+  // for a class. A pending one does NOT count -- the provider still has to
+  // activate it after payment.
+  const todayLocalStr = new Date().toISOString().slice(0, 10);
+  const usablePackage = myPackages.find(
+    (p) =>
+      p.status === "active" &&
+      p.entries_remaining > 0 &&
+      (!p.expires_at || p.expires_at.slice(0, 10) >= todayLocalStr),
+  );
+  // Studios sell class access by package only, so booking is gated on having
+  // one. Every other provider type books normally and is untouched.
+  const canBook = !showsPackages || !!usablePackage;
+  const hasSpentPackage = myPackages.some(
+    (p) => p.status === "exhausted" || (p.status === "active" && p.entries_remaining <= 0),
+  );
   const { isFavorite, toggleFavorite } = useFavorites();
   const { data: photos = [] } = usePublicProviderPhotos(id);
   const { availability, blockedDates, monthlySettings, overrides } = usePublicProviderSchedule(id);
@@ -716,7 +734,7 @@ const ProviderDetail = () => {
 
       {/* Packages — fitness studios only. Purchase is a REQUEST: payment happens
           outside the app, and the provider activates once they have it. */}
-      {showsPackages && packageOffers.length > 0 && (
+      {showsPackages && !usablePackage && packageOffers.length > 0 && (
         <section className="mt-8 px-5">
           {/* What this customer already has here, before what is on sale —
               "how many classes do I have left" is the more common question. */}
@@ -735,6 +753,11 @@ const ProviderDetail = () => {
             </div>
           )}
 
+          {hasSpentPackage && (
+            <p className="mb-3 rounded-2xl bg-rose-50 px-4 py-2.5 text-center text-xs font-medium text-rose-700">
+              {t("packageExhaustedMessage")}
+            </p>
+          )}
           <SectionLabel className="mb-3">{t("availablePackages")}</SectionLabel>
           <div className="flex flex-col gap-2">
             {packageOffers.map((pkg, i) => (
@@ -811,7 +834,12 @@ const ProviderDetail = () => {
       {/* Write a Review */}
       <WriteReviewSection providerId={provider.id} />
 
-      {/* Sticky Book Button */}
+      {/* Sticky Book Button — hidden for a studio customer with no spendable
+          package. The booking flow would only show them locked cards, and the
+          database refuses the insert anyway (NO_ACTIVE_PACKAGE), so offering
+          the CTA promises something that cannot happen. The packages section
+          above is their path instead. */}
+      {canBook && (
       <div className="fixed inset-x-0 bottom-0 z-50">
         <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[hsl(40_30%_96%)] to-transparent" />
         <div className="border-t border-white/40 bg-white/70 p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] backdrop-blur-xl">
@@ -824,6 +852,7 @@ const ProviderDetail = () => {
           </button>
         </div>
       </div>
+      )}
       </div>
     </div>
   );
