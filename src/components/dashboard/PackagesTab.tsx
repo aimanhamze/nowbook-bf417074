@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Ticket, History, PlusCircle, CheckCircle2, CalendarClock, UserPlus, Ban, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Ticket, History, PlusCircle, CheckCircle2, CalendarClock, UserPlus, Ban, ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -30,9 +30,9 @@ import { useLang } from "@/contexts/LangContext";
 import { usePackageTemplates, type PackageTemplateInput } from "@/hooks/usePackageTemplates";
 import { useCustomerPackages, type EnrichedCustomerPackage } from "@/hooks/useCustomerPackages";
 import { usePackageActions, packageErrorKey } from "@/hooks/usePackageActions";
-import { useProviderCustomers } from "@/hooks/useProviderCustomers";
-import { isRegisteredKey } from "@/lib/customerKey";
 import { PackageHistorySheet } from "@/components/dashboard/PackageHistorySheet";
+import { SellPackageSheet } from "@/components/dashboard/SellPackageSheet";
+import { groupPackagesByCustomerKey } from "@/lib/packageSelection";
 import { packageStatusLabel, packageStatusClass } from "@/lib/packageStatus";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -70,10 +70,6 @@ export function PackagesTab() {
   const { templates, isLoading, upsertTemplate, deleteTemplate, toggleActive } = usePackageTemplates();
   const { data: customerPackages = [], isLoading: pkgLoading } = useCustomerPackages();
   const { activatePackage, addEntries, sellPackage, cancelPackage } = usePackageActions();
-  const { data: allCustomers = [] } = useProviderCustomers();
-  // A package needs an account to belong to (customer_packages.customer_id is
-  // NOT NULL against auth.users), so phone-only walk-ins cannot hold one.
-  const registeredCustomers = allCustomers.filter((c) => isRegisteredKey(c.key));
   const showError = usePackageErrorToast();
 
   const [editing, setEditing] = useState<EditState | null>(null);
@@ -82,23 +78,19 @@ export function PackagesTab() {
   const [addingTo, setAddingTo] = useState<EnrichedCustomerPackage | null>(null);
   const [addForm, setAddForm] = useState({ entries: 0, days: 0, note: "" });
   const [selling, setSelling] = useState(false);
-  const [sellForm, setSellForm] = useState({ customerKey: "", templateId: "" });
-  const [customerSearch, setCustomerSearch] = useState("");
+  const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
+
+  // One row per CUSTOMER, not per package. Someone who has bought, spent and
+  // re-bought would otherwise fill the list with their own history. The rule
+  // lives in lib/packageSelection so the customers page badge agrees with it.
+  const byCustomer = groupPackagesByCustomerKey(customerPackages);
+  const customerRows = [...byCustomer.entries()].map(([key, all]) => ({
+    key,
+    primary: all[0],   // groupPackagesByCustomerKey pre-sorts by the shared rule
+    older: all.slice(1),
+  }));
   const [pendingCancel, setPendingCancel] = useState<EnrichedCustomerPackage | null>(null);
 
-  // DECISION 2: the list is already limited to people who have booked here
-  // (useProviderCustomers derives it from this provider's bookings). Search
-  // narrows by name or phone; digits are compared loosely so "050-111" matches
-  // a number stored as "0501112233".
-  const searchTerm = customerSearch.trim().toLowerCase();
-  const searchDigits = customerSearch.replace(/\D/g, "");
-  const filteredCustomers = registeredCustomers.filter((c) => {
-    if (!searchTerm) return true;
-    const byName = (c.name || "").toLowerCase().includes(searchTerm);
-    const byPhone = searchDigits.length > 0
-      && (c.phone || "").replace(/\D/g, "").includes(searchDigits);
-    return byName || byPhone;
-  });
 
   const handleSaveTemplate = async () => {
     if (!editing) return;
@@ -130,22 +122,6 @@ export function PackagesTab() {
       showError(err);
     } finally {
       setPendingDeleteId(null);
-    }
-  };
-
-  const handleSellPackage = async () => {
-    if (!sellForm.customerKey || !sellForm.templateId) return;
-    try {
-      await sellPackage.mutateAsync({
-        // "u:<uuid>" -> the account id. See lib/customerKey for the format.
-        customerId: sellForm.customerKey.slice(2),
-        templateId: sellForm.templateId,
-      });
-      toast.success(t("packageSoldToast"));
-      setSelling(false);
-      setSellForm({ customerKey: "", templateId: "" });
-    } catch (err) {
-      showError(err);
     }
   };
 
@@ -299,8 +275,6 @@ export function PackagesTab() {
             size="sm"
             className="h-9 gap-1.5 text-xs shadow-sm"
             onClick={() => {
-              setSellForm({ customerKey: "", templateId: "" });
-              setCustomerSearch("");
               setSelling(true);
             }}
           >
@@ -317,9 +291,9 @@ export function PackagesTab() {
           </p>
         ) : (
           <div className="space-y-2">
-            {customerPackages.map((pkg, i) => (
+            {customerRows.map(({ key: rowKey, primary: pkg, older }, i) => (
               <motion.div
-                key={pkg.id}
+                key={rowKey}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.03, duration: 0.2 }}
@@ -439,6 +413,58 @@ export function PackagesTab() {
                     )}
                   </div>
                 </div>
+
+                {/* Earlier packages for this same customer, collapsed by
+                    default. Only offered when there is genuinely something
+                    behind the representative row. */}
+                {older.length > 0 && (
+                  <div className="border-t border-border/60 pt-2">
+                    <button
+                      onClick={() =>
+                        setExpandedCustomer(expandedCustomer === rowKey ? null : rowKey)
+                      }
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {expandedCustomer === rowKey ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
+                      {t("showPackageHistory")} ({older.length})
+                    </button>
+
+                    {expandedCustomer === rowKey && (
+                      <div className="mt-2 space-y-1.5">
+                        {older.map((prev) => (
+                          <div
+                            key={prev.id}
+                            className="flex items-center gap-2 rounded-lg bg-secondary/40 px-2.5 py-1.5"
+                          >
+                            <Badge
+                              variant="outline"
+                              className={`shrink-0 text-[9px] ${packageStatusClass(prev)}`}
+                            >
+                              {t(packageStatusLabel(prev) as never)}
+                            </Badge>
+                            <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+                              {prev.template_name || "—"}
+                            </span>
+                            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                              {prev.entries_remaining}/{prev.total_entries}
+                            </span>
+                            <button
+                              onClick={() => setHistoryFor(prev)}
+                              className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                              aria-label={t("packageHistory")}
+                            >
+                              <History className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </motion.div>
             ))}
           </div>
@@ -564,84 +590,7 @@ export function PackagesTab() {
         </SheetContent>
       </Sheet>
 
-      {/* ── Sell a package to a customer ─────────────────────────────── */}
-      <Sheet open={selling} onOpenChange={(open) => !open && setSelling(false)}>
-        <SheetContent side="bottom" className={`rounded-t-3xl ${providerDesktopSheet}`}>
-          <SheetHeader>
-            <SheetTitle>{t("sellPackage")}</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4 py-4">
-            {registeredCustomers.length === 0 ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">
-                {t("noRegisteredCustomers")}
-              </p>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{t("selectCustomer")}</Label>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground [inset-inline-start:0.65rem]" />
-                    <Input
-                      value={customerSearch}
-                      onChange={(e) => setCustomerSearch(e.target.value)}
-                      placeholder={t("searchCustomer")}
-                      className="h-9 text-xs [padding-inline-start:2rem]"
-                    />
-                  </div>
-                  <Select
-                    value={sellForm.customerKey}
-                    onValueChange={(v) => setSellForm({ ...sellForm, customerKey: v })}
-                  >
-                    <SelectTrigger><SelectValue placeholder={t("selectCustomer")} /></SelectTrigger>
-                    <SelectContent>
-                      {filteredCustomers.length === 0 ? (
-                        <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-                          {t("noCustomersMatch")}
-                        </div>
-                      ) : (
-                        filteredCustomers.map((c) => (
-                          <SelectItem key={c.key} value={c.key}>
-                            <span className="flex flex-col items-start">
-                              <span>{c.name || c.phone || "—"}</span>
-                              <span className="text-[10px] text-muted-foreground">
-                                {c.phone}
-                                {c.lastVisit ? ` · ${t("lastVisit")} ${c.lastVisit}` : ""}
-                              </span>
-                            </span>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{t("selectPackageType")}</Label>
-                  <Select
-                    value={sellForm.templateId}
-                    onValueChange={(v) => setSellForm({ ...sellForm, templateId: v })}
-                  >
-                    <SelectTrigger><SelectValue placeholder={t("selectPackageType")} /></SelectTrigger>
-                    <SelectContent>
-                      {templates.filter((tpl) => tpl.is_active).map((tpl) => (
-                        <SelectItem key={tpl.id} value={tpl.id}>
-                          {tpl.name} · {tpl.total_entries} {t("entriesShort")} · ₪{tpl.price}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  className="w-full"
-                  onClick={handleSellPackage}
-                  disabled={sellPackage.isPending || !sellForm.customerKey || !sellForm.templateId}
-                >
-                  {sellPackage.isPending ? "..." : t("save")}
-                </Button>
-              </>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <SellPackageSheet open={selling} onOpenChange={setSelling} />
 
       <PackageHistorySheet pkg={historyFor} onClose={() => setHistoryFor(null)} />
 
