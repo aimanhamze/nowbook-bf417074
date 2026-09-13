@@ -32,6 +32,7 @@ export type PackageUsageAction =
   | "entry_returned_cancellation"
   | "entry_returned_manual"
   | "entry_added_manual"
+  | "entry_removed_manual"
   | "package_activated"
   | "package_exhausted"
   | "package_expired"

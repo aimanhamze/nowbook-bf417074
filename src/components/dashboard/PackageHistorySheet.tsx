@@ -12,6 +12,7 @@ const ACTION_LABELS: Record<PackageUsageAction, string> = {
   entry_returned_cancellation: "logEntryReturnedCancellation",
   entry_returned_manual: "logEntryReturnedManual",
   entry_added_manual: "logEntryAddedManual",
+  entry_removed_manual: "logEntryRemovedManual",
   package_activated: "logPackageActivated",
   package_exhausted: "logPackageExhausted",
   package_expired: "logPackageExpired",

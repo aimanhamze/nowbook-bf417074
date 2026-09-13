@@ -216,6 +216,8 @@ export function packageErrorKey(message: string): string | null {
   if (message.includes("PACKAGE_NOT_PENDING")) return "packageNotPendingError";
   if (message.includes("PACKAGE_FORBIDDEN")) return "packageForbiddenError";
   if (message.includes("BOOKING_HAS_NO_PACKAGE")) return "packageNoneOnBooking";
+  if (message.includes("NOT_ENOUGH_ENTRIES")) return "notEnoughEntries";
+  if (message.includes("CANNOT_EMPTY_PACKAGE")) return "cannotEmptyPackage";
   if (message.includes("NOTHING_TO_APPLY")) return "packageNothingToApply";
   if (message.includes("TEMPLATE_IN_USE")) return "packageTemplateInUse";
   return null;

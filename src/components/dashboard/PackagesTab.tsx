@@ -543,7 +543,7 @@ export function PackagesTab() {
       <Sheet open={!!addingTo} onOpenChange={(open) => !open && setAddingTo(null)}>
         <SheetContent side="bottom" className={`rounded-t-3xl ${providerDesktopSheet}`}>
           <SheetHeader>
-            <SheetTitle>{t("addEntries")}</SheetTitle>
+            <SheetTitle>{t("adjustEntries")}</SheetTitle>
           </SheetHeader>
           {addingTo && (
             <div className="space-y-4 py-4">
@@ -552,13 +552,37 @@ export function PackagesTab() {
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">{t("entriesToAdd")}</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={addForm.entries}
-                    onChange={(e) => setAddForm({ ...addForm, entries: Number(e.target.value) })}
-                  />
+                  <Label className="text-xs">{t("entriesChange")}</Label>
+                  {/* Signed: positive grants, negative removes. Steppers because
+                      typing a minus sign on a phone number pad is awkward. */}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-9 w-9 shrink-0 p-0 text-base"
+                      onClick={() => setAddForm({ ...addForm, entries: addForm.entries - 1 })}
+                      aria-label={t("removeEntries")}
+                    >
+                      −
+                    </Button>
+                    <Input
+                      type="number"
+                      value={addForm.entries}
+                      onChange={(e) => setAddForm({ ...addForm, entries: Number(e.target.value) })}
+                      className="h-9 text-center"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-9 w-9 shrink-0 p-0 text-base"
+                      onClick={() => setAddForm({ ...addForm, entries: addForm.entries + 1 })}
+                      aria-label={t("addEntries")}
+                    >
+                      +
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">{t("daysToExtend")}</Label>
@@ -570,6 +594,23 @@ export function PackagesTab() {
                   />
                 </div>
               </div>
+              {addForm.entries !== 0 && (
+                <p className={`text-[11px] ${
+                  addingTo.entries_remaining + addForm.entries < 0 ||
+                  addingTo.total_entries + addForm.entries <= 0
+                    ? "font-medium text-rose-600"
+                    : "text-muted-foreground"
+                }`}>
+                  {addingTo.entries_remaining + addForm.entries < 0
+                    ? t("notEnoughEntries")
+                    : addingTo.total_entries + addForm.entries <= 0
+                      ? t("cannotEmptyPackage")
+                      : `${addingTo.entries_remaining}/${addingTo.total_entries} → ${
+                          addingTo.entries_remaining + addForm.entries}/${
+                          addingTo.total_entries + addForm.entries}`}
+                </p>
+              )}
+
               <div className="space-y-1.5">
                 <Label className="text-xs">{t("noteOptional")}</Label>
                 <Input
@@ -581,7 +622,12 @@ export function PackagesTab() {
               <Button
                 className="w-full"
                 onClick={handleAddEntries}
-                disabled={addEntries.isPending || (addForm.entries <= 0 && addForm.days <= 0)}
+                disabled={
+                  addEntries.isPending ||
+                  (addForm.entries === 0 && addForm.days <= 0) ||
+                  addingTo.entries_remaining + addForm.entries < 0 ||
+                  addingTo.total_entries + addForm.entries <= 0
+                }
               >
                 {addEntries.isPending ? "..." : t("save")}
               </Button>
