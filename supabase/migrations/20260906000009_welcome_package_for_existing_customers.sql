@@ -12,9 +12,18 @@
 --     package_request_purchase will refuse with PACKAGES_FOR_FITNESS_ONLY.
 --     Confirm the category before running this on PROD.
 --
--- Numbered 20260906000008 -- AFTER every table, trigger and RPC this depends
--- on. An earlier number (e.g. 202609040000xx) would sort before
--- 20260905000002 creates package_templates and fail on a clean replay.
+-- Numbered 20260906000009 -- AFTER every table, trigger and RPC this depends
+-- on, and AFTER 20260906000008 (deduct on pending). An earlier number (e.g.
+-- 202609040000xx) would sort before 20260905000002 creates package_templates
+-- and fail on a clean replay.
+--
+-- WHAT 2 ENTRIES BUYS, precisely. Since 20260906000008 an entry is taken when
+-- the class booking is CREATED, not when the provider approves it -- a
+-- booking holds its slot from the moment it exists, and
+-- prevent_booking_conflicts counts 'pending' as well as 'confirmed'. So 2
+-- entries = 2 classes the customer can BOOK, whether or not those bookings
+-- have been approved yet. A rejected booking (pending -> cancelled) returns
+-- its entry, so a rejection costs the customer nothing.
 --
 -- Idempotency is by WHERE NOT EXISTS, not ON CONFLICT: package_templates has
 -- no unique constraint on (provider_id, name) for ON CONFLICT to target, and
