@@ -678,6 +678,7 @@ const ProviderDetail = () => {
             blockedDates={blockedDates}
             overrides={overrides}
             bookingWindowDays={provider.bookingWindowDays}
+            staffEnabled={provider.staffEnabled}
             lang={lang}
             t={t}
           />
@@ -690,6 +691,7 @@ const ProviderDetail = () => {
               availability={availability}
               blockedDates={blockedDates}
               status={status}
+              staffEnabled={provider.staffEnabled}
               lang={lang}
               t={t}
             />

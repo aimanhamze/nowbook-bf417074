@@ -1,4 +1,4 @@
-import { User, Settings, LogIn, LogOut, Bell, BellOff, HelpCircle, Globe, Star, QrCode, Users, Loader2, FileText, MessageCircle } from "lucide-react";
+import { User, Settings, LogIn, LogOut, Bell, BellOff, HelpCircle, Globe, Star, QrCode, Users, UsersRound, Loader2, FileText, MessageCircle } from "lucide-react";
 import { ForwardArrow } from "@/components/ui/directional-icon";
 import { motion } from "framer-motion";
 import { useLang } from "@/contexts/LangContext";
@@ -45,6 +45,7 @@ const Profile = () => {
     ...(user && isProvider ? [{ icon: QrCode, label: t("myQrCode"), action: () => navigate("/qr-code") }] : []),
     ...(user && isProvider ? [{ icon: Star, label: t("myReviews"), action: () => navigate("/reviews") }] : []),
     ...(user && isProvider ? [{ icon: Users, label: t("myCustomers"), action: () => navigate("/customers") }] : []),
+    ...(user && isProvider ? [{ icon: UsersRound, label: t("myStaff"), action: () => navigate("/staff") }] : []),
     ...(user && isProvider ? [{ icon: FileText, label: t("monthlyReport"), action: () => navigate("/monthly-report") }] : []),
     ...(user && isProvider ? [{ icon: MessageCircle, label: t("notificationSettingsTitle"), action: () => navigate("/notification-settings") }] : []),
     ...(user && isSupported ? [{

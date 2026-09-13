@@ -28,6 +28,12 @@ interface Props {
   blockedDates: string[];
   overrides: DateOverrideRow[];
   bookingWindowDays: number;
+  /**
+   * The provider runs per-staff booking, so these SHOP hours may be wider than
+   * any individual member's. Required rather than optional: this table has one
+   * caller, and a silently-omitted flag is exactly how the note would go missing.
+   */
+  staffEnabled: boolean;
   lang: Lang;
   t: (key: string) => string;
 }
@@ -37,6 +43,7 @@ export default function MonthlyHoursTable({
   blockedDates,
   overrides,
   bookingWindowDays,
+  staffEnabled,
   lang,
   t,
 }: Props) {
@@ -158,6 +165,16 @@ export default function MonthlyHoursTable({
             className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`}
           />
         </button>
+      )}
+
+      {/* Same note as WeeklyHoursTable, for the same reason: these are the
+          SHOP's hours per date, and a staff member's own hours narrow them.
+          A member's hours are WEEKLY even here — they act as a weekly limit on
+          top of each date's window. Rendered ONLY for staff-enabled providers. */}
+      {staffEnabled && (
+        <p className="border-t border-border/40 px-3.5 pb-2 pt-2.5 text-[11px] leading-relaxed text-muted-foreground">
+          {t("hoursShopWideNote")}
+        </p>
       )}
     </div>
   );

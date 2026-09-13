@@ -184,6 +184,7 @@ export function MonthlyAvailabilityCalendar() {
           onMonthChange={setMonth}
           dir={isRtl ? "rtl" : "ltr"}
           locale={dateFnsLocale}
+          weekStartsOn={0}
           fromDate={today}
           toDate={rangeEnd}
           onDayClick={(day, mods) => {

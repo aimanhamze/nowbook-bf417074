@@ -10,10 +10,16 @@ import { bookingDuration } from "@/lib/bookingDuration";
 // reused by the slot logic below AND the customer profile's hours display.
 import {
   resolveDayHours,
+  narrowToStaff,
+  staffDayWindow,
+  NO_BLOCKED_DATES,
   toLocalDateStr,
   type MonthlySettings,
   type DateOverrideRow,
 } from "@/lib/availabilityResolver";
+import { usePublicStaffHours } from "./useProviderStaffHours";
+import { usePublicStaffTimeOff } from "./useProviderStaffTimeOff";
+import { availabilityWindow } from "@/lib/availabilityWindow";
 
 export interface DbProvider {
   id: string;
@@ -314,23 +320,20 @@ export function useAllProviderSchedules() {
 }
 
 /** Fetch real availability for a provider */
-// The availability window the client fetches busy slots for. Must be >= the
-// booking date strip shown in the UI (currently 14 days in both BookAppointment
-// and NewBookingSheet) so every bookable day's conflicts are covered.
-const AVAILABILITY_WINDOW_DAYS = 60;
+// AVAILABILITY_WINDOW_DAYS and the [fromStr, toStr] derivation now live in
+// lib/availabilityWindow, because usePublicStaffTimeOff needs the SAME window to
+// build the SAME query key — two independent derivations could split one cache
+// into two. The value and the resulting strings are unchanged.
 
 // selectedStaffId (multi-staff Phase 3): OPTIONAL staff filter for the private
 // slot builder. Omitted / null → NO filtering, byte-identical to the pre-staff
 // behavior — every existing caller passes one argument and is unaffected. The
 // customer staff picker (Phase 4) will thread the chosen provider_staff.id.
 export function useRealAvailability(providerId: string | undefined, selectedStaffId?: string | null) {
-  // Local date window [today, today + AVAILABILITY_WINDOW_DAYS]. Use LOCAL date
-  // strings (toLocalDateStr, NOT toISOString) so the window matches how
+  // Local date window [today, today + AVAILABILITY_WINDOW_DAYS], from the shared
+  // helper. LOCAL date strings (never toISOString) so the window matches how
   // booking_date is stored/compared and the queryKey stays stable within a day.
-  const windowEnd = new Date();
-  windowEnd.setDate(windowEnd.getDate() + AVAILABILITY_WINDOW_DAYS);
-  const fromStr = toLocalDateStr(new Date());
-  const toStr = toLocalDateStr(windowEnd);
+  const { fromStr, toStr } = availabilityWindow();
 
   const availabilityQuery = useQuery({
     queryKey: ["provider-availability-public", providerId],
@@ -459,6 +462,41 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     monthly_default_end: monthlySettingsQuery.data?.monthly_default_end ?? "17:00",
   };
 
+  // ── PER-STAFF HOURS (Phase 3) ───────────────────────────────────────────────
+  // ONE query for EVERY member's rows, keyed by providerId only, indexed into a
+  // Map once. `getAvailableSlots` closes over that Map, so resolving a day costs
+  // a Map.get and never a round trip — which matters because dayHasAvailability
+  // calls it once per rendered calendar cell.
+  //
+  // Gated on a member actually being SELECTED: with no selection there is
+  // nothing to narrow, so a provider who does not use staff — and a customer who
+  // has not reached the staff step — fires no request at all.
+  const { hoursByStaff: staffHoursByStaff, isLoading: staffHoursLoading } = usePublicStaffHours(
+    providerId,
+    !!selectedStaffId
+  );
+
+  // The selected member's week, resolved ONCE per render rather than per day.
+  // `undefined` here means "no member selected, or this member has no rows" —
+  // both of which staffDayWindow turns into the identity path. Substituting an
+  // empty Map would read as "configured and off every day"; the absence must
+  // travel all the way to the resolver intact.
+  const selectedStaffDays = selectedStaffId ? staffHoursByStaff.get(selectedStaffId) : undefined;
+
+  // ── PER-STAFF TIME OFF (Phase 5c) ───────────────────────────────────────────
+  // Same shape and the same three constraints as the hours query above: ONE
+  // request for EVERY member, indexed into a Map once, gated on a member being
+  // selected. Windowed to [fromStr, toStr] via the shared availabilityWindow, so
+  // this key and the walk-in sheet's are identical strings.
+  const { timeOffByStaff: staffTimeOffByStaff, isLoading: staffTimeOffLoading } =
+    usePublicStaffTimeOff(providerId, !!selectedStaffId);
+
+  // NO_BLOCKED_DATES rather than a fresh Set: with nobody selected, or a member
+  // with no days off in the window, there is nothing to close and staffDayWindow
+  // falls straight through to the hours check.
+  const selectedStaffTimeOff =
+    (selectedStaffId ? staffTimeOffByStaff.get(selectedStaffId) : undefined) ?? NO_BLOCKED_DATES;
+
   // Per-date overrides for monthly mode (mirrors blockedDatesQuery). Only
   // consulted when availability_mode==='monthly'; irrelevant to weekly providers.
   const overridesQuery = useQuery({
@@ -508,14 +546,33 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     // Resolve this provider's open window for `date` via the SINGLE shared helper
     // (blocked-check → mode branch → weekday lookup). For weekly providers this
     // returns exactly what the old inline code did. null === closed.
-    const dayWindow = resolveDayHours(
+    const shopWindow = resolveDayHours(
       date,
       monthlySettings,
       availabilityQuery.data || [],
       blockedDatesQuery.data || [],
       overridesQuery.data || [],
     );
+
+    // PER-STAFF NARROWING (Phase 3). resolveDayHours is untouched — this
+    // composes over its output. With no member selected, or a member who has no
+    // hours rows, narrowToStaff returns `shopWindow` ITSELF and this line is the
+    // identity, so every existing provider gets byte-identical behaviour.
+    // Deliberately NOT applied in getGroupSlotsWithCapacity below: group
+    // capacity is pooled shop-wide and the trigger's group branch is staff-blind.
+    const dayWindow = narrowToStaff(
+      shopWindow,
+      staffDayWindow(date, selectedStaffDays, selectedStaffTimeOff),
+    );
     if (!dayWindow) return [];
+
+    // A member is selected but their hours or days off have not arrived yet.
+    // Fail CLOSED rather than offering the un-narrowed shop window and retracting
+    // it a moment later: this is an offering rule, and briefly showing nothing is
+    // the same thing the page already does while the weekly rows load. Time off
+    // is included for the same reason — offering a day the member is away and
+    // then withdrawing it is the worst of the available behaviours.
+    if (selectedStaffId && (staffHoursLoading || staffTimeOffLoading)) return [];
 
     const services = servicesQuery.data || [];
 
@@ -656,7 +713,40 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     return result;
   };
 
-  return { getAvailableSlots, getGroupSlotsWithCapacity, isLoading: availabilityQuery.isLoading };
+  /**
+   * COPY ONLY — never gates a slot, never hides a day.
+   *
+   * "No times on this day" has three different causes and the customer deserves
+   * to be told which: the shop is closed, the chosen member is not working, or
+   * everything is booked. The slot pipeline collapses all three into an empty
+   * array, so this answers the middle one: the SHOP is open on `date` but the
+   * selected member's narrowed window is null.
+   *
+   * Returns false with no member selected, and false when the shop itself is
+   * closed — that case already has its own message.
+   */
+  const staffOffOnDate = (date: Date): boolean => {
+    if (!selectedStaffId) return false;
+    const shopWindow = resolveDayHours(
+      date,
+      monthlySettings,
+      availabilityQuery.data || [],
+      blockedDatesQuery.data || [],
+      overridesQuery.data || [],
+    );
+    if (!shopWindow) return false;
+    return (
+      narrowToStaff(shopWindow, staffDayWindow(date, selectedStaffDays, selectedStaffTimeOff)) ===
+      null
+    );
+  };
+
+  return {
+    getAvailableSlots,
+    getGroupSlotsWithCapacity,
+    staffOffOnDate,
+    isLoading: availabilityQuery.isLoading,
+  };
 }
 
 function parseTime(timeStr: string): number {

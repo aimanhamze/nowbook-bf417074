@@ -1686,6 +1686,7 @@ export function CalendarTab() {
               selected={selectedDate}
               onSelect={(d) => d && setSelectedDate(d)}
               locale={dateFnsLocale}
+              weekStartsOn={0}
               className="pointer-events-auto"
               components={calendarComponents}
               modifiers={{ hasBooking: datesWithBookings }}

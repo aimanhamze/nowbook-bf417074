@@ -24,6 +24,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Install = lazy(() => import("./pages/Install"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Admin = lazy(() => import("./pages/Admin"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
@@ -33,6 +34,8 @@ const ProviderCalendar = lazy(() => import("./pages/ProviderCalendar"));
 const Reviews = lazy(() => import("./pages/Reviews"));
 const ProviderQrCode = lazy(() => import("./pages/ProviderQrCode"));
 const ProviderCustomers = lazy(() => import("./pages/ProviderCustomers"));
+// One chunk for both staff pages: the slide between them must never suspend.
+const StaffRoutes = lazy(() => import("./pages/StaffRoutes"));
 const ProviderNotifications = lazy(() => import("./pages/ProviderNotifications"));
 const Statistics = lazy(() => import("./pages/Statistics"));
 const MonthlyReport = lazy(() => import("./pages/MonthlyReport"));
@@ -66,6 +69,7 @@ function PageTitleUpdater() {
       "/calendar": `Ehjezly — ${t("bookingsCalendar")}`,
       "/admin": `Ehjezly — Admin`,
       "/booking-confirmed": `Ehjezly — ${t("bookingConfirmed")}`,
+      "/privacy": `Ehjezly — ${t("privacyTitle")}`,
     };
 
     const base = location.pathname.split("/").slice(0, 2).join("/");
@@ -107,6 +111,9 @@ const App = () => (
                   <Route path="/reviews" element={<ProtectedRoute><ErrorBoundary><Reviews /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/qr-code" element={<ProtectedRoute><ErrorBoundary><ProviderQrCode /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/customers" element={<ProtectedRoute><ErrorBoundary><ProviderCustomers /></ErrorBoundary></ProtectedRoute>} />
+                  {/* Provider team: /staff (roster) and /staff/:id ("new" creates),
+                      routed inside StaffRoutes so the two slide over each other. */}
+                  <Route path="/staff/*" element={<ProtectedRoute><ErrorBoundary><StaffRoutes /></ErrorBoundary></ProtectedRoute>} />
                   {/* Provider WhatsApp settings. Distinct from /notifications,
                       which is the customer's notification feed. */}
                   <Route path="/notification-settings" element={<ProtectedRoute><ErrorBoundary><ProviderNotifications /></ErrorBoundary></ProtectedRoute>} />
@@ -117,6 +124,9 @@ const App = () => (
                   <Route path="/admin/providers" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
                   <Route path="/admin/customers" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
                   <Route path="/install" element={<ErrorBoundary><Install /></ErrorBoundary>} />
+                  {/* Public on purpose: a Meta Business Verification reviewer
+                      must reach the policy without an account. No guard. */}
+                  <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

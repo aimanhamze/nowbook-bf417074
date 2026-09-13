@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { AvailabilityModeSection } from "@/components/settings/AvailabilityModeSection";
-import { StaffSection } from "@/components/settings/StaffSection";
+import { StaffPageLink } from "@/components/settings/StaffPageLink";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -127,7 +127,8 @@ const Settings = () => {
                 {t("settingsGroupBusiness")}
               </h2>
               <AvailabilityModeSection delay={0} />
-              <StaffSection delay={0.06} />
+              {/* Team management lives on its own page (/staff); this row is the way in. */}
+              <StaffPageLink delay={0.06} />
             </div>
 
             <div className="space-y-3">

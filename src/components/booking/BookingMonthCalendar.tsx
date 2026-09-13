@@ -112,6 +112,7 @@ export function BookingMonthCalendar({
         onMonthChange={onMonthChange}
         dir={isRtl ? "rtl" : "ltr"}
         locale={dateFnsLocale}
+        weekStartsOn={0}
         fromDate={fromDate}
         toDate={toDate}
         // An overridable day is NOT disabled — that is the whole point. Days
