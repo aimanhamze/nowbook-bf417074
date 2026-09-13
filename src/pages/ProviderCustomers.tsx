@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Search, X, Phone, User, Users } from "lucide-react";
+import { Search, X, Phone, User, Users, UserPlus } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -9,6 +9,10 @@ import { useProviderCustomers } from "@/hooks/useProviderCustomers";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
+import { useCustomerPackages } from "@/hooks/useCustomerPackages";
+import { groupPackagesByCustomerKey } from "@/lib/packageSelection";
+import { packageStatusLabel, packageStatusClass } from "@/lib/packageStatus";
+import { SellPackageSheet } from "@/components/dashboard/SellPackageSheet";
 
 // Standalone provider "My Customers" page. ALL customer PII comes from the
 // single isolated hook useProviderCustomers() — this page does no profiles/
@@ -19,6 +23,14 @@ export default function ProviderCustomers() {
   const navigate = useNavigate();
   const { profile, isLoading: profileLoading } = useProviderProfile();
   const { data: customers = [], isLoading } = useProviderCustomers();
+  // Package status per customer, fitness studios only -- no other provider
+  // type can sell one, so the query is not even fired for them.
+  const isFitnessStudio = profile?.category === "fitness_studio";
+  const { data: allPackages = [] } = useCustomerPackages();
+  const packagesByCustomer = groupPackagesByCustomerKey(
+    isFitnessStudio ? allPackages : [],
+  );
+  const [sellTo, setSellTo] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -164,9 +176,38 @@ export default function ProviderCustomers() {
                       )}
                     </div>
 
-                    <span className="shrink-0 text-xs font-semibold text-accent bg-accent/10 px-2.5 py-1 rounded-full whitespace-nowrap">
-                      {c.bookingCount} {t("bookingsUnit")}
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className="text-xs font-semibold text-accent bg-accent/10 px-2.5 py-1 rounded-full whitespace-nowrap">
+                        {c.bookingCount} {t("bookingsUnit")}
+                      </span>
+                      {isFitnessStudio && (() => {
+                        // One representative package per customer, chosen by the
+                        // same rule the packages tab uses (lib/packageSelection),
+                        // so the two screens can never disagree.
+                        const pkg = packagesByCustomer.get(c.key)?.[0];
+                        if (!pkg) {
+                          return (
+                            <button
+                              onClick={() => setSellTo(c.key)}
+                              className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-[10px] font-semibold text-accent-foreground transition-transform active:scale-95"
+                            >
+                              <UserPlus className="h-3 w-3" />
+                              {t("sellPackage")}
+                            </button>
+                          );
+                        }
+                        const label = packageStatusLabel(pkg);
+                        return (
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${packageStatusClass(pkg)}`}
+                          >
+                            {t(label as never)}
+                            {label === "packageActive" &&
+                              ` · ${pkg.entries_remaining} ${t("entriesShort")}`}
+                          </span>
+                        );
+                      })()}
+                    </div>
                   </motion.div>
                 );
               })}
@@ -174,6 +215,12 @@ export default function ProviderCustomers() {
           )}
         </div>
       </div>
+
+      <SellPackageSheet
+        open={!!sellTo}
+        onOpenChange={(open) => !open && setSellTo(null)}
+        presetCustomerKey={sellTo}
+      />
     </div>
   );
 }

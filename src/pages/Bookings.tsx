@@ -12,6 +12,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
+import { useMyPackages } from "@/hooks/usePublicPackages";
+import { MyPackageCard } from "@/components/packages/MyPackageCard";
 import type { Tables } from "@/integrations/supabase/types";
 
 // Fallback cutoff (hours) when a booking's provider can't be resolved (e.g. the
@@ -49,6 +51,9 @@ const Bookings = () => {
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(0);
   const [tab, setTab] = useState<TabId>("upcoming");
+  // The customer's own packages, read through their own RLS policy. Empty for
+  // everyone who has never bought one, so the section simply does not render.
+  const { data: myPackages = [] } = useMyPackages();
 
   const { data: bookingsData, isLoading } = useQuery({
     queryKey: ["bookings", user?.id, page],
@@ -169,6 +174,26 @@ const Bookings = () => {
           </motion.div>
         ) : (
           <>
+            {/* What the customer has left to use, before their bookings —
+                the question "how many classes do I still have?" is the reason
+                most package holders open this page. */}
+            {myPackages.length > 0 && (
+              <section className="mb-5 px-5">
+                <h2 className="mb-2 text-sm font-bold">{t("myPackages")}</h2>
+                <div className="flex flex-col gap-2">
+                  {myPackages.map((pkg, i) => (
+                    <MyPackageCard
+                      key={pkg.id}
+                      pkg={pkg}
+                      providerName={pkg.provider_name}
+                      templateName={pkg.template_name}
+                      index={i}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Tab switcher — segmented control (app pattern). */}
             <div className="px-5">
               <div className="flex gap-1 rounded-2xl border border-border bg-secondary/70 p-1 backdrop-blur-sm">

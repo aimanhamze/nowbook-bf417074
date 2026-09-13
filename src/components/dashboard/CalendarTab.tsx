@@ -16,6 +16,7 @@ import { useProviderClassSchedule, ClassScheduleEntry } from "@/hooks/useProvide
 import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { NewBookingSheet } from "@/components/dashboard/NewBookingSheet";
 import { RescheduleSheet } from "@/components/dashboard/RescheduleSheet";
+import { BookingPackageRow } from "@/components/dashboard/BookingPackageRow";
 import { DEFAULT_REMINDER_TEMPLATE } from "@/components/dashboard/BusinessProfileTab";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -377,6 +378,10 @@ function BookingCard({ booking, index, color = null, showDurationEditor = false 
           </span>
         )}
       </div>
+
+      {/* Package balance, check-in and package assignment. Renders nothing
+          for walk-ins, cancelled bookings, or a provider with no packages. */}
+      <BookingPackageRow booking={booking} />
 
       {/* Customer note — what the customer wrote when booking (if any) */}
       {booking.customer_notes && (

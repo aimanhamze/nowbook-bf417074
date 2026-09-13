@@ -4,8 +4,10 @@ import { useProviderActiveStaff, useProviderStaffAssignments } from "@/hooks/use
 import { eligibleStaffForService } from "@/lib/staffServices";
 import { useProviderSessionsById } from "@/hooks/useProviderSessions";
 import { useProviderClassScheduleById, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
+import { useMyPackagesAt, useProviderPackages, useRequestPackage } from "@/hooks/usePublicPackages";
+import { packageErrorKey } from "@/hooks/usePackageActions";
 import type { Service } from "@/lib/mock-data";
-import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote, UserRound } from "lucide-react";
+import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote, UserRound, Ticket } from "lucide-react";
 import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
@@ -108,6 +110,11 @@ const BookAppointment = () => {
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
 
   const isFitnessStudio = provider?.category === "fitness_studio";
+  // Must sit above every early return below -- rules-of-hooks. The derived
+  // package state stays further down with the other fitness helpers.
+  const { data: myPkgsHere = [] } = useMyPackagesAt(isFitnessStudio ? id : undefined);
+  const { data: offersHere = [] } = useProviderPackages(isFitnessStudio ? id : undefined);
+  const requestPackageHere = useRequestPackage();
 
   // ── Standard flow state ──
   // Standard (non-fitness) flow is 4 steps: services → day (month calendar) →
@@ -386,6 +393,24 @@ const BookAppointment = () => {
   const effectiveTime = selectedSession
     ? selectedSession.session_time.slice(0, 5)
     : selectedTime;
+
+  // ── Package gate (fitness_studio) ──────────────────────────────────────
+  // Classes are package-only: enforce_class_requires_package refuses a class
+  // booking from a customer with no usable package, so the UI must not offer
+  // one. Mirrors the trigger's rule exactly -- active, entries left, and not
+  // past its LOCAL expiry date.
+  const todayLocal = format(new Date(), "yyyy-MM-dd");
+  const activePackage = myPkgsHere.find(
+    (p) =>
+      p.status === "active" &&
+      p.entries_remaining > 0 &&
+      (!p.expires_at || p.expires_at.slice(0, 10) >= todayLocal),
+  );
+  // Distinguishes "you never had one" from "yours ran out", which are
+  // different messages and, for the second, a stronger nudge to re-buy.
+  const hasSpentPackage = myPkgsHere.some(
+    (p) => p.status === "exhausted" || (p.status === "active" && p.entries_remaining <= 0),
+  );
 
   // ── Fitness-studio flow helpers ──
   const fitnessEffectiveDate = selectedOccurrence ? format(selectedOccurrence, "yyyy-MM-dd") : "";
@@ -783,6 +808,22 @@ const BookAppointment = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* Balance when they can book; why they cannot when they
+                      can't. The schedule stays visible either way, so a
+                      customer can see what they would be buying into. */}
+                  {activePackage ? (
+                    <div className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+                      <Ticket className="h-3.5 w-3.5" />
+                      {activePackage.entries_remaining} {t("entriesLeft")}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl bg-accent/10 px-4 py-3 text-center">
+                      <p className="text-xs font-semibold text-accent">{t("packageRequired")}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {hasSpentPackage ? t("packageExhaustedMessage") : t("packageRequiredMessage")}
+                      </p>
+                    </div>
+                  )}
                   {DAY_KEYS.map((dayKey, dayIdx) => {
                     const dayClasses = scheduleByDay[dayIdx] || [];
                     if (dayClasses.length === 0) return null;
@@ -798,18 +839,25 @@ const BookAppointment = () => {
                             const nextBooked = classNextBookingCounts[cls.id] ?? 0;
                             const nextSpotsLeft = cls.max_capacity - nextBooked;
                             const nextIsFull = isGroup && nextSpotsLeft <= 0;
+                            // Classes are package-only. The DB refuses these
+                            // bookings anyway (NO_ACTIVE_PACKAGE), so the card
+                            // is inert rather than failing after a tap.
+                            const locked = !activePackage;
                             return (
                               <motion.button
                                 key={cls.id}
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ ...SPRING, delay: i * 0.05 }}
+                                disabled={locked}
                                 onClick={() => {
+                                  if (locked) return;
                                   setSelectedClass(cls);
                                   setSelectedOccurrence(null);
                                 }}
                                 className={cn(
-                                  "flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98]",
+                                  "flex items-center justify-between p-4 rounded-2xl border transition-all",
+                                  locked ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]",
                                   isSelected
                                     ? "border-accent bg-accent/10 ring-2 ring-accent/20 shadow-sm"
                                     : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] hover:border-accent/30"
@@ -847,8 +895,18 @@ const BookAppointment = () => {
                                       </span>
                                     )}
                                   </div>
+                                  {locked && (
+                                    <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-accent">
+                                      <Lock className="h-3 w-3" />
+                                      {t("purchaseToBook")}
+                                    </p>
+                                  )}
                                 </div>
-                                {isSelected && (
+                                {locked ? (
+                                  <div className="ms-3 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+                                    <Lock className="h-3 w-3" />
+                                  </div>
+                                ) : isSelected && (
                                   <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0 ms-3">
                                     <Check className="h-3 w-3 text-accent-foreground" />
                                   </div>
@@ -860,6 +918,58 @@ const BookAppointment = () => {
                       </div>
                     );
                   })}
+
+                  {/* Buy without leaving the booking page. */}
+                  {!activePackage && offersHere.length > 0 && (
+                    <div className="pt-2">
+                      <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {t("availablePackages")}
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {offersHere.map((pkg) => (
+                          <div
+                            key={pkg.id}
+                            className="flex items-center gap-3 rounded-2xl border border-white/60 bg-white/70 p-4"
+                          >
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                              <Ticket className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1 text-start">
+                              <p className="truncate text-sm font-semibold">{pkg.name}</p>
+                              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                {pkg.total_entries} {t("entriesShort")} · {pkg.validity_days} {t("daysUnit")}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 flex-col items-end gap-1.5">
+                              <span className="text-sm font-semibold tabular-nums">₪{pkg.price}</span>
+                              <button
+                                onClick={() => {
+                                  if (!user) {
+                                    saveRedirectAfterLogin();
+                                    navigate("/auth");
+                                    return;
+                                  }
+                                  requestPackageHere.mutate(pkg.id, {
+                                    onSuccess: () => toast.success(t("purchasePendingNote")),
+                                    onError: (err) => {
+                                      const key = packageErrorKey(
+                                        err instanceof Error ? err.message : String(err),
+                                      );
+                                      toast.error(key ? t(key as never) : String(err));
+                                    },
+                                  });
+                                }}
+                                disabled={requestPackageHere.isPending}
+                                className="rounded-xl bg-accent px-3 py-1.5 text-[11px] font-semibold text-accent-foreground transition-opacity active:scale-95 disabled:opacity-50"
+                              >
+                                {t("purchasePackage")}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </motion.div>

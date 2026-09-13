@@ -8,7 +8,7 @@ import WriteReviewSection from "@/components/reviews/WriteReviewSection";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
 import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
-import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight, Images, Sparkles, CalendarPlus } from "lucide-react";
+import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight, Images, Sparkles, CalendarPlus, Ticket } from "lucide-react";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { FaWhatsapp, FaInstagram, FaTiktok, FaFacebook, FaWaze } from "react-icons/fa6";
@@ -21,6 +21,9 @@ import ReviewCard from "@/components/reviews/ReviewCard";
 import type { SocialLinks } from "@/lib/socialLinks";
 import { buildWhatsAppLink } from "@/lib/socialLinks";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
+import { useProviderPackages, useMyPackagesAt, useRequestPackage } from "@/hooks/usePublicPackages";
+import { packageErrorKey } from "@/hooks/usePackageActions";
+import { MyPackageCard } from "@/components/packages/MyPackageCard";
 
 interface SocialLinkEntry {
   href: string;
@@ -130,6 +133,36 @@ const ProviderDetail = () => {
   const { user } = useAuth();
   const { provider, isLoading } = useProviderById(id);
   const { data: dbReviews } = useProviderReviews(id);
+  // Packages are a fitness_studio feature (group classes only), so the section
+  // simply does not exist for any other provider type.
+  const showsPackages = provider?.category === "fitness_studio";
+  const { data: packageOffers = [] } = useProviderPackages(showsPackages ? id : undefined);
+  const { data: myPackages = [] } = useMyPackagesAt(showsPackages ? id : undefined);
+  const requestPackage = useRequestPackage();
+  // The RPC refuses a second outstanding request per provider; mirroring that
+  // here disables the button up front instead of failing after the round trip.
+  const livePackages = myPackages.filter(
+    (p) => p.status === "pending_activation" || p.status === "active",
+  );
+  const hasLivePackage = livePackages.length > 0;
+
+  // SPENDABLE, not merely owned. Mirrors enforce_class_requires_package: only
+  // an active package with entries left and not past its local expiry can pay
+  // for a class. A pending one does NOT count -- the provider still has to
+  // activate it after payment.
+  const todayLocalStr = new Date().toISOString().slice(0, 10);
+  const usablePackage = myPackages.find(
+    (p) =>
+      p.status === "active" &&
+      p.entries_remaining > 0 &&
+      (!p.expires_at || p.expires_at.slice(0, 10) >= todayLocalStr),
+  );
+  // Studios sell class access by package only, so booking is gated on having
+  // one. Every other provider type books normally and is untouched.
+  const canBook = !showsPackages || !!usablePackage;
+  const hasSpentPackage = myPackages.some(
+    (p) => p.status === "exhausted" || (p.status === "active" && p.entries_remaining <= 0),
+  );
   const { isFavorite, toggleFavorite } = useFavorites();
   const { data: photos = [] } = usePublicProviderPhotos(id);
   const { availability, blockedDates, monthlySettings, overrides } = usePublicProviderSchedule(id);
@@ -699,6 +732,93 @@ const ProviderDetail = () => {
         </section>
       )}
 
+      {/* Packages — fitness studios only. Purchase is a REQUEST: payment happens
+          outside the app, and the provider activates once they have it. */}
+      {showsPackages && !usablePackage && packageOffers.length > 0 && (
+        <section className="mt-8 px-5">
+          {/* What this customer already has here, before what is on sale —
+              "how many classes do I have left" is the more common question. */}
+          {livePackages.length > 0 && (
+            <div className="mb-4 flex flex-col gap-2">
+              <h3 className="text-sm font-bold">{t("myPackages")}</h3>
+              {livePackages.map((pkg, i) => (
+                <MyPackageCard
+                  key={pkg.id}
+                  pkg={pkg}
+                  templateName={packageOffers.find((o) => o.id === pkg.template_id)?.name ?? null}
+                  showProvider={false}
+                  index={i}
+                />
+              ))}
+            </div>
+          )}
+
+          {hasSpentPackage && (
+            <p className="mb-3 rounded-2xl bg-rose-50 px-4 py-2.5 text-center text-xs font-medium text-rose-700">
+              {t("packageExhaustedMessage")}
+            </p>
+          )}
+          <SectionLabel className="mb-3">{t("availablePackages")}</SectionLabel>
+          <div className="flex flex-col gap-2">
+            {packageOffers.map((pkg, i) => (
+              <motion.div
+                key={pkg.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 + i * 0.06, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                className="surface-soft flex items-center gap-3.5 rounded-2xl p-4"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                  <Ticket className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1 text-start">
+                  <p className="line-clamp-2 text-sm font-medium leading-snug">{pkg.name}</p>
+                  {pkg.description && (
+                    <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{pkg.description}</p>
+                  )}
+                  <span className="mt-1 inline-flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+                    <span>{pkg.total_entries} {t("entriesShort")}</span>
+                    <span>·</span>
+                    <span>{pkg.validity_days} {t("daysUnit")}</span>
+                  </span>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <div className="flex items-baseline gap-0.5">
+                    <span className="text-sm text-muted-foreground">₪</span>
+                    <span className="text-lg font-semibold tracking-tight tabular-nums">{pkg.price}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!user) {
+                        saveRedirectAfterLogin(`/provider/${id}`);
+                        navigate("/auth");
+                        return;
+                      }
+                      requestPackage.mutate(pkg.id, {
+                        onSuccess: () => toast.success(t("purchasePendingNote")),
+                        onError: (err) => {
+                          const key = packageErrorKey(err instanceof Error ? err.message : String(err));
+                          toast.error(key ? t(key as never) : String(err));
+                        },
+                      });
+                    }}
+                    disabled={requestPackage.isPending || hasLivePackage}
+                    className="rounded-xl bg-accent px-3 py-1.5 text-[11px] font-semibold text-accent-foreground transition-opacity active:scale-95 disabled:opacity-50"
+                  >
+                    {t("purchasePackage")}
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          {hasLivePackage && (
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              {t("packageAlreadyPending")}
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Reviews */}
       {dbReviews && dbReviews.length > 0 && (
         <section className="mt-8 px-5">
@@ -714,7 +834,12 @@ const ProviderDetail = () => {
       {/* Write a Review */}
       <WriteReviewSection providerId={provider.id} />
 
-      {/* Sticky Book Button */}
+      {/* Sticky Book Button — hidden for a studio customer with no spendable
+          package. The booking flow would only show them locked cards, and the
+          database refuses the insert anyway (NO_ACTIVE_PACKAGE), so offering
+          the CTA promises something that cannot happen. The packages section
+          above is their path instead. */}
+      {canBook && (
       <div className="fixed inset-x-0 bottom-0 z-50">
         <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[hsl(40_30%_96%)] to-transparent" />
         <div className="border-t border-white/40 bg-white/70 p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] backdrop-blur-xl">
@@ -727,6 +852,7 @@ const ProviderDetail = () => {
           </button>
         </div>
       </div>
+      )}
       </div>
     </div>
   );
