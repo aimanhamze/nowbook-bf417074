@@ -131,6 +131,36 @@ function toSendPulsePhone(raw: string | null | undefined): string | null {
   return `972${d}`;
 }
 
+/**
+ * WALK-IN phone → SendPulse format. MOBILE ONLY.
+ *
+ * Stricter than toSendPulsePhone on purpose. An account holder's number was
+ * verified by OTP; a walk-in's was typed by the provider and never verified,
+ * so this shape check is the only thing standing between a mistyped digit and
+ * a message to a stranger. toSendPulsePhone's [5-9] admits 07X VoIP/landline
+ * numbers; this admits 05X only.
+ *
+ * Also drops a trunk '0' typed after the country code ("+972 050-…"), which is
+ * the same number, not a different one.
+ *
+ * VALIDATES, NEVER REWRITES. The result is used only as the send target;
+ * bookings.customer_phone is never written back. link_walkin_to_account and
+ * link_my_walkins compare its digits against profiles.phone, so changing the
+ * stored format would silently break walk-in → account linking.
+ *
+ * KEEP BYTE-IDENTICAL TO THE COPY IN whatsapp-booking-confirm. If the two
+ * diverge, a walk-in can be confirmed to a number it is never reminded on.
+ */
+function toWalkInPhone(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let d = raw.replace(/\D/g, "");
+  if (d.startsWith("00972")) d = d.slice(5);
+  else if (d.startsWith("972")) d = d.slice(3);
+  if (d.startsWith("0")) d = d.slice(1);
+  const phone = `972${d}`;
+  return /^9725\d{8}$/.test(phone) ? phone : null;
+}
+
 /** Normalizes an ALLOWLIST ENTRY to the same form toSendPulsePhone produces. */
 function looseDigits(raw: string | null | undefined): string {
   const d = (raw ?? "").replace(/\D/g, "");
@@ -361,10 +391,11 @@ async function sendTemplate(
  * unique index, so this distinction matters:
  *   * DATA-quality skips (unusable phone, no name, no service, bad date/time)
  *     DO get a row, so the gap is auditable instead of invisible.
- *   * POLICY skips (cancelled since the query, provider opted out, walk-in,
- *     slot moved, not allowlisted) get NO row and return before this is called.
- *     All are reversible, and claiming would block the legitimate reminder that
- *     follows — most importantly the corrected one after a reschedule.
+ *   * POLICY skips (cancelled since the query, provider opted out, walk-in
+ *     without consent, slot moved, not allowlisted) get NO row and return
+ *     before this is called. All are reversible, and claiming would block the
+ *     legitimate reminder that follows — most importantly the corrected one
+ *     after a reschedule.
  */
 async function logSkip(
   admin: Admin,
@@ -411,7 +442,7 @@ async function processBooking(
     // ── Re-read the booking ──────────────────────────────────────────────────
     const { data: booking, error: bookingError } = await admin
       .from("bookings")
-      .select("id, status, provider_id, user_id, linked_user_id, service_ids, class_schedule_id, booking_date, booking_time")
+      .select("id, status, provider_id, user_id, linked_user_id, service_ids, class_schedule_id, booking_date, booking_time, customer_name, customer_phone, whatsapp_consent")
       .eq("id", bookingId)
       .maybeSingle();
 
@@ -425,9 +456,13 @@ async function processBooking(
       return { outcome: "skipped", reason: "NOT_CONFIRMED" };
     }
 
-    // GATE: walk-ins never receive template messages — no opt-in, and a
-    // provider-typed free-text phone.
-    if (booking.user_id === null && booking.linked_user_id === null) {
+    // GATE: walk-ins receive template messages ONLY when the provider recorded
+    // that the customer agreed (bookings.whatsapp_consent). Re-read here, not
+    // trusted from the RPC. A LINKED walk-in has an account and takes the
+    // account path, whatever the flag says.
+    // KEEP IN STEP with whatsapp-booking-confirm and get_due_whatsapp_reminders.
+    const isWalkIn = booking.user_id === null && booking.linked_user_id === null;
+    if (isWalkIn && booking.whatsapp_consent !== true) {
       return { outcome: "skipped", reason: "WALKIN_EXCLUDED" };
     }
 
@@ -521,10 +556,18 @@ async function processBooking(
     // Data quality BEFORE the allowlist: a missing or malformed number must
     // leave a record, otherwise a phoneless customer is indistinguishable from
     // one merely out of rollout scope.
-    const phoneDigits = toSendPulsePhone(rawPhone);
+    //
+    // A consented walk-in has no account, so the block above left rawPhone
+    // null; its recipient is the provider-typed bookings.customer_phone under
+    // the stricter mobile-only check, with a distinct code so UI/function
+    // drift is visible in the ledger.
+    const phoneDigits = isWalkIn
+      ? toWalkInPhone(booking.customer_phone)
+      : toSendPulsePhone(rawPhone);
     if (!phoneDigits) {
-      await logSkip(admin, bookingId, messageKind, provider.id, "INVALID_PHONE", null);
-      return { outcome: "skipped", reason: "INVALID_PHONE" };
+      const skipReason = isWalkIn ? "WALKIN_INVALID_PHONE" : "INVALID_PHONE";
+      await logSkip(admin, bookingId, messageKind, provider.id, skipReason, null);
+      return { outcome: "skipped", reason: skipReason };
     }
 
     // GATE: allowlist. Reached only with a VALID number, so this expresses one
@@ -538,13 +581,20 @@ async function processBooking(
     // {{1}} customer name. No generic fallback by design: a nameless greeting
     // reads as a marketing blast and risks the sender quality rating for all
     // our traffic.
-    const { data: customerProfile } = await admin
-      .from("profiles")
-      .select("display_name")
-      .eq("user_id", accountId!)
-      .maybeSingle();
+    // A walk-in has no profile: its name is the provider-typed
+    // bookings.customer_name, which the walk-in sheet requires.
+    let customerName: string;
+    if (isWalkIn) {
+      customerName = (booking.customer_name ?? "").trim();
+    } else {
+      const { data: customerProfile } = await admin
+        .from("profiles")
+        .select("display_name")
+        .eq("user_id", accountId!)
+        .maybeSingle();
 
-    const customerName = (customerProfile?.display_name ?? "").trim();
+      customerName = (customerProfile?.display_name ?? "").trim();
+    }
     if (!customerName) {
       await logSkip(admin, bookingId, messageKind, provider.id, "NO_NAME", phoneDigits);
       return { outcome: "skipped", reason: "NO_NAME" };

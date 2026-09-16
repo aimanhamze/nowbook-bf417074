@@ -159,6 +159,36 @@ function toSendPulsePhone(raw: string | null | undefined): string | null {
 }
 
 /**
+ * WALK-IN phone → SendPulse format. MOBILE ONLY.
+ *
+ * Stricter than toSendPulsePhone on purpose. An account holder's number was
+ * verified by OTP; a walk-in's was typed by the provider and never verified,
+ * so this shape check is the only thing standing between a mistyped digit and
+ * a message to a stranger. toSendPulsePhone's [5-9] admits 07X VoIP/landline
+ * numbers; this admits 05X only.
+ *
+ * Also drops a trunk '0' typed after the country code ("+972 050-…"), which is
+ * the same number, not a different one.
+ *
+ * VALIDATES, NEVER REWRITES. The result is used only as the send target;
+ * bookings.customer_phone is never written back. link_walkin_to_account and
+ * link_my_walkins compare its digits against profiles.phone, so changing the
+ * stored format would silently break walk-in → account linking.
+ *
+ * KEEP BYTE-IDENTICAL TO THE COPY IN whatsapp-booking-reminder. If the two
+ * diverge, a walk-in can be confirmed to a number it is never reminded on.
+ */
+function toWalkInPhone(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let d = raw.replace(/\D/g, "");
+  if (d.startsWith("00972")) d = d.slice(5);
+  else if (d.startsWith("972")) d = d.slice(3);
+  if (d.startsWith("0")) d = d.slice(1);
+  const phone = `972${d}`;
+  return /^9725\d{8}$/.test(phone) ? phone : null;
+}
+
+/**
  * Normalizes an ALLOWLIST ENTRY to the same 972-prefixed digit form
  * toSendPulsePhone produces, so "+972-54-786-8325", "0547868325" and
  * "972547868325" in the env var all match the same recipient.
@@ -374,10 +404,10 @@ async function sendTemplate(
  *   * DATA-quality skips (no name, unusable phone, no service) DO get a row.
  *     They are logged so the gap is auditable rather than invisible.
  *   * POLICY skips (not confirmed yet, provider not opted in, not allowlisted,
- *     walk-in) get NO row and return before this is ever called. All of those
- *     states are reversible, and claiming the booking would permanently block
- *     the legitimate send that follows when the provider opts in or the
- *     allowlist widens.
+ *     walk-in without consent) get NO row and return before this is ever
+ *     called. All of those states are reversible, and claiming the booking
+ *     would permanently block the legitimate send that follows when the
+ *     provider opts in or the allowlist widens.
  *
  * To deliberately allow a re-send after fixing the underlying data, delete the
  * row for that booking. There is no automatic retry.
@@ -511,7 +541,7 @@ Deno.serve(async (req) => {
     // ── Load the booking (service role — the source of truth) ────────────────
     const { data: booking, error: bookingError } = await admin
       .from("bookings")
-      .select("id, status, provider_id, user_id, linked_user_id, service_ids, class_schedule_id, booking_date, booking_time, customer_name, customer_phone")
+      .select("id, status, provider_id, user_id, linked_user_id, service_ids, class_schedule_id, booking_date, booking_time, customer_name, customer_phone, whatsapp_consent")
       .eq("id", bookingId)
       .maybeSingle();
 
@@ -584,11 +614,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Walk-ins are excluded from v1: the customer never opted in to receive
-    // template messages, and the provider-typed free-text phone is the least
-    // reliable number in the schema. No ledger row, so enabling them later is
-    // purely a policy change.
-    if (booking.user_id === null && booking.linked_user_id === null) {
+    // Walk-ins receive template messages ONLY when the provider recorded, at
+    // booking time, that the customer agreed (bookings.whatsapp_consent). Meta
+    // requires opt-in, and an unexpected message risks the sender quality
+    // rating for all our traffic. Consent covers every kind for this booking,
+    // cancellations included — the consent label says so.
+    //
+    // A LINKED walk-in (linked_user_id set) is not a walk-in here: it has an
+    // account and takes the account path below, whatever the flag says.
+    //
+    // No ledger row, so a skip here never blocks a later legitimate send.
+    // KEEP IN STEP with whatsapp-booking-reminder and get_due_whatsapp_reminders.
+    const isWalkIn = booking.user_id === null && booking.linked_user_id === null;
+    if (isWalkIn && booking.whatsapp_consent !== true) {
       return json(200, { ok: true, result: "skipped", reason: "WALKIN_EXCLUDED" });
     }
 
@@ -664,10 +702,19 @@ Deno.serve(async (req) => {
     // no phone at all is indistinguishable from a customer who is simply out of
     // rollout scope, and the problem stays invisible. Covers both NULL (nothing
     // on auth.users or profiles) and unparseable values.
-    const phoneDigits = toSendPulsePhone(rawPhone);
+    //
+    // A consented walk-in has no account, so the block above left rawPhone
+    // null; its recipient is the provider-typed bookings.customer_phone under
+    // the stricter mobile-only check. A distinct code, because the walk-in
+    // sheet blocks invalid numbers when consent is ticked — any
+    // WALKIN_INVALID_PHONE row means the UI and this check have drifted.
+    const phoneDigits = isWalkIn
+      ? toWalkInPhone(booking.customer_phone)
+      : toSendPulsePhone(rawPhone);
     if (!phoneDigits) {
-      await logSkip(admin, bookingId, messageKind, provider.id, "INVALID_PHONE", null);
-      return json(200, { ok: true, result: "skipped", reason: "INVALID_PHONE" });
+      const skipReason = isWalkIn ? "WALKIN_INVALID_PHONE" : "INVALID_PHONE";
+      await logSkip(admin, bookingId, messageKind, provider.id, skipReason, null);
+      return json(200, { ok: true, result: "skipped", reason: skipReason });
     }
 
     // ── GATE 4: allowlist ────────────────────────────────────────────────────
@@ -682,13 +729,20 @@ Deno.serve(async (req) => {
     // {{1}} customer name. No generic fallback by design: a nameless greeting
     // reads as a marketing blast and risks the sender quality rating for all our
     // traffic. NameGate means a logged-in customer almost always has a name.
-    const { data: customerProfile } = await admin
-      .from("profiles")
-      .select("display_name")
-      .eq("user_id", accountId!)
-      .maybeSingle();
+    // A walk-in has no profile: its name is the provider-typed
+    // bookings.customer_name, which the walk-in sheet requires.
+    let customerName: string;
+    if (isWalkIn) {
+      customerName = (booking.customer_name ?? "").trim();
+    } else {
+      const { data: customerProfile } = await admin
+        .from("profiles")
+        .select("display_name")
+        .eq("user_id", accountId!)
+        .maybeSingle();
 
-    const customerName = (customerProfile?.display_name ?? "").trim();
+      customerName = (customerProfile?.display_name ?? "").trim();
+    }
     if (!customerName) {
       await logSkip(admin, bookingId, messageKind, provider.id, "NO_NAME", phoneDigits);
       return json(200, { ok: true, result: "skipped", reason: "NO_NAME" });
