@@ -18,10 +18,12 @@ export type Database = {
         Row: {
           booking_date: string
           booking_time: string
+          check_in_at: string | null
           class_schedule_id: string | null
           created_at: string
           customer_name: string | null
           customer_notes: string | null
+          customer_package_id: string | null
           customer_phone: string | null
           duration_override: number | null
           guest_notes: string | null
@@ -35,14 +37,17 @@ export type Database = {
           treatment_notes: string | null
           updated_at: string
           user_id: string | null
+          whatsapp_consent: boolean
         }
         Insert: {
           booking_date: string
           booking_time: string
+          check_in_at?: string | null
           class_schedule_id?: string | null
           created_at?: string
           customer_name?: string | null
           customer_notes?: string | null
+          customer_package_id?: string | null
           customer_phone?: string | null
           duration_override?: number | null
           guest_notes?: string | null
@@ -56,14 +61,17 @@ export type Database = {
           treatment_notes?: string | null
           updated_at?: string
           user_id?: string | null
+          whatsapp_consent?: boolean
         }
         Update: {
           booking_date?: string
           booking_time?: string
+          check_in_at?: string | null
           class_schedule_id?: string | null
           created_at?: string
           customer_name?: string | null
           customer_notes?: string | null
+          customer_package_id?: string | null
           customer_phone?: string | null
           duration_override?: number | null
           guest_notes?: string | null
@@ -77,6 +85,7 @@ export type Database = {
           treatment_notes?: string | null
           updated_at?: string
           user_id?: string | null
+          whatsapp_consent?: boolean
         }
         Relationships: [
           {
@@ -84,6 +93,13 @@ export type Database = {
             columns: ["class_schedule_id"]
             isOneToOne: false
             referencedRelation: "provider_class_schedule"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_customer_package_id_fkey"
+            columns: ["customer_package_id"]
+            isOneToOne: false
+            referencedRelation: "customer_packages"
             referencedColumns: ["id"]
           },
           {
@@ -99,6 +115,72 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "provider_staff"
             referencedColumns: ["id", "provider_id"]
+          },
+        ]
+      }
+      customer_packages: {
+        Row: {
+          activated_at: string | null
+          created_at: string | null
+          customer_id: string
+          entries_remaining: number
+          expires_at: string | null
+          id: string
+          last_low_entry_notified_at: string | null
+          notes: string | null
+          provider_id: string
+          purchased_at: string | null
+          status: string
+          template_id: string
+          total_entries: number
+          updated_at: string | null
+        }
+        Insert: {
+          activated_at?: string | null
+          created_at?: string | null
+          customer_id: string
+          entries_remaining: number
+          expires_at?: string | null
+          id?: string
+          last_low_entry_notified_at?: string | null
+          notes?: string | null
+          provider_id: string
+          purchased_at?: string | null
+          status?: string
+          template_id: string
+          total_entries: number
+          updated_at?: string | null
+        }
+        Update: {
+          activated_at?: string | null
+          created_at?: string | null
+          customer_id?: string
+          entries_remaining?: number
+          expires_at?: string | null
+          id?: string
+          last_low_entry_notified_at?: string | null
+          notes?: string | null
+          provider_id?: string
+          purchased_at?: string | null
+          status?: string
+          template_id?: string
+          total_entries?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_packages_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_packages_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "package_templates"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -220,6 +302,104 @@ export type Database = {
           verified_at?: string | null
         }
         Relationships: []
+      }
+      package_templates: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          price: number
+          provider_id: string
+          total_entries: number
+          updated_at: string | null
+          validity_days: number
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          price: number
+          provider_id: string
+          total_entries: number
+          updated_at?: string | null
+          validity_days: number
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          price?: number
+          provider_id?: string
+          total_entries?: number
+          updated_at?: string | null
+          validity_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "package_templates_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      package_usage_log: {
+        Row: {
+          action_type: string
+          booking_id: string | null
+          created_at: string | null
+          customer_package_id: string
+          entries_after: number
+          entries_before: number
+          id: string
+          note: string | null
+          performed_by: string | null
+        }
+        Insert: {
+          action_type: string
+          booking_id?: string | null
+          created_at?: string | null
+          customer_package_id: string
+          entries_after: number
+          entries_before: number
+          id?: string
+          note?: string | null
+          performed_by?: string | null
+        }
+        Update: {
+          action_type?: string
+          booking_id?: string | null
+          created_at?: string | null
+          customer_package_id?: string
+          entries_after?: number
+          entries_before?: number
+          id?: string
+          note?: string | null
+          performed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "package_usage_log_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "package_usage_log_customer_package_id_fkey"
+            columns: ["customer_package_id"]
+            isOneToOne: false
+            referencedRelation: "customer_packages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -1160,6 +1340,136 @@ export type Database = {
           r_attempts_left: number
           r_status: string
         }[]
+      }
+      package_activate: {
+        Args: { p_package_id: string }
+        Returns: {
+          activated_at: string | null
+          created_at: string | null
+          customer_id: string
+          entries_remaining: number
+          expires_at: string | null
+          id: string
+          last_low_entry_notified_at: string | null
+          notes: string | null
+          provider_id: string
+          purchased_at: string | null
+          status: string
+          template_id: string
+          total_entries: number
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "customer_packages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      package_add_entries: {
+        Args: {
+          p_entries?: number
+          p_extend_days?: number
+          p_note?: string
+          p_package_id: string
+        }
+        Returns: {
+          activated_at: string | null
+          created_at: string | null
+          customer_id: string
+          entries_remaining: number
+          expires_at: string | null
+          id: string
+          last_low_entry_notified_at: string | null
+          notes: string | null
+          provider_id: string
+          purchased_at: string | null
+          status: string
+          template_id: string
+          total_entries: number
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "customer_packages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      package_cancel: {
+        Args: { p_note?: string; p_package_id: string }
+        Returns: {
+          activated_at: string | null
+          created_at: string | null
+          customer_id: string
+          entries_remaining: number
+          expires_at: string | null
+          id: string
+          last_low_entry_notified_at: string | null
+          notes: string | null
+          provider_id: string
+          purchased_at: string | null
+          status: string
+          template_id: string
+          total_entries: number
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "customer_packages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      package_request_purchase: {
+        Args: { p_template_id: string }
+        Returns: {
+          activated_at: string | null
+          created_at: string | null
+          customer_id: string
+          entries_remaining: number
+          expires_at: string | null
+          id: string
+          last_low_entry_notified_at: string | null
+          notes: string | null
+          provider_id: string
+          purchased_at: string | null
+          status: string
+          template_id: string
+          total_entries: number
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "customer_packages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      package_return_entry: {
+        Args: { p_booking_id: string; p_note?: string }
+        Returns: {
+          activated_at: string | null
+          created_at: string | null
+          customer_id: string
+          entries_remaining: number
+          expires_at: string | null
+          id: string
+          last_low_entry_notified_at: string | null
+          notes: string | null
+          provider_id: string
+          purchased_at: string | null
+          status: string
+          template_id: string
+          total_entries: number
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "customer_packages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
