@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
 import { CustomerAutocomplete } from "@/components/dashboard/CustomerAutocomplete";
@@ -51,6 +52,8 @@ import {
   type WeeklyRow,
 } from "@/lib/availabilityResolver";
 import { normalizeBookingTime } from "@/lib/bookingTime";
+import { isWhatsAppMobile } from "@/lib/whatsappPhone";
+import { notifyBookingConfirmed } from "@/lib/whatsappConfirm";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "sonner";
@@ -116,6 +119,9 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  // Provider-recorded consent for WhatsApp messages about THIS booking. Per
+  // booking, never remembered per customer — the provider has to ask each time.
+  const [whatsappConsent, setWhatsappConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // Manual ("שעה אחרת…") time entry on the time step. `manualTime` holds the
   // RAW input value; `time` only ever receives the normalised form.
@@ -153,6 +159,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     setName("");
     setPhone("");
     setNotes("");
+    setWhatsappConsent(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -333,8 +340,26 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   // an empty region. Drop the rule and its padding in exactly that case.
   const slotAreaEmpty = !!service && !hasSlots && selectedDayOverridable;
 
+  // WhatsApp consent is offered only to providers who send WhatsApp messages at
+  // all. `consentActive` — never raw `whatsappConsent` — is what the checks, the
+  // payload and the send read, so a box ticked before the provider turned the
+  // flag off cannot leak through as consent.
+  const whatsappConsentOffered = profile?.whatsapp_confirm_enabled === true;
+  const consentActive = whatsappConsentOffered && whatsappConsent;
+  // Consent to a number the WhatsApp functions would refuse is no consent at
+  // all: block Create and say why. Shown only once a phone is typed — an empty
+  // phone already blocks Create through its own required marker. Unticking
+  // always clears it.
+  const consentPhoneInvalid =
+    consentActive && phone.trim().length > 0 && !isWhatsAppMobile(phone);
+
   const canSubmit =
-    !!service && !!time && name.trim().length > 0 && phone.trim().length > 0 && !submitting;
+    !!service &&
+    !!time &&
+    name.trim().length > 0 &&
+    phone.trim().length > 0 &&
+    !(consentActive && !isWhatsAppMobile(phone)) &&
+    !submitting;
 
   // Per-step gate: service → [staff] → day → time → (name + phone handled by
   // canSubmit on the info step). While a staff-enabled provider's staff list OR
@@ -382,6 +407,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     if (!profile || !service) return;
     if (!name.trim()) { toast.error(t("walkInNameRequired")); return; }
     if (!phone.trim()) { toast.error(t("walkInPhoneRequired")); return; }
+    if (consentActive && !isWhatsAppMobile(phone)) { toast.error(t("walkInWhatsappPhoneInvalid")); return; }
     if (!time) return;
 
     setSubmitting(true);
@@ -394,8 +420,11 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
       total_price: service.price,
       status: "confirmed",
       customer_name: name.trim(),
+      // Stored exactly as typed — validated above, never reformatted:
+      // link_walkin_to_account matches its digits against profiles.phone.
       customer_phone: phone.trim(),
       guest_notes: notes.trim() || null,
+      whatsapp_consent: consentActive,
       // Multi-staff: set only when the staff step was part of THIS flow —
       // group, zero-eligible-staff and non-staff providers stay NULL, identical
       // to pre-staff walk-ins. Same rule as the customer flow's insert, and
@@ -404,7 +433,13 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
       staff_id: staffStepEnabled && effectiveStaffId ? effectiveStaffId : null,
     };
 
-    const { error } = await supabase.from("bookings").insert(payload);
+    // .select("id") returns the new row's id for the WhatsApp trigger below; the
+    // provider's own SELECT policy covers the row they just inserted.
+    const { data: created, error } = await supabase
+      .from("bookings")
+      .insert(payload)
+      .select("id")
+      .single();
     setSubmitting(false);
 
     if (error) {
@@ -420,8 +455,14 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
       return;
     }
 
-    // No notifications: a walk-in has no account to notify, and the provider is
-    // the one creating it.
+    // No in-app notification: a walk-in has no account to notify, and the
+    // provider is the one creating it. WhatsApp only with recorded consent —
+    // fire-and-forget, so a messaging failure can never fail the booking. The
+    // Edge Function re-reads consent, the flag, the phone and the allowlist
+    // itself; this call only asks it to look.
+    if (consentActive && created?.id) {
+      notifyBookingConfirmed(created.id);
+    }
     queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched", profile.id] });
     queryClient.invalidateQueries({ queryKey: ["provider-bookings-public", profile.id] });
     toast.success(t("walkInCreated"));
@@ -942,6 +983,35 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                       className="h-12"
                     />
                   </div>
+                  {whatsappConsentOffered && (
+                    <div className="space-y-1">
+                      {/* The whole row is the label, so the tap target is the
+                          full width at 44px min height, not the 20px box. A
+                          click on the box itself is not re-dispatched by the
+                          label (interactive descendant), so it toggles once.
+                          Never disabled: the provider may ask before typing
+                          the number, and an invalid one is reported below. */}
+                      <Label className="flex min-h-11 cursor-pointer items-center gap-3 py-2 text-sm font-normal leading-snug">
+                        <Checkbox
+                          checked={whatsappConsent}
+                          onCheckedChange={(v) => setWhatsappConsent(v === true)}
+                          aria-invalid={consentPhoneInvalid || undefined}
+                          aria-describedby={consentPhoneInvalid ? "walkin-whatsapp-consent-error" : undefined}
+                          className="h-5 w-5 rounded-[6px]"
+                        />
+                        <span className="flex-1 text-start">{t("walkInWhatsappConsent")}</span>
+                      </Label>
+                      {consentPhoneInvalid && (
+                        <p
+                          id="walkin-whatsapp-consent-error"
+                          aria-live="polite"
+                          className="ps-8 text-xs text-destructive"
+                        >
+                          {t("walkInWhatsappPhoneInvalid")}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label htmlFor="walkin-notes" className="text-xs">
                       {t("walkInNotes")}
