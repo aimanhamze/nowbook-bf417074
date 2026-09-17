@@ -42,7 +42,12 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
   const { lang, t } = useLang();
   const { profile } = useProviderProfile();
   const { services } = useProviderServices();
-  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(profile?.id);
+  // The booking's staff member, so the offered slots are THEIR hours and days
+  // off, and only their lane's bookings (plus unassigned ones) block. Without it
+  // reschedule used the whole-shop view: it offered days the member is off and
+  // hid slots another member's bookings occupy. null (non-staff provider, or an
+  // unassigned booking) → no narrowing, identical to before.
+  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(profile?.id, booking.staff_id);
   const reschedule = useRescheduleBooking();
 
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
