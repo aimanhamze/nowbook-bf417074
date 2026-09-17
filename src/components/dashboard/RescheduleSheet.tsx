@@ -9,7 +9,7 @@ import {
   eachDayOfInterval,
 } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Clock, CalendarDays, CalendarX, Info, User } from "lucide-react";
+import { Clock, CalendarDays, CalendarX, Info, MoonStar, Pencil, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sheet,
@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
 import { BackArrow } from "@/components/ui/directional-icon";
@@ -41,7 +43,8 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { useRealAvailability } from "@/hooks/useAllProviders";
 import { useResolvedDayWindow } from "@/hooks/useResolvedDayWindow";
-import { classifyDay } from "@/lib/availabilityResolver";
+import { classifyDay, isOutsideDayWindow } from "@/lib/availabilityResolver";
+import { normalizeBookingTime } from "@/lib/bookingTime";
 import { useRescheduleBooking, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { toast } from "sonner";
 
@@ -84,6 +87,10 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
   const [time, setTime] = useState("");
   const [calMonth, setCalMonth] = useState<Date>(() => startOfDay(new Date()));
   const [dateChosen, setDateChosen] = useState(false);
+  // Manual time entry on the time step. `manualTime` holds the RAW input value;
+  // `time` only ever receives the normalised "HH:MM" form.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualTime, setManualTime] = useState("");
 
   const startToday = startOfDay(new Date());
   const windowEnd = addDays(startToday, (profile?.booking_window_days ?? 14) - 1);
@@ -121,14 +128,20 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
     setCalMonth(startToday);
     setDateChosen(false);
     setTime("");
+    setManualOpen(false);
+    setManualTime("");
     setStep(1);
     setPendingOffDay(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // A different day invalidates any previously picked time.
+  // A different day invalidates any previously picked time — typed or tapped.
+  // manualOpen is deliberately NOT reset here: commitDaySelection sets it in the
+  // same batch as `date`, and this effect runs after that render, so resetting
+  // it here would immediately undo the auto-open on an override day.
   useEffect(() => {
     setTime("");
+    setManualTime("");
   }, [date]);
 
   // The step body is its own scroll container — reset it so every step opens at
@@ -203,9 +216,26 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
   const commitDaySelection = (day: Date) => {
     setDate(day);
     setTime("");
+    setManualTime("");
+    // A day with nothing bookable can only be served by manual entry, so open it
+    // straight away rather than landing on an empty grid with the way forward
+    // hidden behind a pill. Normal days keep the grid-first flow.
+    setManualOpen(dayIsOverridable(day));
     setDateChosen(true);
     setStep(2);
   };
+
+  // Advisory flag for a manual time outside the day's hours — the member's
+  // hours when the booking has one with their own, else the shop's. Same
+  // derived test the provider calendar badges bookings with.
+  const manualIsOutOfHours =
+    !!time && manualOpen && isOutsideDayWindow(resolveWindow(date), time);
+
+  // On an override day the slot area renders nothing (the provider already saw
+  // the dashed cell, the legend and the dialog), so the manual block drops its
+  // divider rather than hanging a rule under empty space.
+  const selectedDayOverridable = dateChosen && dayIsOverridable(date);
+  const slotAreaEmpty = !!primaryService && !hasSlots && selectedDayOverridable;
 
   const currentDate = parseISO(booking.booking_date);
 
@@ -397,7 +427,10 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
                   </SectionLabel>
                   {!primaryService ? (
                     <p className="text-sm text-muted-foreground">{t("walkInNoSlots")}</p>
-                  ) : !hasSlots ? (
+                  ) : !hasSlots && selectedDayOverridable ? null : !hasSlots ? (
+                    // Zero slots on a day reached WITHOUT the override context
+                    // (e.g. availability changed under the provider) still gets
+                    // the card — there, "no times" is news.
                     <div className="rounded-2xl border border-dashed border-border p-8 text-center">
                       <CalendarX className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" />
                       {/* "No times" is not one fact — say which one it is. */}
@@ -416,7 +449,12 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
                           key={slot.time}
                           type="button"
                           disabled={slot.isFull}
-                          onClick={() => !slot.isFull && setTime(slot.time)}
+                          onClick={() => {
+                            if (slot.isFull) return;
+                            // Grid and manual entry are one selection.
+                            setManualTime("");
+                            setTime(slot.time);
+                          }}
                           className={cn(
                             "flex flex-col items-center gap-0.5 rounded-xl border py-2.5 px-1 text-sm font-semibold transition-all active:scale-95",
                             time === slot.time
@@ -439,7 +477,10 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
                         <button
                           key={slot}
                           type="button"
-                          onClick={() => setTime(slot)}
+                          onClick={() => {
+                            setManualTime("");
+                            setTime(slot);
+                          }}
                           className={cn(
                             "rounded-xl border py-3 text-sm font-semibold tabular-nums transition-all active:scale-95",
                             time === slot
@@ -450,6 +491,58 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
                           {slot}
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {/* ── Manual time ──
+                      A SIBLING of the slot chain above, never inside a branch:
+                      the zero-slot case is exactly where this is the only way
+                      forward. Overrides HOURS only — an overlapping time is
+                      still rejected by prevent_booking_conflicts and surfaces
+                      through handleConfirm's slot-taken toast. */}
+                  {!!primaryService && (
+                    <div className={cn("mt-4", !slotAreaEmpty && "border-t border-border/60 pt-4")}>
+                      {!manualOpen ? (
+                        <button
+                          type="button"
+                          onClick={() => setManualOpen(true)}
+                          className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-secondary px-3.5 py-2 text-start text-xs font-semibold text-foreground transition-transform active:scale-95 hover:bg-secondary/80"
+                        >
+                          <Pencil className="h-3.5 w-3.5 shrink-0" />
+                          {t("rescheduleOtherTime")}
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <Label htmlFor="reschedule-manual-time" className="text-xs">
+                            {t("rescheduleManualTimeLabel")}
+                          </Label>
+                          <Input
+                            id="reschedule-manual-time"
+                            type="time"
+                            dir="ltr"
+                            step={60}
+                            value={manualTime}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setManualTime(raw);
+                              // Always normalised before reaching `time`; a
+                              // partial entry clears the selection instead of
+                              // leaking an unpadded value (see lib/bookingTime).
+                              setTime(normalizeBookingTime(raw) ?? "");
+                            }}
+                            className="h-12 w-full tabular-nums"
+                          />
+                          <p className="text-[11px] leading-relaxed text-muted-foreground">
+                            {t("rescheduleManualTimeHint")}
+                          </p>
+                          {manualIsOutOfHours && (
+                            <p className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600">
+                              <MoonStar className="h-3.5 w-3.5 shrink-0" />
+                              {t("rescheduleManualOutOfHours")}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
