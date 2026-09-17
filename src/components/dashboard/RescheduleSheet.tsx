@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { format, addDays, startOfDay, parseISO } from "date-fns";
+import {
+  format,
+  addDays,
+  startOfDay,
+  parseISO,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+} from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Clock, CalendarDays, CalendarX, User } from "lucide-react";
+import { Clock, CalendarDays, CalendarX, Info, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sheet,
@@ -11,6 +19,16 @@ import {
   SheetDescription,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/ui/SectionLabel";
@@ -22,6 +40,8 @@ import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { useRealAvailability } from "@/hooks/useAllProviders";
+import { useResolvedDayWindow } from "@/hooks/useResolvedDayWindow";
+import { classifyDay } from "@/lib/availabilityResolver";
 import { useRescheduleBooking, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { toast } from "sonner";
 
@@ -47,7 +67,11 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
   // reschedule used the whole-shop view: it offered days the member is off and
   // hid slots another member's bookings occupy. null (non-staff provider, or an
   // unassigned booking) → no narrowing, identical to before.
-  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(profile?.id, booking.staff_id);
+  const {
+    getAvailableSlots,
+    getGroupSlotsWithCapacity,
+    isLoading: slotHoursLoading,
+  } = useRealAvailability(profile?.id, booking.staff_id);
   const reschedule = useRescheduleBooking();
 
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
@@ -74,6 +98,22 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
   const duration = bookingDuration(booking, services);
   const capacity = primaryService?.max_capacity ?? 1;
 
+  // Resolved hours for the OVERRIDE path — same hook, same reasoning as the
+  // walk-in sheet: the slot pipeline says THAT a day has no slots, only the
+  // shop and staff-narrowed windows together say WHY. Group services are
+  // staff-blind in the pipeline (capacity is pooled shop-wide), so they are
+  // classified staff-blind here too, or a group day could read "{name} isn't
+  // working" while its slots ignore that member entirely.
+  const {
+    resolveShopWindow,
+    resolveWindow,
+    staffHasOwnHours,
+    isLoading: staffHoursLoading,
+  } = useResolvedDayWindow(isGroup ? undefined : (booking.staff_id ?? undefined));
+
+  // Day awaiting the override confirmation. Nothing else moves until confirmed.
+  const [pendingOffDay, setPendingOffDay] = useState<Date | null>(null);
+
   // Reset the wizard each time the sheet opens, seeded on today's month.
   useEffect(() => {
     if (!open) return;
@@ -82,6 +122,7 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
     setDateChosen(false);
     setTime("");
     setStep(1);
+    setPendingOffDay(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -116,6 +157,56 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
     return getAvailableSlots(d, duration, capacity, primaryService.id).length > 0;
   };
 
+  // ── Out-of-hours override (provider-side only) ─────────────────────────────
+  // A day the provider may OVERRIDE: inside the SAME [today, booking window]
+  // range the calendar enforces, but with nothing bookable — shop closed or
+  // blocked, the booking's staff member off, or fully booked. The range is
+  // asserted here too so an override can never reach a past day.
+  //
+  // Held off while hours are still loading: getAvailableSlots fails CLOSED for
+  // an in-flight member (and reads an unloaded week as closed), so without this
+  // every day would flash dashed on open and then un-dash a moment later.
+  const overrideReady = !slotHoursLoading && !staffHoursLoading;
+  const dayIsOverridable = (d: Date): boolean => {
+    if (!primaryService || !overrideReady) return false;
+    const day = startOfDay(d);
+    if (day < startToday || day > windowEnd) return false;
+    return !dayHasAvailability(d);
+  };
+
+  // Why a day has no slots. Both windows plus the grid's own verdict, so the
+  // copy can never disagree with the slots it describes.
+  const chosenDayStatus = classifyDay(resolveShopWindow(date), resolveWindow(date), hasSlots);
+  // Asked of the PENDING day, not `date` — `date` has not moved yet.
+  const pendingOffDayStatus = pendingOffDay
+    ? classifyDay(
+        resolveShopWindow(pendingOffDay),
+        resolveWindow(pendingOffDay),
+        dayHasAvailability(pendingOffDay),
+      )
+    : null;
+
+  // Does the displayed month contain a dashed day? Drives the legend, so the
+  // dashed cells are explained before one is tapped.
+  const monthHasOverridableDay = (() => {
+    if (!primaryService || !overrideReady) return false;
+    const from = startOfMonth(calMonth) < startToday ? startToday : startOfMonth(calMonth);
+    const to = endOfMonth(calMonth) > windowEnd ? windowEnd : endOfMonth(calMonth);
+    if (from > to) return false;
+    return eachDayOfInterval({ start: from, end: to }).some(dayIsOverridable);
+  })();
+
+  const staffName = booking.staff_name ?? "";
+
+  // Everything that happens once a day is ACCEPTED — the normal path and the
+  // confirmed-override path run this same code; the dialog is only a gate.
+  const commitDaySelection = (day: Date) => {
+    setDate(day);
+    setTime("");
+    setDateChosen(true);
+    setStep(2);
+  };
+
   const currentDate = parseISO(booking.booking_date);
 
   const handleConfirm = () => {
@@ -142,6 +233,7 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
   };
 
   return (
+    <>
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
 
@@ -236,14 +328,32 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
                     fromDate={startToday}
                     toDate={windowEnd}
                     dayHasAvailability={dayHasAvailability}
+                    dayIsOverridable={dayIsOverridable}
                     selected={dateChosen ? date : undefined}
                     onSelectDay={(day) => {
-                      setDate(day);
-                      setTime("");
-                      setDateChosen(true);
-                      setStep(2);
+                      // An override day is confirmed first. NOTHING is mutated
+                      // here — not date, dateChosen or step — until it is.
+                      if (dayIsOverridable(day)) {
+                        setPendingOffDay(day);
+                        return;
+                      }
+                      commitDaySelection(day);
                     }}
                   />
+
+                  {/* Legend for the dashed cells. Names the staff reason only
+                      when the member has hours of their own — otherwise it
+                      cannot be why a day is dashed. */}
+                  {monthHasOverridableDay && (
+                    <div className="mt-3 flex items-start gap-2 rounded-xl border border-dashed border-muted-foreground/40 bg-muted/40 p-3">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        {staffHasOwnHours && staffName
+                          ? t("rescheduleOverrideLegendStaff").replace("{name}", staffName)
+                          : t("rescheduleOverrideLegend")}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -290,7 +400,14 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
                   ) : !hasSlots ? (
                     <div className="rounded-2xl border border-dashed border-border p-8 text-center">
                       <CalendarX className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" />
-                      <p className="text-sm text-muted-foreground">{t("walkInNoSlots")}</p>
+                      {/* "No times" is not one fact — say which one it is. */}
+                      <p className="text-sm text-muted-foreground">
+                        {chosenDayStatus === "staffOff" && staffName
+                          ? t("rescheduleStaffOffDay").replace("{name}", staffName)
+                          : chosenDayStatus === "closed" || chosenDayStatus === "staffOff"
+                            ? t("rescheduleClosedDay")
+                            : t("walkInNoSlots")}
+                      </p>
                     </div>
                   ) : isGroup ? (
                     <div className="grid grid-cols-3 gap-2">
@@ -372,5 +489,49 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
         </div>
       </SheetContent>
     </Sheet>
+
+    {/* ── Override confirmation ──
+        Sibling of the Sheet, portalled above it (same placement as the walk-in
+        sheet's). Cancel — button, backdrop or Esc — only clears pendingOffDay.
+        Confirming overrides HOURS only: prevent_booking_conflicts still rejects
+        an overlap with another appointment. */}
+    <AlertDialog
+      open={!!pendingOffDay}
+      onOpenChange={(isOpen) => { if (!isOpen) setPendingOffDay(null); }}
+    >
+      <AlertDialogContent>
+        {/* text-start / gap instead of the primitive's sm:text-left and
+            sm:space-x-2, which are physical and break under RTL. */}
+        <AlertDialogHeader className="sm:text-start">
+          <AlertDialogTitle>{t("rescheduleOffDayConfirmTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {/* A staff-off day whose member has no resolvable name (e.g. since
+                removed) reads as closed — never as "fully booked". */}
+            {pendingOffDayStatus === "staffOff" && staffName
+              ? t("rescheduleOffDayConfirmStaffOff").replace("{name}", staffName)
+              : pendingOffDayStatus === "closed" || pendingOffDayStatus === "staffOff"
+                ? t("rescheduleOffDayConfirmClosed")
+                : t("rescheduleOffDayConfirmFull")}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {pendingOffDay && (
+          <p className="text-sm font-semibold text-foreground">
+            {format(pendingOffDay, "EEEE, d MMMM yyyy", { locale: dateFnsLocale })}
+          </p>
+        )}
+        <AlertDialogFooter className="sm:gap-2 sm:space-x-0">
+          <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (pendingOffDay) commitDaySelection(pendingOffDay);
+              setPendingOffDay(null);
+            }}
+          >
+            {t("rescheduleOffDayConfirmAction")}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
