@@ -2,26 +2,40 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import type { SocialLinks } from "@/lib/socialLinks";
+import { pickActiveBranch, useActiveBranchId } from "@/lib/activeBranch";
 
 export function useProviderProfile() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const activeBranchId = useActiveBranchId(user?.id);
 
-  const profileQuery = useQuery({
+  // Multi-branch: an owner may have several provider_profiles rows (one per
+  // branch), so this fetches them all, oldest first, and exposes the active
+  // one as `profile`. With a single row — every provider today — `profile` is
+  // that row, exactly as the old `.maybeSingle()` returned it.
+  const branchesQuery = useQuery({
     queryKey: ["provider-profile", user?.id],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      if (!user) return null;
+      if (!user) return [];
       const { data, error } = await supabase
         .from("provider_profiles")
         .select("*")
         .eq("user_id", user.id)
-        .maybeSingle();
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true });
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
     enabled: !!user,
   });
+
+  // undefined while loading (as before), null when the user has no row.
+  const branches = branchesQuery.data;
+  const profile = branches === undefined ? undefined : pickActiveBranch(branches, activeBranchId);
+  // Every write below targets the active branch by id. Filtering on user_id
+  // would write to ALL of an owner's branches at once.
+  const profileId = profile?.id;
 
   const upsertProfile = useMutation({
     mutationFn: async (values: {
@@ -35,11 +49,12 @@ export function useProviderProfile() {
       longitude?: number | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
 
       const { error } = await supabase
         .from("provider_profiles")
         .update(values)
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -51,10 +66,11 @@ export function useProviderProfile() {
   const updateBookingApproval = useMutation({
     mutationFn: async (value: boolean) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ requires_booking_approval: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -66,10 +82,11 @@ export function useProviderProfile() {
   const updateTreatmentNotesEnabled = useMutation({
     mutationFn: async (value: boolean) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ treatment_notes_enabled: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -80,10 +97,11 @@ export function useProviderProfile() {
   const updateShowPrices = useMutation({
     mutationFn: async (value: boolean) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ show_prices: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -95,12 +113,13 @@ export function useProviderProfile() {
   const updateDepositRequestEnabled = useMutation({
     mutationFn: async (value: boolean) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         // Cast: column added by 20260618000002 migration; types.ts is
         // regenerated after Aiman applies it (matches booking_window_days).
         .update({ deposit_request_enabled: value } as never)
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -118,10 +137,11 @@ export function useProviderProfile() {
   const updateStaffEnabled = useMutation({
     mutationFn: async (value: boolean) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ staff_enabled: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -138,10 +158,11 @@ export function useProviderProfile() {
   const updateServiceColorsEnabled = useMutation({
     mutationFn: async (value: boolean) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ service_colors_enabled: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -152,10 +173,11 @@ export function useProviderProfile() {
   const updateMinLeadTime = useMutation({
     mutationFn: async (value: number) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ min_lead_time_minutes: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -166,10 +188,11 @@ export function useProviderProfile() {
   const updateBookingWindow = useMutation({
     mutationFn: async (value: number) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ booking_window_days: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -180,12 +203,13 @@ export function useProviderProfile() {
   const updateCancellationNoticeHours = useMutation({
     mutationFn: async (value: number) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         // Cast: column added by 20260622000001 migration; types.ts is
         // regenerated after apply (matches booking_window_days / deposit_request_enabled).
         .update({ cancellation_notice_hours: value } as never)
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -198,12 +222,13 @@ export function useProviderProfile() {
   const updateSlotInterval = useMutation({
     mutationFn: async (value: number) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         // Cast: column added by 20260630000001 migration; types.ts is
         // regenerated after apply (matches cancellation_notice_hours pattern).
         .update({ slot_interval_minutes: value } as never)
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -220,10 +245,11 @@ export function useProviderProfile() {
   const updateAvailabilityMode = useMutation({
     mutationFn: async (value: "weekly" | "monthly") => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ availability_mode: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -243,10 +269,11 @@ export function useProviderProfile() {
       monthly_default_end?: string;
     }) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update(values)
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -259,10 +286,11 @@ export function useProviderProfile() {
   const updateWhatsAppTemplates = useMutation({
     mutationFn: async (values: { deposit_message_template?: string; reminder_message_template?: string }) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update(values)
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -277,10 +305,11 @@ export function useProviderProfile() {
   const updateWhatsAppConfirmEnabled = useMutation({
     mutationFn: async (value: boolean) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ whatsapp_confirm_enabled: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -293,10 +322,11 @@ export function useProviderProfile() {
   const updateWhatsAppMessageLanguage = useMutation({
     mutationFn: async (value: "he" | "ar") => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ whatsapp_message_language: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -311,10 +341,11 @@ export function useProviderProfile() {
   const updateWhatsAppReminderEnabled = useMutation({
     mutationFn: async (value: boolean) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ whatsapp_reminder_enabled: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -326,10 +357,11 @@ export function useProviderProfile() {
   const updateWhatsAppReminderHours = useMutation({
     mutationFn: async (value: 1 | 24) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
       const { error } = await supabase
         .from("provider_profiles")
         .update({ whatsapp_reminder_hours: value })
-        .eq("user_id", user.id);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -340,6 +372,7 @@ export function useProviderProfile() {
   const uploadCoverImage = useMutation({
     mutationFn: async (file: File) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
 
       const extension = file.name.split(".").pop() || "jpg";
       const filePath = `${user.id}/cover-${Date.now()}.${extension}`;
@@ -355,7 +388,8 @@ export function useProviderProfile() {
 
       const { error: updateError } = await supabase
         .from("provider_profiles")
-        .upsert({ user_id: user.id, cover_image: publicUrlData.publicUrl }, { onConflict: "user_id" });
+        .update({ cover_image: publicUrlData.publicUrl })
+        .eq("id", profileId);
       if (updateError) throw updateError;
 
       return publicUrlData.publicUrl;
@@ -369,6 +403,7 @@ export function useProviderProfile() {
   const uploadAvatarImage = useMutation({
     mutationFn: async (file: File) => {
       if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
 
       const extension = file.name.split(".").pop() || "jpg";
       const filePath = `${user.id}/avatar-${Date.now()}.${extension}`;
@@ -384,7 +419,8 @@ export function useProviderProfile() {
 
       const { error: updateError } = await supabase
         .from("provider_profiles")
-        .upsert({ user_id: user.id, avatar_image: publicUrlData.publicUrl }, { onConflict: "user_id" });
+        .update({ avatar_image: publicUrlData.publicUrl })
+        .eq("id", profileId);
       if (updateError) throw updateError;
 
       return publicUrlData.publicUrl;
@@ -396,9 +432,12 @@ export function useProviderProfile() {
   });
 
   return {
-    profile: profileQuery.data,
-    isLoading: profileQuery.isLoading,
-    error: profileQuery.error,
+    profile,
+    // All of the owner's branches, oldest first. Nothing reads this yet; the
+    // branch switcher (Phase 3) will, and only render when length > 1.
+    branches: branches ?? [],
+    isLoading: branchesQuery.isLoading,
+    error: branchesQuery.error,
     upsertProfile,
     updateBookingApproval,
     updateTreatmentNotesEnabled,
