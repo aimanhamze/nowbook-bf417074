@@ -6,6 +6,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { useActiveBranchId } from "@/lib/activeBranch";
+import { BranchSwitcher } from "@/components/dashboard/BranchSwitcher";
 import { ServicesTab } from "@/components/dashboard/ServicesTab";
 import { BusinessProfileTab } from "@/components/dashboard/BusinessProfileTab";
 import { BookingSettingsTab } from "@/components/dashboard/BookingSettingsTab";
@@ -39,7 +41,11 @@ const TAB_LABELS: Record<TabId, string> = {
 export default function Dashboard() {
   const { t } = useLang();
   const { user, isProvider } = useAuth();
-  const { profile, isLoading } = useProviderProfile();
+  const { profile, branches, isLoading } = useProviderProfile();
+  // Multi-branch: the stored active-branch id keys the tab content below. It is
+  // null — and never changes — for a single-branch owner, so their tab is never
+  // remounted; it changes only when a multi-branch owner switches.
+  const activeBranchId = useActiveBranchId(user?.id);
   const navigate = useNavigate();
   const location = useLocation();
   // Allow deep-linking to a specific tab via navigation state, e.g.
@@ -126,8 +132,12 @@ export default function Dashboard() {
             </button>
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-2xl font-extrabold leading-tight">{t("providerDashboard")}</h1>
-              {profile?.business_name && (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile.business_name}</p>
+              {branches.length > 1 ? (
+                <BranchSwitcher />
+              ) : (
+                profile?.business_name && (
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile.business_name}</p>
+                )
               )}
             </div>
             {isSupported && (
@@ -185,8 +195,11 @@ export default function Dashboard() {
           </div>
         </header>
 
+        {/* Keyed on branch AND tab: switching branch remounts the open tab, which
+            closes its sheets and drops form state that belongs to the old
+            branch, while the selected tab itself (state above) is kept. */}
         <motion.div
-          key={effectiveTab}
+          key={`${activeBranchId ?? ""}:${effectiveTab}`}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25 }}
