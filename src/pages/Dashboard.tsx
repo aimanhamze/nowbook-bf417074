@@ -56,14 +56,15 @@ export default function Dashboard() {
   const isFitnessStudio = profile?.category === "fitness_studio";
 
   // A fitness studio runs on a fixed weekly class schedule, not per-service
-  // bookings, so two tabs are meaningless to it:
-  //   services     -- classes live in provider_class_schedule, not
-  //                   provider_services (useProviderServices already forces
-  //                   service_type for them)
-  //   availability -- the class grid IS the availability; the weekly hours
-  //                   editor drives the standard slot generator only
-  // Both are edited from /calendar for studios instead.
-  const HIDDEN_FOR_FITNESS: TabId[] = ["services", "availability"];
+  // bookings, so the services tab is meaningless to it: classes live in
+  // provider_class_schedule, not provider_services (useProviderServices already
+  // forces service_type for them), and are edited from /calendar instead.
+  //
+  // availability stays visible: AvailabilityTab hides its hours editors for a
+  // studio (the class grid IS its availability) but keeps the blocked-dates
+  // card, the only place a studio can close a day. Hiding the whole tab
+  // (880e09f) took that away.
+  const HIDDEN_FOR_FITNESS: TabId[] = ["services"];
   const visibleTabs = tabs.filter((tab) => {
     if (tab.id === "packages") return isFitnessStudio;
     if (isFitnessStudio && HIDDEN_FOR_FITNESS.includes(tab.id)) return false;
