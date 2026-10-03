@@ -44,6 +44,9 @@ export interface DbProvider {
   // Multi-staff opt-in flag (added by 20260724000001 migration; same
   // typed-here-before-regen convention as cancellation_notice_hours).
   staff_enabled?: boolean;
+  // Customer self-reschedule opt-in (added by 20261003000001 migration; same
+  // typed-here-before-regen convention).
+  allow_customer_reschedule?: boolean;
 }
 
 export interface DbService {
@@ -93,6 +96,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCoun
     cancellationNoticeHours: dbp.cancellation_notice_hours ?? 5,
     phone: dbp.phone ?? null,
     staffEnabled: dbp.staff_enabled ?? false,
+    allowCustomerReschedule: dbp.allow_customer_reschedule ?? false,
     services: services.filter(s => s.is_active).map(s => ({
       id: s.id,
       name: { he: s.name, ar: s.name, en: s.name },

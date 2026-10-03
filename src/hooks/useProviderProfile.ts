@@ -110,6 +110,24 @@ export function useProviderProfile() {
     },
   });
 
+  const updateAllowCustomerReschedule = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
+      // Cast: column added by 20261003000001 migration; types.ts regenerated after apply.
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ allow_customer_reschedule: value } as never)
+        .eq("id", profileId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      // The customer Bookings page reads the flag through useAllProviders.
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+    },
+  });
+
   const updateDepositRequestEnabled = useMutation({
     mutationFn: async (value: boolean) => {
       if (!user) throw new Error("Not authenticated");
@@ -442,6 +460,7 @@ export function useProviderProfile() {
     updateBookingApproval,
     updateTreatmentNotesEnabled,
     updateShowPrices,
+    updateAllowCustomerReschedule,
     updateDepositRequestEnabled,
     updateStaffEnabled,
     updateServiceColorsEnabled,

@@ -39,6 +39,7 @@ export function BookingSettingsTab() {
     updateBookingApproval,
     updateTreatmentNotesEnabled,
     updateShowPrices,
+    updateAllowCustomerReschedule,
     updateDepositRequestEnabled,
     updateMinLeadTime,
     updateBookingWindow,
@@ -51,6 +52,12 @@ export function BookingSettingsTab() {
   const requiresApproval = profile?.requires_booking_approval ?? false;
   const treatmentNotesEnabled = profile?.treatment_notes_enabled ?? false;
   const showPrices = profile?.show_prices ?? true;
+  // Cast: column added by 20261003000001 migration; types.ts regenerated after apply.
+  const allowCustomerReschedule =
+    (profile as { allow_customer_reschedule?: boolean } | null)?.allow_customer_reschedule ?? false;
+  // Class bookings have fixed times, so the reschedule toggle means nothing to
+  // a studio -- the DB trigger rejects their customers' reschedules regardless.
+  const isFitnessStudio = profile?.category === "fitness_studio";
   // Cast: column added by 20260618000002 migration; types.ts regenerated after
   // apply (matches the booking_window_days cast below).
   const depositRequestEnabled =
@@ -140,6 +147,26 @@ export function BookingSettingsTab() {
             <p className="text-xs text-muted-foreground mt-1">{t("showPricesHelp")}</p>
           </div>
         </div>
+        {!isFitnessStudio && (
+          <div className="flex items-start gap-3 pt-3 border-t border-border">
+            <Switch
+              checked={allowCustomerReschedule}
+              onCheckedChange={async (next) => {
+                try {
+                  await updateAllowCustomerReschedule.mutateAsync(next);
+                  toast.success(t("profileSaved"));
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Error");
+                }
+              }}
+              disabled={updateAllowCustomerReschedule.isPending}
+            />
+            <div className="flex-1">
+              <Label className="text-sm font-medium">{t("allowCustomerReschedule")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{t("allowCustomerRescheduleHelper")}</p>
+            </div>
+          </div>
+        )}
         <div className="flex items-start gap-3 pt-3 border-t border-border">
           <Switch
             checked={depositRequestEnabled}
