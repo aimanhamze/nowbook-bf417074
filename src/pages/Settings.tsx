@@ -190,8 +190,10 @@ const Settings = () => {
             </div>
 
             {/* Build identity, read aloud to support (e.g. before a second
-                branch is granted) to confirm the installed app is current. */}
-            <p className="pb-2 text-center text-xs text-muted-foreground">
+                branch is granted) to confirm the installed app is current.
+                foreground/70, not muted-foreground: muted measures 3.39–3.65:1
+                on this page's gradient; /70 measures ≥5.67:1 on every stop. */}
+            <p className="pb-2 text-center text-xs text-foreground/70">
               {t("appVersion")} <span dir="ltr">{APP_VERSION}</span>
             </p>
           </div>
