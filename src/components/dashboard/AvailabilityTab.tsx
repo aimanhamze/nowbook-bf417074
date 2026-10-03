@@ -24,6 +24,11 @@ export function AvailabilityTab() {
   // Monthly mode swaps the weekly Working Hours card for the monthly calendar.
   // Weekly providers (the default) get the exact same tab as before.
   const isMonthly = profile?.availability_mode === "monthly";
+  // A fitness studio's hours ARE its class schedule (edited from /calendar), so
+  // both hours editors are hidden for it. The blocked-dates card stays: it is a
+  // studio's only way to close a day, and the class booking flow honours it
+  // (BookAppointment.tsx, blockedDateSet). Same exact-string gate as Dashboard.
+  const isFitnessStudio = profile?.category === "fitness_studio";
   const [blockingDate, setBlockingDate] = useState<Date | undefined>();
   const [blockReason, setBlockReason] = useState("");
 
@@ -147,10 +152,10 @@ export function AvailabilityTab() {
       <h2 className="text-lg font-semibold">{t("availability")}</h2>
 
       {/* Monthly mode: calendar editor replaces the weekly Working Hours card. */}
-      {isMonthly && <MonthlyAvailabilityCalendar />}
+      {!isFitnessStudio && isMonthly && <MonthlyAvailabilityCalendar />}
 
       {/* Weekly schedule — weekly mode only (unchanged for weekly providers) */}
-      {!isMonthly && (
+      {!isFitnessStudio && !isMonthly && (
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
         <h3 className="text-sm font-medium">{t("workingHoursLabel")}</h3>
         {DAY_KEYS.map((dayKey, dow) => {
