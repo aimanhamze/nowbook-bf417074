@@ -14,16 +14,19 @@ import { Copy, Check, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
 import type { Tables } from "@/integrations/supabase/types";
+import { SharedLoginNote } from "./SharedLoginNote";
 
 const MIN_PASSWORD_LENGTH = 6;
 
 interface ResetPasswordDialogProps {
   provider: Tables<"provider_profiles"> | null;
+  /** Every branch of this provider's owner, for the shared-login note. */
+  branches?: Tables<"provider_profiles">[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function ResetPasswordDialog({ provider, open, onOpenChange }: ResetPasswordDialogProps) {
+export function ResetPasswordDialog({ provider, branches = [], open, onOpenChange }: ResetPasswordDialogProps) {
   const { t, isRtl } = useLang();
   const [password, setPassword] = useState("");
   const [resetPassword, setResetPassword] = useState<string | null>(null);
@@ -107,6 +110,7 @@ export function ResetPasswordDialog({ provider, open, onOpenChange }: ResetPassw
             <p className="text-sm text-muted-foreground">
               {t("resetPasswordFor")} <span className="font-semibold text-foreground">{provider?.business_name}</span>
             </p>
+            <SharedLoginNote branches={branches} />
             <div className="space-y-1.5">
               <Label>{t("newPassword")}</Label>
               <Input

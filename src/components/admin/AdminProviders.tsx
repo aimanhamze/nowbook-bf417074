@@ -18,9 +18,12 @@ import {
   ExternalLink,
   CalendarDays,
   Clock,
+  Building2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { CreateProviderDialog } from "./CreateProviderDialog";
+import { CreateBranchDialog } from "./CreateBranchDialog";
+import { Button } from "@/components/ui/button";
 import { EditProviderDialog } from "./EditProviderDialog";
 import { ResetPasswordDialog } from "./ResetPasswordDialog";
 import { ChangeEmailDialog } from "./ChangeEmailDialog";
@@ -55,10 +58,15 @@ function ProviderCard({
   onHide,
   onShow,
   onDelete,
+  onAddBranch,
+  branchCount,
   hidePending,
   lastLoginText,
 }: {
   p: Provider;
+  onAddBranch: () => void;
+  /** How many branches this provider's owner has (1 for every owner today). */
+  branchCount: number;
   expanded: boolean;
   onToggle: () => void;
   onView: () => void;
@@ -93,6 +101,7 @@ function ProviderCard({
           <h3 className="font-semibold text-sm truncate">{p.business_name}</h3>
           <p className="text-xs text-muted-foreground truncate">
             {categoryNames[p.category]?.he || p.category}
+            {branchCount > 1 && ` · ${branchCount} ${t("adminBranches")}`}
           </p>
           {p.address && (
             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
@@ -167,6 +176,7 @@ function ProviderCard({
                 ) : (
                   <ActionButton icon={Eye} label={t("adminShow")} onClick={onShow} tone="emerald" />
                 )}
+                <ActionButton icon={Building2} label={t("adminAddBranch")} onClick={onAddBranch} />
               </div>
 
               {/* Destructive — separated below a divider, full-width, clearly red */}
@@ -229,6 +239,7 @@ export function AdminProviders() {
   const [hidingProvider, setHidingProvider] = useState<Provider | null>(null);
   const [resettingProvider, setResettingProvider] = useState<Provider | null>(null);
   const [changingEmailProvider, setChangingEmailProvider] = useState<Provider | null>(null);
+  const [branchSource, setBranchSource] = useState<Provider | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
@@ -272,6 +283,30 @@ export function AdminProviders() {
     },
   });
 
+  // Multi-branch: removes ONE branch row; the owner's login and other branches
+  // stay. The Edge Function refuses an owner's last branch (409) — that case
+  // never reaches here, because the dialog only offers it for 2+ branches.
+  const deleteBranch = useMutation({
+    mutationFn: async (provider: Provider) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await supabase.functions.invoke("delete-branch", {
+        body: { provider_id: provider.id },
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (res.error) throw res.error;
+      if (res.data?.error) throw new Error(res.data.error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+      toast.success("הסניף נמחק");
+      setDeletingProvider(null);
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "שגיאה במחיקת הסניף");
+    },
+  });
+
   const { data: providers, isLoading } = useQuery({
     queryKey: ["admin-providers"],
     queryFn: async () => {
@@ -296,6 +331,25 @@ export function AdminProviders() {
     const ts = lastLoginMap.get(p.user_id);
     return ts ? new Date(ts).toLocaleDateString("he-IL") : t("adminNeverLoggedIn");
   };
+
+  // Multi-branch: every provider row grouped by its owner login, oldest branch
+  // first. Built from the full list (not the search-filtered one) so counts and
+  // shared-login notes stay right while searching. One entry per owner today.
+  const branchesByOwner = useMemo(() => {
+    const map = new Map<string, Provider[]>();
+    for (const p of providers || []) {
+      const list = map.get(p.user_id);
+      if (list) list.push(p);
+      else map.set(p.user_id, [p]);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    }
+    return map;
+  }, [providers]);
+  const branchesOf = (p: Provider | null): Provider[] =>
+    p ? branchesByOwner.get(p.user_id) ?? [p] : [];
+  const deletingBranches = branchesOf(deletingProvider);
 
   // Client-side filter over the already-loaded list: business name, category
   // (raw + localized he label), and address/city.
@@ -374,6 +428,8 @@ export function AdminProviders() {
               toast.success("הספק הוצג מחדש");
             }}
             onDelete={() => setDeletingProvider(p)}
+            onAddBranch={() => setBranchSource(p)}
+            branchCount={branchesOf(p).length}
             hidePending={toggleVisibility.isPending}
             lastLoginText={lastLoginText(p)}
           />
@@ -388,14 +444,22 @@ export function AdminProviders() {
 
       <ResetPasswordDialog
         provider={resettingProvider}
+        branches={branchesOf(resettingProvider)}
         open={!!resettingProvider}
         onOpenChange={(open) => { if (!open) setResettingProvider(null); }}
       />
 
       <ChangeEmailDialog
         provider={changingEmailProvider}
+        branches={branchesOf(changingEmailProvider)}
         open={!!changingEmailProvider}
         onOpenChange={(open) => { if (!open) setChangingEmailProvider(null); }}
+      />
+
+      <CreateBranchDialog
+        source={branchSource}
+        open={!!branchSource}
+        onOpenChange={(open) => { if (!open) setBranchSource(null); }}
       />
 
       {/* Hide confirmation */}
@@ -430,24 +494,69 @@ export function AdminProviders() {
       </AlertDialog>
 
       <AlertDialog open={!!deletingProvider} onOpenChange={(open) => { if (!open) setDeletingProvider(null); }}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>מחיקת ספק</AlertDialogTitle>
-            <AlertDialogDescription>
-              האם אתה בטוח שברצונך למחוק את "{deletingProvider?.business_name}"? פעולה זו לא ניתנת לביטול.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row-reverse gap-2">
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deletingProvider && deleteProvider.mutate(deletingProvider)}
-              disabled={deleteProvider.isPending}
-            >
-              {deleteProvider.isPending ? "מוחק..." : "מחק"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
+        {deletingBranches.length > 1 ? (
+          // Multi-branch owner: deleting "the provider" is ambiguous, so the two
+          // outcomes are separate, explicit buttons. Plain Buttons (not
+          // AlertDialogAction) keep the dialog open while pending and on error.
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>מחיקת סניף או בעלים</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>
+                    "{deletingProvider?.business_name}" הוא אחד מ-{deletingBranches.length} סניפים של אותם בעלים,
+                    עם התחברות משותפת:
+                  </p>
+                  <ul className="list-disc ps-5 space-y-0.5">
+                    {deletingBranches.map((b) => (
+                      <li key={b.id} className="font-medium text-foreground">{b.business_name}</li>
+                    ))}
+                  </ul>
+                  <p>שתי הפעולות אינן ניתנות לביטול.</p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex flex-col gap-2">
+              <Button
+                variant="destructive"
+                onClick={() => deletingProvider && deleteBranch.mutate(deletingProvider)}
+                disabled={deleteBranch.isPending || deleteProvider.isPending}
+              >
+                {deleteBranch.isPending ? "מוחק..." : `מחק רק את "${deletingProvider?.business_name}"`}
+              </Button>
+              <Button
+                variant="outline"
+                className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => deletingProvider && deleteProvider.mutate(deletingProvider)}
+                disabled={deleteBranch.isPending || deleteProvider.isPending}
+              >
+                {deleteProvider.isPending
+                  ? "מוחק..."
+                  : `מחק את הבעלים וכל ${deletingBranches.length} הסניפים`}
+              </Button>
+              <AlertDialogCancel className="mt-0">ביטול</AlertDialogCancel>
+            </div>
+          </AlertDialogContent>
+        ) : (
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>מחיקת ספק</AlertDialogTitle>
+              <AlertDialogDescription>
+                האם אתה בטוח שברצונך למחוק את "{deletingProvider?.business_name}"? פעולה זו לא ניתנת לביטול.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-row-reverse gap-2">
+              <AlertDialogCancel>ביטול</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => deletingProvider && deleteProvider.mutate(deletingProvider)}
+                disabled={deleteProvider.isPending}
+              >
+                {deleteProvider.isPending ? "מוחק..." : "מחק"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        )}
       </AlertDialog>
     </div>
   );
