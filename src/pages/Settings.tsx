@@ -14,6 +14,7 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { supabase } from "@/integrations/supabase/client";
+import { APP_VERSION } from "@/lib/appVersion";
 
 const MIN_PASSWORD_LENGTH = 6;
 
@@ -187,6 +188,12 @@ const Settings = () => {
                 </Button>
               </SettingsSection>
             </div>
+
+            {/* Build identity, read aloud to support (e.g. before a second
+                branch is granted) to confirm the installed app is current. */}
+            <p className="pb-2 text-center text-xs text-muted-foreground">
+              {t("appVersion")} <span dir="ltr">{APP_VERSION}</span>
+            </p>
           </div>
         ) : (
           <div className="px-5">
