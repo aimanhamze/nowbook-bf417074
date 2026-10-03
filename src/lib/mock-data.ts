@@ -35,6 +35,9 @@ export interface Provider {
   // Multi-staff (Phase 4): when true, the booking flow inserts a "choose staff
   // member" step for private services. False for every provider by default.
   staffEnabled: boolean;
+  // Provider opted in to customer self-reschedule (Bookings page). Enforced in
+  // the DB by trg_enforce_customer_reschedule, not only by this flag.
+  allowCustomerReschedule: boolean;
 }
 
 export const categories = [

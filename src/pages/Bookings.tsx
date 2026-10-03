@@ -1,4 +1,4 @@
-import { Calendar, Clock, Phone, Star, XCircle, CalendarPlus, History, MessageCircle, Info, UserRound } from "lucide-react";
+import { Calendar, CalendarClock, Clock, Phone, Star, XCircle, CalendarPlus, History, MessageCircle, Info, UserRound } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -15,6 +15,8 @@ import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { useMyPackages } from "@/hooks/usePublicPackages";
 import { MyPackageCard } from "@/components/packages/MyPackageCard";
 import type { Tables } from "@/integrations/supabase/types";
+import type { Provider } from "@/lib/mock-data";
+import { CustomerRescheduleSheet } from "@/components/booking/CustomerRescheduleSheet";
 
 // Fallback cutoff (hours) when a booking's provider can't be resolved (e.g. the
 // provider went invisible). Matches the column default; real cutoff comes from
@@ -270,6 +272,7 @@ const Bookings = () => {
                       allProviders.find((p) => p.id === booking.provider_id)?.cancellationNoticeHours
                         ?? DEFAULT_CANCELLATION_HOURS
                     }
+                    provider={allProviders.find((p) => p.id === booking.provider_id) ?? null}
                   />
                 ))}
               </motion.div>
@@ -380,7 +383,7 @@ function DateTile({ booking, variant, isNext }: { booking: Tables<"bookings">; v
   );
 }
 
-function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProviderName, getServiceNames, staffName, providerPhone, showPrices, cancellationNoticeHours }: {
+function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProviderName, getServiceNames, staffName, providerPhone, showPrices, cancellationNoticeHours, provider }: {
   booking: Tables<"bookings">;
   index: number;
   variant: CardVariant;
@@ -392,6 +395,7 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
   providerPhone: string | null;
   showPrices: boolean;
   cancellationNoticeHours: number;
+  provider: Provider | null;
 }) {
   const { t } = useLang();
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -411,6 +415,16 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
   // explains why. Reviews are unaffected (they insert with user_id = me).
   const canCancel = !isLinkedWalkin && isActive && (cancellationNoticeHours <= 0 || hoursUntilBooking > cancellationNoticeHours);
   const canCallToCancel = !isLinkedWalkin && isActive && cancellationNoticeHours > 0 && hoursUntilBooking <= cancellationNoticeHours;
+  // Self-reschedule: the provider opted in, and the booking could be cancelled
+  // right now (same cutoff -- canCancel). Confirmed only, and never a class:
+  // classes run at fixed times. trg_enforce_customer_reschedule re-checks all
+  // of this in the DB; this gate only decides whether to show the button.
+  const canReschedule =
+    canCancel &&
+    booking.status === "confirmed" &&
+    !booking.class_schedule_id &&
+    !!provider?.allowCustomerReschedule &&
+    provider.category !== "fitness_studio";
   const canReview = isPast && booking.status === "confirmed" && !existingReview;
   // Cancel UI lives ONLY on the Upcoming tab. (canCancel/canCallToCancel are
   // already false for anything in History, but gate explicitly so History
@@ -555,6 +569,18 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
               <XCircle className="h-3 w-3 me-1" />
               {cancelMutation.isPending ? t("cancelling") : t("cancelBooking")}
             </Button>
+            {canReschedule && provider && (
+              <CustomerRescheduleSheet
+                booking={booking}
+                provider={provider}
+                trigger={
+                  <Button variant="outline" size="sm" className="text-[11px] h-7 px-2.5">
+                    <CalendarClock className="h-3 w-3 me-1" />
+                    {t("rescheduleBooking")}
+                  </Button>
+                }
+              />
+            )}
           </div>
         )}
 
