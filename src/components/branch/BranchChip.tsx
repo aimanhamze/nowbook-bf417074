@@ -7,6 +7,7 @@ import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { useBranchPendingCounts } from "@/hooks/useBranchPendingCounts";
 import { setActiveBranchId } from "@/lib/activeBranch";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,7 @@ export function BranchChip() {
   const { t, isRtl } = useLang();
   const { user } = useAuth();
   const { profile, branches } = useProviderProfile();
+  const { countFor, otherBranchesPending } = useBranchPendingCounts();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
@@ -51,12 +53,24 @@ export function BranchChip() {
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
-        aria-label={`${t("switchBranch")}: ${profile.business_name}`}
+        aria-label={`${t("switchBranch")}: ${profile.business_name}${
+          otherBranchesPending ? ` — ${t("otherBranchPending")}` : ""
+        }`}
         className="relative mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full bg-secondary/80 py-0.5 pe-2 ps-0.5 text-xs font-medium text-foreground transition-colors after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] hover:bg-secondary active:scale-[0.98]"
       >
         <BranchAvatar src={profile.avatar_image} size="sm" />
         <bdi className="truncate">{profile.business_name}</bdi>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="relative shrink-0">
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          {/* Another branch (never the active one — the bottom-nav badge
+              covers that) has bookings waiting for approval. */}
+          {otherBranchesPending && (
+            <span
+              data-testid="other-branch-pending-dot"
+              className="absolute -top-1 -end-1 h-2 w-2 rounded-full bg-destructive ring-2 ring-background"
+            />
+          )}
+        </span>
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
@@ -73,6 +87,7 @@ export function BranchChip() {
           <ul className="mt-4 space-y-2">
             {branches.map((b) => {
               const active = b.id === profile.id;
+              const pending = countFor(b.id);
               return (
                 <li key={b.id}>
                   <button
@@ -98,6 +113,15 @@ export function BranchChip() {
                         </p>
                       )}
                     </div>
+                    {pending > 0 && (
+                      // Same look as the bottom-nav badge: red number = pending.
+                      <span
+                        aria-label={`${pending} ${t("pendingTab")}`}
+                        className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-bold text-destructive-foreground"
+                      >
+                        {pending > 9 ? "9+" : pending}
+                      </span>
+                    )}
                     {active && (
                       <Check className="h-5 w-5 shrink-0 text-accent" aria-label={t("currentBranch")} />
                     )}

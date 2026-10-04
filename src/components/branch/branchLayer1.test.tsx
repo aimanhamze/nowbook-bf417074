@@ -31,6 +31,10 @@ vi.mock("@/hooks/useProviderProfile", async () => {
 });
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: USER, isProvider: state.isProvider }) }));
 vi.mock("@/contexts/LangContext", () => ({ useLang: () => ({ t: (k: string) => k, isRtl: true, lang: "he" }) }));
+// Pending counts are layer 2's concern (branchLayer2.test.tsx).
+vi.mock("@/hooks/useBranchPendingCounts", () => ({
+  useBranchPendingCounts: () => ({ countFor: () => 0, otherBranchesPending: false }),
+}));
 const toastSpy = vi.fn();
 vi.mock("sonner", () => ({ toast: (...args: unknown[]) => toastSpy(...args) }));
 

@@ -42,6 +42,10 @@ vi.mock("@/hooks/usePushSubscription", () => ({
   usePushSubscription: () => ({ isSupported: false, isSubscribed: false, loading: false, subscribe: vi.fn(), unsubscribe: vi.fn() }),
 }));
 
+// Pending counts are layer 2's concern (branchLayer2.test.tsx).
+vi.mock("@/hooks/useBranchPendingCounts", () => ({
+  useBranchPendingCounts: () => ({ countFor: () => 0, otherBranchesPending: false }),
+}));
 let profileTabMounts = 0;
 function ProfileTabStub() {
   useEffect(() => {
