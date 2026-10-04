@@ -18,6 +18,7 @@ import { useProviderCustomers } from "@/hooks/useProviderCustomers";
 import { usePackageActions, packageErrorKey } from "@/hooks/usePackageActions";
 import { isRegisteredKey } from "@/lib/customerKey";
 import { toast } from "sonner";
+import { BranchSuffix } from "@/components/branch/BranchSuffix";
 
 /**
  * Sell a package to one of the provider's existing customers.
@@ -93,7 +94,7 @@ export function SellPackageSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className={`rounded-t-3xl ${providerDesktopSheet}`}>
         <SheetHeader>
-          <SheetTitle>{t("sellPackage")}</SheetTitle>
+          <SheetTitle>{t("sellPackage")}<BranchSuffix /></SheetTitle>
         </SheetHeader>
 
         <div className="space-y-4 py-4">

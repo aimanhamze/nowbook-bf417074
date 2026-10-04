@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
+import { BranchSuffix } from "@/components/branch/BranchSuffix";
 
 interface Props {
   open: boolean;
@@ -44,7 +45,7 @@ export function FacetSheet({ open, onClose, icon: Icon, title, subtitle, onSave,
             </span>
             <div className="min-w-0">
               <SheetTitle className="text-[17px]">{title}</SheetTitle>
-              <SheetDescription className="mt-0.5 truncate text-xs">{subtitle}</SheetDescription>
+              <SheetDescription className="mt-0.5 truncate text-xs">{subtitle}<BranchSuffix /></SheetDescription>
             </div>
           </div>
         </SheetHeader>

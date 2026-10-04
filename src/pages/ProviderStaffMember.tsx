@@ -37,6 +37,7 @@ import {
 import { timeOffDraftFromRows, sameDates, fromDateKey } from "@/lib/staffTimeOff";
 import { narrowWeekdayLabels, uniformRange, weekDates } from "@/lib/staffToday";
 import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
+import { BranchSuffix } from "@/components/branch/BranchSuffix";
 
 type SheetKind = "services" | "hours" | "timeOff" | null;
 
@@ -245,7 +246,7 @@ export default function ProviderStaffMember() {
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
                   <UserPlus className="h-5 w-5" />
                 </span>
-                <h1 className="text-lg font-bold">{t("staffNewMember")}</h1>
+                <h1 className="text-lg font-bold">{t("staffNewMember")}<BranchSuffix /></h1>
               </div>
               <Label htmlFor="staff-name">{t("staffNameLabel")}</Label>
               <Input

@@ -47,6 +47,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { BranchSuffix } from "@/components/branch/BranchSuffix";
 
 // Same expressive easing the customer BookAppointment flow uses for its step
 // slides — keeps the walk-in wizard feeling identical to the customer one.
@@ -433,7 +434,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
         {/* ── Header + step indicator (fixed; content below scrolls) ── */}
         <div className="shrink-0 px-5 pt-3">
           <SheetHeader className="text-start">
-            <SheetTitle className="text-lg">{t("newBookingSheetTitle")}</SheetTitle>
+            <SheetTitle className="text-lg">{t("newBookingSheetTitle")}<BranchSuffix /></SheetTitle>
             <SheetDescription className="text-xs">{t("newBookingSheetDesc")}</SheetDescription>
           </SheetHeader>
 

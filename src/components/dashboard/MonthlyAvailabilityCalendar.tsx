@@ -22,6 +22,7 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { BranchSuffix } from "@/components/branch/BranchSuffix";
 
 type OverrideRow = {
   id: string;
@@ -296,6 +297,7 @@ export function MonthlyAvailabilityCalendar() {
           <SheetHeader className="shrink-0 px-5 pb-1 pt-3 text-start">
             <SheetTitle>
               {editingDate && format(editingDate, "EEEE, d MMMM", { locale: dateFnsLocale })}
+              <BranchSuffix />
             </SheetTitle>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-5 pb-6 pt-3">

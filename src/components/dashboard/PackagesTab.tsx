@@ -36,6 +36,7 @@ import { groupPackagesByCustomerKey } from "@/lib/packageSelection";
 import { packageStatusLabel, packageStatusClass } from "@/lib/packageStatus";
 import { toast } from "sonner";
 import { z } from "zod";
+import { BranchSuffix } from "@/components/branch/BranchSuffix";
 
 const templateSchema = z.object({
   name: z.string().min(1).max(100),
@@ -475,7 +476,7 @@ export function PackagesTab() {
       <Sheet open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <SheetContent side="bottom" className={`max-h-[92vh] overflow-y-auto rounded-t-3xl ${providerDesktopSheet}`}>
           <SheetHeader>
-            <SheetTitle>{editing?.id ? t("editPackage") : t("createPackage")}</SheetTitle>
+            <SheetTitle>{editing?.id ? t("editPackage") : t("createPackage")}<BranchSuffix /></SheetTitle>
           </SheetHeader>
           {editing && (
             <div className="space-y-4 py-4">
