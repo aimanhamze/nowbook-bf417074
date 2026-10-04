@@ -103,8 +103,14 @@ export function BranchChip() {
                   >
                     <BranchAvatar src={b.avatar_image} size="lg" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">
-                        <bdi>{b.business_name}</bdi>
+                      {/* The <bdi> truncates itself, so a Latin name in an RTL
+                          row loses its END, not its distinguishing start. Its
+                          own direction would also decide its alignment, so
+                          align it to the UI's side explicitly. */}
+                      <p className="text-sm font-semibold">
+                        <bdi className={cn("block truncate", isRtl ? "text-right" : "text-left")}>
+                          {b.business_name}
+                        </bdi>
                       </p>
                       {b.address && (
                         <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
