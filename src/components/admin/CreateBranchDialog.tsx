@@ -106,7 +106,7 @@ export function CreateBranchDialog({
             <Input
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
-              placeholder="לדוגמה: Womed חיפה"
+              placeholder="לדוגמה: סניף חיפה"
             />
           </div>
 
