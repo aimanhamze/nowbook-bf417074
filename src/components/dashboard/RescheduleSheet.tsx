@@ -47,6 +47,7 @@ import { classifyDay, isOutsideDayWindow } from "@/lib/availabilityResolver";
 import { normalizeBookingTime } from "@/lib/bookingTime";
 import { useRescheduleBooking, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { toast } from "sonner";
+import { BranchSuffix } from "@/components/branch/BranchSuffix";
 
 // Same expressive easing the customer + walk-in flows use for their step slides.
 const SPRING = { duration: 0.5, ease: [0.16, 1, 0.3, 1] } as const;
@@ -277,7 +278,7 @@ export function RescheduleSheet({ booking, trigger }: { booking: EnrichedBooking
         {/* ── Header + current-appointment summary (fixed) ── */}
         <div className="shrink-0 px-5 pt-3">
           <SheetHeader className="text-start">
-            <SheetTitle className="text-lg">{t("rescheduleTitle")}</SheetTitle>
+            <SheetTitle className="text-lg">{t("rescheduleTitle")}<BranchSuffix /></SheetTitle>
             <SheetDescription className="text-xs">{t("currentAppointment")}</SheetDescription>
           </SheetHeader>
 

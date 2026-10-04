@@ -36,6 +36,8 @@ import {
 } from "@/lib/staffHours";
 import { timeOffDraftFromRows, sameDates, fromDateKey } from "@/lib/staffTimeOff";
 import { narrowWeekdayLabels, uniformRange, weekDates } from "@/lib/staffToday";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
+import { BranchSuffix } from "@/components/branch/BranchSuffix";
 
 type SheetKind = "services" | "hours" | "timeOff" | null;
 
@@ -234,7 +236,7 @@ export default function ProviderStaffMember() {
           <button onClick={() => navigate("/staff")} className="-ms-1.5 rounded-xl p-1.5 active:scale-95" aria-label={t("staffPageTitle")}>
             <BackArrow className="h-5 w-5" />
           </button>
-          <p className="flex-1 text-sm font-semibold text-muted-foreground">{t("staffPageTitle")}</p>
+          <ProviderPageTitle as="p" className="flex-1 text-sm font-semibold text-muted-foreground">{t("staffPageTitle")}</ProviderPageTitle>
         </header>
 
         <div className="flex flex-col gap-3.5 px-5">
@@ -244,7 +246,7 @@ export default function ProviderStaffMember() {
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
                   <UserPlus className="h-5 w-5" />
                 </span>
-                <h1 className="text-lg font-bold">{t("staffNewMember")}</h1>
+                <h1 className="text-lg font-bold">{t("staffNewMember")}<BranchSuffix /></h1>
               </div>
               <Label htmlFor="staff-name">{t("staffNameLabel")}</Label>
               <Input

@@ -14,6 +14,7 @@ import { Copy, Check, AtSign } from "lucide-react";
 import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
 import type { Tables } from "@/integrations/supabase/types";
+import { SharedLoginNote } from "./SharedLoginNote";
 
 // Lenient on purpose, mirroring the Edge Function's server-side check: providers
 // log in with fake addresses like someone@ehjezly.com, so we only require a
@@ -22,11 +23,13 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface ChangeEmailDialogProps {
   provider: Tables<"provider_profiles"> | null;
+  /** Every branch of this provider's owner, for the shared-login note. */
+  branches?: Tables<"provider_profiles">[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function ChangeEmailDialog({ provider, open, onOpenChange }: ChangeEmailDialogProps) {
+export function ChangeEmailDialog({ provider, branches = [], open, onOpenChange }: ChangeEmailDialogProps) {
   const { t, isRtl } = useLang();
   const [email, setEmail] = useState("");
   const [newEmail, setNewEmail] = useState<string | null>(null);
@@ -123,6 +126,7 @@ export function ChangeEmailDialog({ provider, open, onOpenChange }: ChangeEmailD
             <p className="text-sm text-muted-foreground">
               {t("changeEmailFor")} <span className="font-semibold text-foreground">{provider?.business_name}</span>
             </p>
+            <SharedLoginNote branches={branches} />
             <div className="space-y-1.5">
               <Label>{t("newEmailLabel")}</Label>
               <Input

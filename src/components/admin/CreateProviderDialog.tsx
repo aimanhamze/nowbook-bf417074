@@ -21,25 +21,7 @@ import {
 import { Plus, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { categories } from "@/lib/mock-data";
-
-const categoryLabels: Record<string, string> = {
-  barber: "💈 ספר",
-  salon: "💇 מספרה",
-  nails: "💅 ציפורניים",
-  brows: "👁️ גבות",
-  spa: "🧖 ספא",
-  skincare: "✨ טיפוח עור",
-  makeup: "💄 איפור",
-  orthopedic: "🦴 אורתופד",
-  dentist: "🦷 רפואת שיניים",
-  eye_doctor: "👁️‍🗨️ רופא עיניים",
-  dermatologist: "🩺 עור ואסתטיקה",
-  aesthetic_medicine: "💉 רפואה אסתטית",
-  physiotherapy: "💪 פיזיותרפיה",
-  pediatrician: "👶 רופא ילדים",
-  gym: "🏋️ סטודיו אימונים",
-  fitness_studio: "🤸 סטודיו כושר",
-};
+import { categoryLabels } from "./categoryLabels";
 
 type CreatedCredentials = { email: string; password: string; businessName: string };
 

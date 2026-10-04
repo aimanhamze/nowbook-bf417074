@@ -12,6 +12,7 @@ import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { formatDistanceToNow } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
 import { useState } from "react";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 
 const typeIcons: Record<string, string> = {
   booking_new: "🎉",
@@ -126,7 +127,7 @@ const Notifications = () => {
         <button onClick={() => navigate(-1)} className="active:scale-95">
           <BackArrow className="h-5 w-5" />
         </button>
-        <h1 className="text-xl font-bold flex-1">{t("notificationsLabel")}</h1>
+        <ProviderPageTitle className="text-xl font-bold flex-1">{t("notificationsLabel")}</ProviderPageTitle>
         {unreadCount > 0 && (
           <Button
             variant="ghost"

@@ -13,6 +13,7 @@ import { useCustomerPackages } from "@/hooks/useCustomerPackages";
 import { groupPackagesByCustomerKey } from "@/lib/packageSelection";
 import { packageStatusLabel, packageStatusClass } from "@/lib/packageStatus";
 import { SellPackageSheet } from "@/components/dashboard/SellPackageSheet";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 
 // Standalone provider "My Customers" page. ALL customer PII comes from the
 // single isolated hook useProviderCustomers() — this page does no profiles/
@@ -84,7 +85,7 @@ export default function ProviderCustomers() {
             <button onClick={() => navigate("/profile")} className="active:scale-95" aria-label={t("profile")}>
               <BackArrow className="h-5 w-5" />
             </button>
-            <h1 className="text-xl font-bold flex-1">{t("myCustomers")}</h1>
+            <ProviderPageTitle className="text-xl font-bold flex-1">{t("myCustomers")}</ProviderPageTitle>
             {customers.length > 0 && (
               <span className="text-xs font-semibold text-accent bg-accent/10 px-2.5 py-1 rounded-full">
                 {customers.length}

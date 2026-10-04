@@ -10,6 +10,7 @@ import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
 import { QrCard, QR_CARD_WIDTH, QR_CARD_HEIGHT } from "@/components/qr/QrCard";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 
 // On-screen preview width (px) for the branded card. The full 1080px card is
 // CSS-scaled down into this viewport; the captured node keeps its real size.
@@ -106,7 +107,7 @@ export default function ProviderQrCode() {
           <button onClick={() => navigate("/profile")} className="active:scale-95" aria-label={t("profile")}>
             <BackArrow className="h-5 w-5" />
           </button>
-          <h1 className="text-xl font-bold flex-1">{t("qrPageTitle")}</h1>
+          <ProviderPageTitle className="text-xl font-bold flex-1">{t("qrPageTitle")}</ProviderPageTitle>
         </div>
       </header>
 

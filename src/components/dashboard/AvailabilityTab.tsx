@@ -14,6 +14,7 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { MonthlyAvailabilityCalendar } from "@/components/dashboard/MonthlyAvailabilityCalendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { BranchSuffix } from "@/components/branch/BranchSuffix";
 
 const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 
@@ -157,7 +158,7 @@ export function AvailabilityTab() {
       {/* Weekly schedule — weekly mode only (unchanged for weekly providers) */}
       {!isFitnessStudio && !isMonthly && (
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
-        <h3 className="text-sm font-medium">{t("workingHoursLabel")}</h3>
+        <h3 className="text-sm font-medium">{t("workingHoursLabel")}<BranchSuffix /></h3>
         {DAY_KEYS.map((dayKey, dow) => {
           const slot = getSlot(dow);
           const isAvail = slot?.is_available ?? false;
@@ -246,7 +247,7 @@ export function AvailabilityTab() {
 
       {/* Blocked dates */}
       <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-        <h3 className="text-sm font-medium">{t("blockedDates")}</h3>
+        <h3 className="text-sm font-medium">{t("blockedDates")}<BranchSuffix /></h3>
 
         <Popover>
           <PopoverTrigger asChild>

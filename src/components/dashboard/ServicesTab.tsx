@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { z } from "zod";
 import { format } from "date-fns";
+import { BranchSuffix } from "@/components/branch/BranchSuffix";
 
 const serviceSchema = z.object({
   name: z.string().min(1, "שם השירות נדרש").max(100),
@@ -258,7 +259,7 @@ export function ServicesTab() {
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
                 {editing?.id ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
               </span>
-              <SheetTitle>{editing?.id ? t("editServiceTitle") : t("addService")}</SheetTitle>
+              <SheetTitle>{editing?.id ? t("editServiceTitle") : t("addService")}<BranchSuffix /></SheetTitle>
             </div>
           </SheetHeader>
 
