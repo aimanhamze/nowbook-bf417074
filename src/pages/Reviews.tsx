@@ -7,6 +7,7 @@ import { ReviewsTab } from "@/components/dashboard/ReviewsTab";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 
 // Standalone provider Reviews page. Reuses ReviewsTab verbatim (the rating
 // summary, distribution, and list — all computed from rows via
@@ -43,7 +44,7 @@ export default function Reviews() {
             <button onClick={() => navigate("/profile")} className="active:scale-95" aria-label={t("profile")}>
               <BackArrow className="h-5 w-5" />
             </button>
-            <h1 className="text-xl font-bold flex-1">{t("myReviews")}</h1>
+            <ProviderPageTitle className="text-xl font-bold flex-1">{t("myReviews")}</ProviderPageTitle>
           </div>
         </header>
 

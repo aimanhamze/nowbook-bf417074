@@ -21,6 +21,7 @@ import type { StaffRowData } from "@/components/staff/StaffRow";
 import { draftFromRows, hoursSummary } from "@/lib/staffHours";
 import { timeOffSummary } from "@/lib/staffTimeOff";
 import { todayCounts } from "@/lib/staffToday";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 
 /**
  * /staff — the provider's team as its own page.
@@ -119,7 +120,7 @@ export default function ProviderStaff() {
           <button onClick={() => navigate("/profile")} className="-ms-1.5 rounded-xl p-1.5 active:scale-95" aria-label={t("profile")}>
             <BackArrow className="h-5 w-5" />
           </button>
-          <h1 className="flex-1 text-xl font-bold">{t("staffPageTitle")}</h1>
+          <ProviderPageTitle className="flex-1 text-xl font-bold">{t("staffPageTitle")}</ProviderPageTitle>
           {hasStaff && (
             <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
               <bdi>{staff.length}</bdi>

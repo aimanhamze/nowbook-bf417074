@@ -7,7 +7,7 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useActiveBranchId } from "@/lib/activeBranch";
-import { BranchSwitcher } from "@/components/dashboard/BranchSwitcher";
+import { BranchChip } from "@/components/branch/BranchChip";
 import { ServicesTab } from "@/components/dashboard/ServicesTab";
 import { BusinessProfileTab } from "@/components/dashboard/BusinessProfileTab";
 import { BookingSettingsTab } from "@/components/dashboard/BookingSettingsTab";
@@ -133,7 +133,7 @@ export default function Dashboard() {
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-2xl font-extrabold leading-tight">{t("providerDashboard")}</h1>
               {branches.length > 1 ? (
-                <BranchSwitcher />
+                <BranchChip />
               ) : (
                 profile?.business_name && (
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile.business_name}</p>

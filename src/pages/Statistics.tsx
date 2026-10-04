@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, Star, Users, Receipt } from "lucide-react";
 import { StatsCharts } from "@/components/statistics/StatsCharts";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 
 // Period window for the statistics aggregation. Wired to data in Phase 2.
 export type StatsPeriod = "week" | "month" | "3months";
@@ -56,7 +57,7 @@ export default function Statistics() {
           <button onClick={() => navigate("/profile")} className="active:scale-95" aria-label={t("profile")}>
             <BackArrow className="h-5 w-5" />
           </button>
-          <h1 className="text-xl font-bold flex-1">{t("statisticsTitle")}</h1>
+          <ProviderPageTitle className="text-xl font-bold flex-1">{t("statisticsTitle")}</ProviderPageTitle>
         </div>
       </header>
 

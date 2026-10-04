@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 
 // Two options only: these are the two Meta-approved templates. There is no
 // English template, and the DB CHECK constraint on
@@ -85,7 +86,7 @@ export default function ProviderNotifications() {
             <button onClick={() => navigate("/profile")} className="active:scale-95" aria-label={t("profile")}>
               <BackArrow className="h-5 w-5" />
             </button>
-            <h1 className="text-xl font-bold flex-1">{t("notificationSettingsTitle")}</h1>
+            <ProviderPageTitle className="text-xl font-bold flex-1">{t("notificationSettingsTitle")}</ProviderPageTitle>
           </div>
         </header>
 

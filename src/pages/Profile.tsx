@@ -10,6 +10,7 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 
 const Profile = () => {
   const { lang, setLang, t } = useLang();
@@ -108,7 +109,7 @@ const Profile = () => {
 
       <div className={`relative ${providerView ? providerDesktopColumn : ""}`}>
         <header className="px-5 pt-12 pb-5">
-          <h1 className="text-xl font-bold">{t("profile")}</h1>
+          <ProviderPageTitle className="text-xl font-bold">{t("profile")}</ProviderPageTitle>
         </header>
 
         {/* Identity hero — premium glass surface with accent-ringed avatar */}

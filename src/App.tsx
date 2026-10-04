@@ -11,6 +11,7 @@ import { AdminRoute } from "@/components/AdminRoute";
 import { NameGate } from "@/components/NameGate";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Suspense, lazy, useEffect } from "react";
+import { BranchScope } from "@/components/branch/BranchScope";
 
 const Index = lazy(() => import("./pages/Index"));
 const Explore = lazy(() => import("./pages/Explore"));
@@ -102,24 +103,24 @@ const App = () => (
                   <Route path="/booking-confirmed" element={<ProtectedRoute><ErrorBoundary><BookingConfirmed /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/bookings" element={<ProtectedRoute><ErrorBoundary><Bookings /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/favorites" element={<ProtectedRoute><ErrorBoundary><Favorites /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/profile" element={<ProtectedRoute><ErrorBoundary><Profile /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/settings" element={<ProtectedRoute><ErrorBoundary><Settings /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><ErrorBoundary><BranchScope><Profile /></BranchScope></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute><ErrorBoundary><BranchScope><Settings /></BranchScope></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
                   <Route path="/reset-password" element={<ErrorBoundary><ResetPassword /></ErrorBoundary>} />
                   <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Dashboard /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/calendar" element={<ProtectedRoute><ErrorBoundary><ProviderCalendar /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/reviews" element={<ProtectedRoute><ErrorBoundary><Reviews /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/qr-code" element={<ProtectedRoute><ErrorBoundary><ProviderQrCode /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/customers" element={<ProtectedRoute><ErrorBoundary><ProviderCustomers /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/calendar" element={<ProtectedRoute><ErrorBoundary><BranchScope><ProviderCalendar /></BranchScope></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/reviews" element={<ProtectedRoute><ErrorBoundary><BranchScope><Reviews /></BranchScope></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/qr-code" element={<ProtectedRoute><ErrorBoundary><BranchScope><ProviderQrCode /></BranchScope></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/customers" element={<ProtectedRoute><ErrorBoundary><BranchScope><ProviderCustomers /></BranchScope></ErrorBoundary></ProtectedRoute>} />
                   {/* Provider team: /staff (roster) and /staff/:id ("new" creates),
                       routed inside StaffRoutes so the two slide over each other. */}
-                  <Route path="/staff/*" element={<ProtectedRoute><ErrorBoundary><StaffRoutes /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/staff/*" element={<ProtectedRoute><ErrorBoundary><BranchScope><StaffRoutes /></BranchScope></ErrorBoundary></ProtectedRoute>} />
                   {/* Provider WhatsApp settings. Distinct from /notifications,
                       which is the customer's notification feed. */}
-                  <Route path="/notification-settings" element={<ProtectedRoute><ErrorBoundary><ProviderNotifications /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/statistics" element={<ProtectedRoute><ErrorBoundary><Statistics /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/monthly-report" element={<ProtectedRoute><ErrorBoundary><MonthlyReport /></ErrorBoundary></ProtectedRoute>} />
-                  <Route path="/notifications" element={<ProtectedRoute><ErrorBoundary><Notifications /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/notification-settings" element={<ProtectedRoute><ErrorBoundary><BranchScope><ProviderNotifications /></BranchScope></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/statistics" element={<ProtectedRoute><ErrorBoundary><BranchScope><Statistics /></BranchScope></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/monthly-report" element={<ProtectedRoute><ErrorBoundary><BranchScope><MonthlyReport /></BranchScope></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/notifications" element={<ProtectedRoute><ErrorBoundary><BranchScope><Notifications /></BranchScope></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/admin" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
                   <Route path="/admin/providers" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />
                   <Route path="/admin/customers" element={<AdminRoute><ErrorBoundary><Admin /></ErrorBoundary></AdminRoute>} />

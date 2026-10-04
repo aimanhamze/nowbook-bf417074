@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Check, ChevronDown, MapPin, Store } from "lucide-react";
+import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
@@ -8,42 +10,52 @@ import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { setActiveBranchId } from "@/lib/activeBranch";
 import { cn } from "@/lib/utils";
 
-// Multi-branch: lets an owner with several branches choose which one the
-// dashboard works on. It takes the place of the business-name line under the
-// Dashboard title — that line already answers "which business am I in?", so the
-// switcher is that same answer, made tappable.
+// Unicode isolates: keep a Latin branch name from reordering the surrounding
+// Hebrew/Arabic sentence in plain-text contexts (toasts) where <bdi> can't go.
+const isolate = (s: string) => `⁨${s}⁩`;
+
+// Multi-branch: which branch this screen is working on — avatar, name, chevron
+// — shown under the title of every provider screen. Tapping it opens the
+// branch sheet. Only rendered for owners with 2+ branches (ProviderPageTitle,
+// Dashboard and Settings decide); a single-branch owner never mounts it.
 //
-// The Dashboard only renders this when the owner has 2+ branches; a
-// single-branch owner (every owner today) keeps the plain business-name line.
-//
-// Switching only writes the active id. The Dashboard keys its tab content on
-// that id, so the switch remounts the tab: open sheets close and every form
-// reloads from the new branch instead of carrying the old branch's values.
-export function BranchSwitcher() {
+// Switching writes the active id and stays on the current screen: BranchScope
+// (App.tsx) and the Dashboard's tab key remount the screen on the new branch,
+// which closes open sheets and drops state that belonged to the old branch.
+// The one exception is a staff member page — that member belongs to the old
+// branch, so it goes back to the staff list.
+export function BranchChip() {
   const { t, isRtl } = useLang();
   const { user } = useAuth();
   const { profile, branches } = useProviderProfile();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
 
   if (!user || !profile) return null;
 
   const choose = (branchId: string) => {
     setOpen(false);
-    if (branchId !== profile.id) setActiveBranchId(user.id, branchId);
+    if (branchId === profile.id) return;
+    const target = branches.find((b) => b.id === branchId);
+    if (/^\/staff\/[^/]+/.test(pathname)) navigate("/staff", { replace: true });
+    setActiveBranchId(user.id, branchId);
+    if (target) toast(t("switchedToBranch").replace("{name}", isolate(target.business_name)));
   };
 
   return (
     <>
-      {/* Visually a compact pill under the title; the ::after extends the hit
-          area to 44px tall without pushing the header layout around. */}
+      {/* Compact under the title; ::after extends the hit area to 44px tall
+          without pushing the header layout around. */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-label={`${t("switchBranch")}: ${profile.business_name}`}
-        className="relative mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-secondary/80 px-2.5 py-1 text-xs font-medium text-foreground transition-colors after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] hover:bg-secondary active:scale-[0.98]"
+        className="relative mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full bg-secondary/80 py-0.5 pe-2 ps-0.5 text-xs font-medium text-foreground transition-colors after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] hover:bg-secondary active:scale-[0.98]"
       >
-        <span className="truncate">{profile.business_name}</span>
+        <BranchAvatar src={profile.avatar_image} size="sm" />
+        <bdi className="truncate">{profile.business_name}</bdi>
         <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       </button>
 
@@ -74,19 +86,15 @@ export function BranchSwitcher() {
                         : "border-border/60 bg-card hover:bg-secondary/60",
                     )}
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-accent/10">
-                      {b.avatar_image ? (
-                        <img src={b.avatar_image} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <Store className="h-5 w-5 text-accent" />
-                      )}
-                    </div>
+                    <BranchAvatar src={b.avatar_image} size="lg" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{b.business_name}</p>
+                      <p className="truncate text-sm font-semibold">
+                        <bdi>{b.business_name}</bdi>
+                      </p>
                       {b.address && (
                         <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
                           <MapPin className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{b.address}</span>
+                          <bdi className="truncate">{b.address}</bdi>
                         </p>
                       )}
                     </div>
@@ -101,5 +109,19 @@ export function BranchSwitcher() {
         </SheetContent>
       </Sheet>
     </>
+  );
+}
+
+function BranchAvatar({ src, size }: { src: string | null; size: "sm" | "lg" }) {
+  const box = size === "sm" ? "h-5 w-5 rounded-full" : "h-10 w-10 rounded-xl";
+  const icon = size === "sm" ? "h-3 w-3" : "h-5 w-5";
+  return (
+    <span className={`flex ${box} shrink-0 items-center justify-center overflow-hidden bg-accent/10`}>
+      {src ? (
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <Store className={`${icon} text-accent`} />
+      )}
+    </span>
   );
 }

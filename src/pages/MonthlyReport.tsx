@@ -15,6 +15,7 @@ import {
   formatMonthLabel, lastCompleteMonth, monthKey, parseMonthKey,
 } from "@/lib/monthlyReport";
 import { providerDesktopPage } from "@/components/layout/providerDesktop";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider monthly report — screen view + print/PDF export.
@@ -86,7 +87,7 @@ export default function MonthlyReport() {
           >
             <BackArrow className="h-5 w-5" />
           </button>
-          <h1 className="text-xl font-bold flex-1">{t("monthlyReport")}</h1>
+          <ProviderPageTitle className="text-xl font-bold flex-1">{t("monthlyReport")}</ProviderPageTitle>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">

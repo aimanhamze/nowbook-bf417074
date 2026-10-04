@@ -3,8 +3,8 @@ import { useLang } from "@/contexts/LangContext";
 import type { Tables } from "@/integrations/supabase/types";
 
 // Multi-branch: the email and password belong to the OWNER's login, which every
-// branch shares — changing them for "Womed Haifa" changes them for "Womed
-// Sakhnin" too. Renders nothing for a single-branch owner (every owner today),
+// branch shares — changing them for one branch changes them for all of them.
+// Renders nothing for a single-branch owner (every owner today),
 // so those dialogs are unchanged.
 export function SharedLoginNote({ branches }: { branches: Tables<"provider_profiles">[] }) {
   const { t } = useLang();

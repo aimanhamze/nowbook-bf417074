@@ -10,6 +10,7 @@ import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
+import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 
 type TabId = "calendar" | "pending" | "schedule";
 
@@ -72,7 +73,7 @@ export default function ProviderCalendar() {
             <button onClick={() => navigate(-1)} className="active:scale-95">
               <BackArrow className="h-5 w-5" />
             </button>
-            <h1 className="text-xl font-bold flex-1">{t("bookingsCalendar")}</h1>
+            <ProviderPageTitle className="text-xl font-bold flex-1">{t("bookingsCalendar")}</ProviderPageTitle>
           </div>
 
           {showTabBar && (

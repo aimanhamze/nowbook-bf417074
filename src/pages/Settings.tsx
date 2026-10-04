@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { supabase } from "@/integrations/supabase/client";
 import { APP_VERSION } from "@/lib/appVersion";
+import { BranchChip } from "@/components/branch/BranchChip";
 
 const MIN_PASSWORD_LENGTH = 6;
 
@@ -29,7 +30,7 @@ const MIN_PASSWORD_LENGTH = 6;
 const Settings = () => {
   const { t } = useLang();
   const { user, isProvider } = useAuth();
-  const { profile } = useProviderProfile();
+  const { profile, branches } = useProviderProfile();
   const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -115,9 +116,13 @@ const Settings = () => {
           </button>
           <div className="min-w-0">
             <h1 className="text-xl font-bold leading-tight">{t("settings")}</h1>
-            {isProvider && profile?.business_name && (
-              <p className="mt-1 truncate text-xs text-muted-foreground">{profile.business_name}</p>
-            )}
+            {isProvider && (branches.length > 1 ? (
+              <BranchChip />
+            ) : (
+              profile?.business_name && (
+                <p className="mt-1 truncate text-xs text-muted-foreground">{profile.business_name}</p>
+              )
+            ))}
           </div>
         </header>
 

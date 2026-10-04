@@ -240,6 +240,7 @@ export const translations = {
     // Multi-branch: one owner login, several provider rows.
     sharedLoginNote: "התחברות זו משותפת לכל הסניפים:",
     switchBranch: "החלפת סניף",
+    switchedToBranch: "עברת ל־{name}",
     yourBranches: "הסניפים שלך",
     currentBranch: "הסניף הנוכחי",
     appVersion: "גרסה",
@@ -1155,6 +1156,7 @@ export const translations = {
     // Multi-branch: one owner login, several provider rows.
     sharedLoginNote: "تسجيل الدخول هذا مشترك بين جميع الفروع:",
     switchBranch: "تبديل الفرع",
+    switchedToBranch: "انتقلت إلى {name}",
     yourBranches: "فروعك",
     currentBranch: "الفرع الحالي",
     appVersion: "الإصدار",
@@ -2066,6 +2068,7 @@ export const translations = {
     // Multi-branch: one owner login, several provider rows.
     sharedLoginNote: "This login is shared by every branch:",
     switchBranch: "Switch branch",
+    switchedToBranch: "Switched to {name}",
     yourBranches: "Your branches",
     currentBranch: "Current branch",
     appVersion: "Version",
