@@ -21,6 +21,7 @@ import ReviewCard from "@/components/reviews/ReviewCard";
 import type { SocialLinks } from "@/lib/socialLinks";
 import { buildWhatsAppLink } from "@/lib/socialLinks";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
+import { SessionHandledError } from "@/lib/liveSession";
 import { useProviderPackages, useMyPackagesAt, useRequestPackage } from "@/hooks/usePublicPackages";
 import { packageErrorKey } from "@/hooks/usePackageActions";
 import { MyPackageCard } from "@/components/packages/MyPackageCard";
@@ -799,8 +800,9 @@ const ProviderDetail = () => {
                       requestPackage.mutate(pkg.id, {
                         onSuccess: () => toast.success(t("purchasePendingNote")),
                         onError: (err) => {
+                          if (err instanceof SessionHandledError) return;
                           const key = packageErrorKey(err instanceof Error ? err.message : String(err));
-                          toast.error(key ? t(key as never) : String(err));
+                          toast.error(t(key ? (key as never) : "packageRequestFailed"));
                         },
                       });
                     }}

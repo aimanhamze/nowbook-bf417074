@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useLiveSessionGuard } from "@/hooks/useLiveSessionGuard";
+import { SessionHandledError, isUnauthenticatedWriteError } from "@/lib/liveSession";
 
 export interface Review {
   id: string;
@@ -50,6 +52,7 @@ export function useBookingReview(bookingId: string | undefined) {
 
 export function useSubmitReview() {
   const queryClient = useQueryClient();
+  const { ensureLiveSession, endDeadSession } = useLiveSessionGuard();
 
   return useMutation({
     mutationFn: async (review: {
@@ -60,12 +63,21 @@ export function useSubmitReview() {
       comment: string;
       display_name: string;
     }) => {
-      const { data, error } = await supabase
+      // Without a usable token this insert would go out as anon and hit RLS.
+      if (!(await ensureLiveSession())) throw new SessionHandledError();
+
+      const { data, error, status } = await supabase
         .from("reviews")
         .insert(review)
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        if (isUnauthenticatedWriteError(error, status)) {
+          await endDeadSession();
+          throw new SessionHandledError();
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: (data) => {

@@ -5,6 +5,7 @@ import { useSubmitReview } from "@/hooks/useReviews";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLang } from "@/contexts/LangContext";
 import { toast } from "sonner";
+import { SessionHandledError } from "@/lib/liveSession";
 
 interface ReviewFormProps {
   bookingId: string;
@@ -37,7 +38,9 @@ const ReviewForm = ({ bookingId, providerId, onSubmitted }: ReviewFormProps) => 
           toast.success(t("reviewSubmitted"));
           onSubmitted?.();
         },
-        onError: () => {
+        onError: (err) => {
+          // The session problem has already been explained to the customer.
+          if (err instanceof SessionHandledError) return;
           toast.error(t("reviewError"));
         },
       }

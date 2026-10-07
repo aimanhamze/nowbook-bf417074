@@ -28,7 +28,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { saveBookingDraft, consumeBookingDraft, type BookingDraft } from "@/lib/bookingDraft";
-import { isUnauthenticatedWriteError } from "@/lib/liveSession";
+import { SessionHandledError, isUnauthenticatedWriteError } from "@/lib/liveSession";
 import { useLiveSessionGuard } from "@/hooks/useLiveSessionGuard";
 import { notifyBookingConfirmed } from "@/lib/whatsappConfirm";
 import { toast } from "sonner";
@@ -1146,10 +1146,11 @@ const BookAppointment = () => {
                                   requestPackageHere.mutate(pkg.id, {
                                     onSuccess: () => toast.success(t("purchasePendingNote")),
                                     onError: (err) => {
+                                      if (err instanceof SessionHandledError) return;
                                       const key = packageErrorKey(
                                         err instanceof Error ? err.message : String(err),
                                       );
-                                      toast.error(key ? t(key as never) : String(err));
+                                      toast.error(t(key ? (key as never) : "packageRequestFailed"));
                                     },
                                   });
                                 }}

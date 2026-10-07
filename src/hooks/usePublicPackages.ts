@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLiveSessionGuard } from "@/hooks/useLiveSessionGuard";
+import { SessionHandledError, isUnauthenticatedWriteError } from "@/lib/liveSession";
 import {
   pkgFrom,
   pkgRpc,
@@ -135,12 +137,25 @@ export function useMyPackages() {
  */
 export function useRequestPackage() {
   const queryClient = useQueryClient();
+  const { ensureLiveSession, endDeadSession } = useLiveSessionGuard();
   return useMutation({
     mutationFn: async (templateId: string) => {
-      const { error } = await pkgRpc("package_request_purchase", {
+      // Without a usable token the RPC runs as anon. EXECUTE is still granted
+      // to anon (via PUBLIC), so only the function's own NOT_AUTHENTICATED
+      // check stops it — and that told the customer to "sign in" with no way
+      // to do so. Check first.
+      if (!(await ensureLiveSession())) throw new SessionHandledError();
+
+      const { error, status } = await pkgRpc("package_request_purchase", {
         p_template_id: templateId,
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        if (error.message.includes("NOT_AUTHENTICATED") || isUnauthenticatedWriteError(error, status)) {
+          await endDeadSession();
+          throw new SessionHandledError();
+        }
+        throw new Error(error.message);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-packages-at"] });

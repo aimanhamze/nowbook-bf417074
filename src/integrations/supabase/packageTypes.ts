@@ -153,7 +153,8 @@ export function pkgRpc(
   return (supabase as unknown as {
     rpc: (name: string, params: Record<string, unknown>) => PromiseLike<{
       data: unknown;
-      error: { message: string } | null;
+      error: { message: string; code?: string } | null;
+      status?: number;
     }>;
   }).rpc(fn, args);
 }

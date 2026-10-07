@@ -24,6 +24,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import type { Provider } from "@/lib/mock-data";
 import { toast } from "sonner";
+import { useLiveSessionGuard } from "@/hooks/useLiveSessionGuard";
+import { SessionHandledError, isUnauthenticatedWriteError } from "@/lib/liveSession";
 
 const SPRING = { duration: 0.5, ease: [0.16, 1, 0.3, 1] } as const;
 
@@ -54,6 +56,7 @@ export function CustomerRescheduleSheet({
 }) {
   const { lang, t } = useLang();
   const queryClient = useQueryClient();
+  const { ensureLiveSession, endDeadSession } = useLiveSessionGuard();
   const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(
     provider.id,
     booking.staff_id,
@@ -110,15 +113,25 @@ export function CustomerRescheduleSheet({
 
   const reschedule = useMutation({
     mutationFn: async ({ newDate, newTime }: { newDate: string; newTime: string }) => {
+      // Without a usable token this UPDATE would go out as anon and match
+      // nothing. Check first; the sheet keeps the customer's pick on failure.
+      if (!(await ensureLiveSession())) throw new SessionHandledError();
+
       // The trigger may flip status to 'pending' (provider requires approval),
       // so read it back rather than assume.
-      const { data, error } = await supabase
+      const { data, error, status } = await supabase
         .from("bookings")
         .update({ booking_date: newDate, booking_time: newTime })
         .eq("id", booking.id)
         .select("status")
         .single();
-      if (error) throw error;
+      if (error) {
+        if (isUnauthenticatedWriteError(error, status)) {
+          await endDeadSession();
+          throw new SessionHandledError();
+        }
+        throw error;
+      }
       const pending = data?.status === "pending";
 
       // Bell rows only -- no WhatsApp/push for reschedule yet. Best-effort: the
@@ -163,6 +176,7 @@ export function CustomerRescheduleSheet({
       setOpen(false);
     },
     onError: (err: unknown) => {
+      if (err instanceof SessionHandledError) return;
       const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? "";
       const code = (err as { code?: string })?.code;
       if (code === "23505" || /GROUP_CAPACITY_EXCEEDED|no longer available|DUPLICATE_USER_BOOKING/i.test(msg)) {
