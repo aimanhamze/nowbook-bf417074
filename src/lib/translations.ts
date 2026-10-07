@@ -285,6 +285,7 @@ export const translations = {
     // Neutral by design: the session ended on the server, which is not
     // something the user did. States what happened and what to do next.
     sessionEndedMessage: "החיבור הסתיים. יש להתחבר שוב כדי להמשיך",
+    sessionOfflineMessage: "אין חיבור כרגע. בדוק את החיבור לאינטרנט ונסה שוב",
     phoneRequired: "נדרש מספר טלפון",
     notificationSettingsTitle: "הגדרות התראות",
     whatsappConfirmLabel: "שליחת אישור תור בוואטסאפ",
@@ -1206,6 +1207,7 @@ export const translations = {
     otpSent: "تم إرسال الرمز إلى رقمك",
     invalidOtp: "رمز غير صالح",
     sessionEndedMessage: "انتهى الاتصال. يرجى تسجيل الدخول مرة أخرى للمتابعة",
+    sessionOfflineMessage: "تعذّر الاتصال حاليًا. تحقق من اتصالك بالإنترنت وحاول مرة أخرى",
     phoneRequired: "رقم الهاتف مطلوب",
     notificationSettingsTitle: "إعدادات الإشعارات",
     whatsappConfirmLabel: "إرسال تأكيد الحجز عبر واتساب",
@@ -2125,6 +2127,7 @@ export const translations = {
     otpSent: "Code sent to your number",
     invalidOtp: "Invalid code",
     sessionEndedMessage: "Your connection has ended. Please sign in again to continue",
+    sessionOfflineMessage: "Can't connect right now. Check your internet connection and try again",
     phoneRequired: "Phone number is required",
     notificationSettingsTitle: "Notification settings",
     whatsappConfirmLabel: "Send booking confirmation on WhatsApp",

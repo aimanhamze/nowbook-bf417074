@@ -17,6 +17,8 @@ import { MyPackageCard } from "@/components/packages/MyPackageCard";
 import type { Tables } from "@/integrations/supabase/types";
 import type { Provider } from "@/lib/mock-data";
 import { CustomerRescheduleSheet } from "@/components/booking/CustomerRescheduleSheet";
+import { useLiveSessionGuard } from "@/hooks/useLiveSessionGuard";
+import { SessionHandledError, isUnauthenticatedWriteError } from "@/lib/liveSession";
 
 // Fallback cutoff (hours) when a booking's provider can't be resolved (e.g. the
 // provider went invisible). Matches the column default; real cutoff comes from
@@ -398,6 +400,7 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
   provider: Provider | null;
 }) {
   const { t } = useLang();
+  const { ensureLiveSession, endDeadSession } = useLiveSessionGuard();
   const [showReviewForm, setShowReviewForm] = useState(false);
   const { data: existingReview } = useBookingReview(booking.id);
 
@@ -433,11 +436,25 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
 
   const cancelMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
+      // Without a usable token supabase-js sends this UPDATE as anon, RLS
+      // filters it to zero rows, and PostgREST reports success. Check first.
+      if (!(await ensureLiveSession())) throw new SessionHandledError();
+
+      // .select("id") so we can SEE whether a row changed: a zero-row update
+      // is not an error to PostgREST, and must never reach "cancelled".
+      const { data: cancelled, error, status } = await supabase
         .from("bookings")
         .update({ status: "cancelled" })
-        .eq("id", booking.id);
-      if (error) throw error;
+        .eq("id", booking.id)
+        .select("id");
+      if (error) {
+        if (isUnauthenticatedWriteError(error, status)) {
+          await endDeadSession();
+          throw new SessionHandledError();
+        }
+        throw error;
+      }
+      if (!cancelled || cancelled.length === 0) throw new Error("CANCEL_NO_ROWS");
 
       // Save cancellation notification for the customer
       const { data: { user } } = await supabase.auth.getUser();
@@ -506,7 +523,13 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
       toast.success(t("bookingCancelled"));
     },
-    onError: () => toast.error(t("errorCancelBooking")),
+    onError: (err) => {
+      if (err instanceof SessionHandledError) return;
+      // The list may be stale (e.g. the booking changed elsewhere) — refresh it
+      // so what the customer sees matches the database.
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      toast.error(t("errorCancelBooking"));
+    },
   });
 
   const surface = variant === "upcoming" ? "glass-card-md" : "surface-soft opacity-[0.92]";
