@@ -27,6 +27,9 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
+import { saveBookingDraft, consumeBookingDraft, type BookingDraft } from "@/lib/bookingDraft";
+import { isUnauthenticatedWriteError } from "@/lib/liveSession";
+import { useLiveSessionGuard } from "@/hooks/useLiveSessionGuard";
 import { notifyBookingConfirmed } from "@/lib/whatsappConfirm";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -54,11 +57,27 @@ function getUpcomingDates(dayOfWeek: number, weeksAhead = 6, windowDays = 90, ex
   return results;
 }
 
+/** Effect-only: calls onReady once, the first render its inputs are loaded.
+ *  A component rather than an effect inside BookAppointment because the
+ *  verdict reads slot values derived AFTER that component's early returns,
+ *  where hooks cannot go. The ref keeps StrictMode's double effect from
+ *  resolving (and toasting) twice. */
+function DraftRestoreCheck({ ready, onReady }: { ready: boolean; onReady: () => void }) {
+  const doneRef = useRef(false);
+  useEffect(() => {
+    if (!ready || doneRef.current) return;
+    doneRef.current = true;
+    onReady();
+  }, [ready, onReady]);
+  return null;
+}
+
 const BookAppointment = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { lang, t } = useLang();
   const { user, isProvider } = useAuth();
+  const { ensureLiveSession, endDeadSession } = useLiveSessionGuard();
   const queryClient = useQueryClient();
   const { provider, isLoading: providerLoading } = useProviderById(id);
   // Multi-staff (Phase 4): the chosen staff member narrows availability. Only
@@ -91,7 +110,7 @@ const BookAppointment = () => {
   // is why this is resolved here rather than at each use site.
   const effectiveStaffId =
     selectedStaffId && eligibleStaff.some((s) => s.id === selectedStaffId) ? selectedStaffId : "";
-  const { getAvailableSlots, getGroupSlotsWithCapacity, staffOffOnDate } = useRealAvailability(id, effectiveStaffId || undefined);
+  const { getAvailableSlots, getGroupSlotsWithCapacity, staffOffOnDate, slotsLoading } = useRealAvailability(id, effectiveStaffId || undefined);
   const { data: allSessions = [], isLoading: sessionsLoading } = useProviderSessionsById(id);
   const { data: classSchedule = [], isLoading: scheduleLoading } = useProviderClassScheduleById(id);
   // Blocked dates for the FITNESS class path. The class flow builds its dates from
@@ -112,7 +131,7 @@ const BookAppointment = () => {
   const isFitnessStudio = provider?.category === "fitness_studio";
   // Must sit above every early return below -- rules-of-hooks. The derived
   // package state stays further down with the other fitness helpers.
-  const { data: myPkgsHere = [] } = useMyPackagesAt(isFitnessStudio ? id : undefined);
+  const { data: myPkgsHere = [], isLoading: myPkgsLoading } = useMyPackagesAt(isFitnessStudio ? id : undefined);
   const { data: offersHere = [] } = useProviderPackages(isFitnessStudio ? id : undefined);
   const requestPackageHere = useRequestPackage();
 
@@ -163,7 +182,7 @@ const BookAppointment = () => {
 
   // Uses SECURITY DEFINER RPC to bypass RLS — direct table queries only return
   // the current user's rows, causing spots to always display as max capacity.
-  const { data: classBookingCounts = {} } = useQuery({
+  const { data: classBookingCounts = {}, isLoading: classCountsLoading } = useQuery({
     queryKey: ["class-booking-counts", selectedClass?.id, _occurrenceDateStrs],
     queryFn: async () => {
       if (!selectedClass || !_occurrenceDateStrs.length) return {} as Record<string, number>;
@@ -213,6 +232,50 @@ const BookAppointment = () => {
     enabled: _nextOccClassIds.length > 0,
     staleTime: 30_000,
   });
+
+  // ── Booking draft restore (after a forced re-login) ──
+  // handleConfirm saves a draft when the session turns out to be dead. Once
+  // the provider's data is here, put the customer's choices back. Whether the
+  // slot is STILL free is decided later, in render, once the slot pipeline has
+  // loaded — see resolveRestoredDraft / DraftRestoreCheck.
+  const [pendingDraft, setPendingDraft] = useState<BookingDraft | null>(null);
+  const draftConsumedRef = useRef(false);
+  useEffect(() => {
+    if (draftConsumedRef.current || !user || !provider) return;
+    if (isFitnessStudio ? scheduleLoading : sessionsLoading) return;
+    draftConsumedRef.current = true;
+
+    const draft = consumeBookingDraft(user.id, provider.id);
+    if (!draft) return;
+
+    if (isFitnessStudio) {
+      const cls = classSchedule.find((c) => c.id === draft.classId);
+      if (!cls) {
+        toast.error(t("restoredSlotGone"));
+        return;
+      }
+      setSelectedClass(cls);
+      setSelectedOccurrence(draft.occurrence ? parseISO(draft.occurrence) : null);
+    } else {
+      const svc = provider.services.find((s) => s.id === draft.serviceId);
+      if (!svc) {
+        toast.error(t("restoredSlotGone"));
+        return;
+      }
+      setSelectedServices([svc]);
+      setSelectedStaffId(draft.staffId ?? "");
+      setSelectedSessionId(draft.sessionId ?? "");
+      if (draft.date) {
+        const d = parseISO(draft.date);
+        setSelectedDate(d);
+        setCalMonth(d);
+        setDateChosen(true);
+      }
+      setSelectedTime(draft.time ?? "");
+      setCustomerNotes(draft.notes ?? "");
+    }
+    setPendingDraft(draft);
+  }, [user, provider, isFitnessStudio, scheduleLoading, sessionsLoading, classSchedule, t]);
 
   if (!user) {
     return (
@@ -532,14 +595,40 @@ const BookAppointment = () => {
     const requiresApproval = provider.requiresBookingApproval;
     const insertedStatus: "pending" | "confirmed" = requiresApproval ? "pending" : "confirmed";
 
-    // DEBUG
-    console.log("DEBUG: provider.requiresBookingApproval =", provider.requiresBookingApproval);
-    console.log("DEBUG: typeof =", typeof provider.requiresBookingApproval);
-    console.log("DEBUG: full provider object =", provider);
-    console.log("DEBUG: computed insertedStatus =", insertedStatus);
-
     if (user) {
       setLoading(true);
+
+      // Everything the customer chose, so a forced re-login returns them to
+      // this booking instead of an empty wizard.
+      const saveDraft = () =>
+        saveBookingDraft(
+          isFitnessStudio
+            ? {
+                userId: user.id,
+                providerId: provider.id,
+                classId: selectedClass?.id,
+                occurrence: fitnessEffectiveDate || undefined,
+              }
+            : {
+                userId: user.id,
+                providerId: provider.id,
+                serviceId: primaryService?.id,
+                staffId: effectiveStaffId || undefined,
+                sessionId: selectedSessionId || undefined,
+                date: format(selectedDate, "yyyy-MM-dd"),
+                time: selectedTime || undefined,
+                notes: customerNotes || undefined,
+              },
+        );
+
+      // Without a usable token supabase-js would send this insert as anon and
+      // RLS would reject it. Check first: offline keeps the wizard as it is,
+      // dead saves the draft and sends the customer to sign in.
+      const live = await ensureLiveSession({ message: "sessionEndedBookingSaved", onDead: saveDraft });
+      if (!live) {
+        setLoading(false);
+        return;
+      }
 
       // Build insert payload
       const insertPayload: Record<string, unknown> = {
@@ -576,14 +665,20 @@ const BookAppointment = () => {
       // inserted 'confirmed' to 'pending' for approval-required providers, so
       // the status we sent is NOT necessarily the status that was stored. The
       // WhatsApp confirmation below must key off what the DB actually holds.
-      const { data: createdBooking, error } = await supabase
+      const { data: createdBooking, error, status: insertStatus } = await supabase
         .from("bookings")
         .insert(insertPayload)
         .select("id, status")
         .single();
       setLoading(false);
+      // Never show error.message: it is raw database text, in English, inside a
+      // Hebrew/Arabic UI. Known cases map to translated copy; anything else
+      // gets the translated generic message.
       if (error) {
-        if (error.message === "LEAD_TIME_VIOLATION") {
+        if (isUnauthenticatedWriteError(error, insertStatus)) {
+          // The session died between the check and the insert.
+          await endDeadSession({ message: "sessionEndedBookingSaved", onDead: saveDraft });
+        } else if (error.message === "LEAD_TIME_VIOLATION") {
           const leadTimeLabels: Record<number, string> = {
             15: t("leadTime15"), 30: t("leadTime30"), 60: t("leadTime60"),
             120: t("leadTime120"), 240: t("leadTime240"), 1440: t("leadTime1440"),
@@ -596,8 +691,13 @@ const BookAppointment = () => {
           queryClient.invalidateQueries({ queryKey: ["class-next-booking-counts"] });
         } else if (error.message === "DUPLICATE_USER_BOOKING") {
           toast.error(t("duplicateUserBookingError"));
+        } else if (error.code === "23505" || /no longer available/i.test(error.message)) {
+          toast.error(t("walkInSlotTaken"));
+          queryClient.invalidateQueries({ queryKey: ["provider-bookings-public"] });
         } else {
-          toast.error(error.message);
+          // Fitness bookings can be refused by the package triggers.
+          const pkgKey = packageErrorKey(error.message);
+          toast.error(pkgKey ? t(pkgKey as never) : t("bookingFailedGeneric"));
         }
         return;
       }
@@ -691,6 +791,82 @@ const BookAppointment = () => {
     });
   };
 
+  // ── Restored draft: is the slot still free? ──
+  // Runs once, when DraftRestoreCheck sees every input loaded. Free → straight
+  // to confirm; otherwise back to the step that needs a new choice, with a
+  // message saying why. The insert triggers re-check all of this regardless.
+  const resolveRestoredDraft = () => {
+    if (!pendingDraft) return;
+    const draft = pendingDraft;
+    setPendingDraft(null);
+
+    if (isFitnessStudio) {
+      if (!selectedClass || !activePackage) {
+        setSelectedClass(null);
+        setSelectedOccurrence(null);
+        setStep(1);
+        toast.error(t("restoredSlotGone"));
+        return;
+      }
+      const occ = fitnessEffectiveDate;
+      const free =
+        !!occ &&
+        occurrenceDateStrs.includes(occ) &&
+        selectedClass.max_capacity - (classBookingCounts[occ] || 0) > 0;
+      if (!free) {
+        setSelectedOccurrence(null);
+        setStep(2);
+        toast.error(t("restoredSlotGone"));
+        return;
+      }
+      setStep(3);
+      toast.success(t("bookingDraftRestored"));
+      return;
+    }
+
+    // The staff step may have appeared, or the member may have stopped
+    // performing this service, since the draft was saved.
+    if (staffStepEnabled && (!effectiveStaffId || effectiveStaffId !== draft.staffId)) {
+      setSelectedStaffId("");
+      setSelectedTime("");
+      setDateChosen(false);
+      setStep(2);
+      toast.error(t("restoredSlotGone"));
+      return;
+    }
+
+    const inWindow = selectedDate >= todayStart && selectedDate <= bookingWindowEnd;
+    const slotFree = hasScheduledSessions
+      ? !!selectedSession &&
+        new Date(`${selectedSession.session_date}T${selectedSession.session_time}`) >=
+          new Date(now.getTime() + minLeadTimeMinutes * 60 * 1000)
+      : inWindow &&
+        (isGroupBooking
+          ? availableGroupSlots.some((s) => s.time === selectedTime && !s.isFull)
+          : availableSlots.includes(selectedTime));
+
+    if (!slotFree) {
+      setSelectedTime("");
+      setSelectedSessionId("");
+      if (!hasScheduledSessions && inWindow && dayHasAvailability(selectedDate)) {
+        setStep(timeStep as 3 | 4);
+      } else {
+        setDateChosen(false);
+        setStep(calendarStep as 2 | 3);
+      }
+      toast.error(t("restoredSlotGone"));
+      return;
+    }
+
+    setStep(standardConfirmStep);
+    toast.success(t("bookingDraftRestored"));
+  };
+  const restoredDraftReady =
+    !!pendingDraft &&
+    (isFitnessStudio
+      ? !classCountsLoading && !myPkgsLoading
+      : !slotsLoading && !(provider.staffEnabled && (staffLoading || staffServicesLoading)));
+
   // ── Fitness-studio step labels ──
   const fitnessStepLabels = [t("pickClass"), t("selectOccurrence"), t("confirm")];
   // ── Standard step labels ── assembled from the same conditions that shape
@@ -732,6 +908,7 @@ const BookAppointment = () => {
       className="relative h-[100dvh] overflow-y-auto overflow-x-clip pb-32"
       style={{ background: "var(--bg-atmosphere)" }}
     >
+      {pendingDraft && <DraftRestoreCheck ready={restoredDraftReady} onReady={resolveRestoredDraft} />}
       <div
         aria-hidden
         className="pointer-events-none absolute top-[6rem] [inset-inline-end:-5rem] h-[22rem] w-[22rem] rounded-full blur-3xl opacity-55"

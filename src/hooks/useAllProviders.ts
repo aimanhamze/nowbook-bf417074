@@ -750,6 +750,20 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     getGroupSlotsWithCapacity,
     staffOffOnDate,
     isLoading: availabilityQuery.isLoading,
+    // True until EVERY input to the slot calculation has arrived. Rendering can
+    // ignore it; a caller that DECIDES something from the slots (e.g. "is the
+    // restored slot still free?") must wait on it, or it reads a partial
+    // answer as "no slots".
+    slotsLoading:
+      availabilityQuery.isLoading ||
+      blockedDatesQuery.isLoading ||
+      bookingsQuery.isLoading ||
+      servicesQuery.isLoading ||
+      slotIntervalQuery.isLoading ||
+      monthlySettingsQuery.isLoading ||
+      overridesQuery.isLoading ||
+      staffHoursLoading ||
+      staffTimeOffLoading,
   };
 }
 
