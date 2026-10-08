@@ -14,7 +14,7 @@ import { useSmartBack } from "@/hooks/useSmartBack";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { FaWhatsapp, FaInstagram, FaTiktok, FaFacebook, FaWaze } from "react-icons/fa6";
 import { motion } from "framer-motion";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,6 +27,7 @@ import { useProviderPackages, useMyPackagesAt, useRequestPackage } from "@/hooks
 import { packageErrorKey } from "@/hooks/usePackageActions";
 import { MyPackageCard } from "@/components/packages/MyPackageCard";
 import { UpcomingAppointmentCard } from "@/components/provider-detail/UpcomingAppointmentCard";
+import { CollapsingHeader, HeaderIconButton } from "@/components/provider-detail/CollapsingHeader";
 
 interface SocialLinkEntry {
   href: string;
@@ -128,6 +129,8 @@ const ProviderDetail = () => {
   const { isEntry, goBack } = useSmartBack();
   const [coverImgSrc, setCoverImgSrc] = useState("");
   const [avatarFailed, setAvatarFailed] = useState(false);
+  const coverRef = useRef<HTMLDivElement>(null);
+  const bigAvatarRef = useRef<HTMLDivElement>(null);
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   // Full-screen viewer for the hero images (cover / profile picture) —
@@ -282,9 +285,46 @@ const ProviderDetail = () => {
         style={{ background: "radial-gradient(circle, hsl(265 60% 80% / 0.45) 0%, transparent 65%)" }}
       />
 
+      {/* Back / share / favourite — pinned; a frosted bar with a small
+          avatar fades in behind them once the big avatar scrolls away. */}
+      <CollapsingHeader
+        coverRef={coverRef}
+        bigAvatarRef={bigAvatarRef}
+        avatar={
+          provider.image?.trim() && !avatarFailed ? (
+            <img src={provider.image.trim()} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <span className="select-none text-sm font-medium text-foreground/60">
+                {provider.name[lang]?.charAt(0)?.toUpperCase()}
+              </span>
+            </div>
+          )
+        }
+        start={
+          <HeaderIconButton onClick={goBack} aria-label={t(isEntry ? "home" : "back")}>
+            <BackOrHomeIcon home={isEntry} variant="arrow" className="h-5 w-5" />
+          </HeaderIconButton>
+        }
+        end={
+          <>
+            <HeaderIconButton onClick={handleShare} aria-label={t("shareProvider")}>
+              <Share2 className="h-5 w-5" />
+            </HeaderIconButton>
+            <HeaderIconButton
+              aria-label={liked ? t("removeFromFavorites") : t("addToFavorites")}
+              aria-pressed={liked}
+              onClick={() => { if (user && id) toggleFavorite.mutate(id); else if (!user) { saveRedirectAfterLogin(); navigate("/auth"); } }}
+            >
+              <Heart className={`h-5 w-5 transition-all ${liked ? "scale-110 fill-accent text-accent" : ""}`} />
+            </HeaderIconButton>
+          </>
+        }
+      />
+
       <div className="relative">
       {/* Cover */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-accent/15 via-secondary to-secondary/40">
+      <div ref={coverRef} className="relative overflow-hidden bg-gradient-to-br from-accent/15 via-secondary to-secondary/40">
         {coverImgSrc ? (
           coverImgSrc === (provider.image?.trim() || "") ? (
             // Avatar standing in for a missing cover: fixed height, blurred,
@@ -329,26 +369,6 @@ const ProviderDetail = () => {
         {/* Bottom of cover fades to transparent so the page atmosphere
             shows through cleanly where the info card lands. */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/45 via-black/0 to-transparent" />
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]">
-          <button
-            onClick={goBack}
-            aria-label={t(isEntry ? "home" : "back")}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95"
-          >
-            <BackOrHomeIcon home={isEntry} variant="arrow" className="h-5 w-5" />
-          </button>
-          <div className="flex gap-2">
-            <button onClick={handleShare} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95">
-              <Share2 className="h-5 w-5" />
-            </button>
-            <button
-              onClick={() => { if (user && id) toggleFavorite.mutate(id); else if (!user) { saveRedirectAfterLogin(); navigate("/auth"); } }}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-all active:scale-95"
-            >
-              <Heart className={`h-5 w-5 transition-all ${liked ? "scale-110 fill-accent text-accent" : ""}`} />
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Info */}
@@ -362,7 +382,7 @@ const ProviderDetail = () => {
           {/* Profile picture — straddles the cover/card seam. Outer div owns
               the centering transform; the motion.div only animates scale so
               framer's inline transform can't override the translate. */}
-          <div className="absolute -top-14 left-1/2 -translate-x-1/2">
+          <div ref={bigAvatarRef} className="absolute -top-14 left-1/2 -translate-x-1/2">
             <motion.div
               initial={{ opacity: 0, scale: 0.7 }}
               animate={{ opacity: 1, scale: 1 }}
