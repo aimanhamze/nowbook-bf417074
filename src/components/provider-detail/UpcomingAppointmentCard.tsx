@@ -22,6 +22,14 @@ import type { Provider } from "@/lib/mock-data";
 const LOCALES: Record<string, string> = { he: "he-IL", ar: "ar", en: "en-US" };
 
 /**
+ * "Add to calendar" is hidden everywhere for now: .ics and Google both fail in
+ * too many in-app browsers. It returns as a private, login-free calendar link;
+ * flip this to bring the current menu back. calendarExport and inAppBrowser
+ * stay in place for that.
+ */
+const SHOW_ADD_TO_CALENDAR = false;
+
+/**
  * "Your upcoming appointment" on the provider page.
  *
  * Customers come back through the same Instagram link they booked from, so the
@@ -116,8 +124,10 @@ function AppointmentRow({ booking, provider }: { booking: UpcomingBooking; provi
     cancellationNoticeHours,
     provider,
   });
-  // Pending: nothing is promised yet, so it must not land in a calendar.
   const isConfirmed = booking.status === "confirmed";
+  // Pending: nothing is promised yet, so it must not land in a calendar.
+  const showAddToCalendar = SHOW_ADD_TO_CALENDAR && isConfirmed;
+  const hasActions = canReschedule || showAddToCalendar || canCancel;
 
   const services = provider.services.filter((s) => booking.service_ids.includes(s.id));
   const serviceNames = services.map((s) => s.name[lang]).join("، ") || provider.name[lang];
@@ -209,48 +219,50 @@ function AppointmentRow({ booking, provider }: { booking: UpcomingBooking; provi
             </p>
           )}
 
-          <div className="mt-5 flex flex-col gap-2">
-            {canReschedule && (
-              <CustomerRescheduleSheet
-                booking={booking}
-                provider={provider}
-                trigger={
-                  <button
-                    type="button"
-                    className="flex h-12 w-full items-center justify-center rounded-2xl bg-accent text-sm font-semibold text-accent-foreground shadow-[0_8px_24px_-10px_hsl(var(--accent)/0.6)] transition-transform active:scale-[0.98]"
-                  >
-                    {t("rescheduleBooking")}
-                  </button>
-                }
-              />
-            )}
-            {isConfirmed && (
-              <AddToCalendarButton
-                event={calendarEvent}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background text-sm font-semibold transition-colors hover:bg-secondary active:scale-[0.98]"
-              />
-            )}
-            {canCancel && (
-              <CancelBookingDialog
-                booking={booking}
-                onConfirm={() =>
-                  cancelMutation.mutate(
-                    { booking, serviceName: serviceNames },
-                    { onSuccess: () => setOpen(false) },
-                  )
-                }
-                trigger={
-                  <button
-                    type="button"
-                    disabled={cancelMutation.isPending}
-                    className="flex h-11 w-full items-center justify-center rounded-2xl text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
-                  >
-                    {cancelMutation.isPending ? t("cancelling") : t("cancelBooking")}
-                  </button>
-                }
-              />
-            )}
-          </div>
+          {hasActions && (
+            <div className="mt-5 flex flex-col gap-2">
+              {canReschedule && (
+                <CustomerRescheduleSheet
+                  booking={booking}
+                  provider={provider}
+                  trigger={
+                    <button
+                      type="button"
+                      className="flex h-12 w-full items-center justify-center rounded-2xl bg-accent text-sm font-semibold text-accent-foreground shadow-[0_8px_24px_-10px_hsl(var(--accent)/0.6)] transition-transform active:scale-[0.98]"
+                    >
+                      {t("rescheduleBooking")}
+                    </button>
+                  }
+                />
+              )}
+              {showAddToCalendar && (
+                <AddToCalendarButton
+                  event={calendarEvent}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background text-sm font-semibold transition-colors hover:bg-secondary active:scale-[0.98]"
+                />
+              )}
+              {canCancel && (
+                <CancelBookingDialog
+                  booking={booking}
+                  onConfirm={() =>
+                    cancelMutation.mutate(
+                      { booking, serviceName: serviceNames },
+                      { onSuccess: () => setOpen(false) },
+                    )
+                  }
+                  trigger={
+                    <button
+                      type="button"
+                      disabled={cancelMutation.isPending}
+                      className="flex h-11 w-full items-center justify-center rounded-2xl text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
+                    >
+                      {cancelMutation.isPending ? t("cancelling") : t("cancelBooking")}
+                    </button>
+                  }
+                />
+              )}
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>
