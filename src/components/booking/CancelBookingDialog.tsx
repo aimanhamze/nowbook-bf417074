@@ -46,7 +46,7 @@ export function CancelBookingDialog({
           <AlertDialogDescription>
             {t("cancelConfirmBody")
               .replace("{date}", date)
-              .replace("{time}", "⁦" + booking.booking_time + "⁩")}
+              .replace("{time}", "\u2066" + booking.booking_time + "\u2069")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="gap-2 sm:space-x-0">
