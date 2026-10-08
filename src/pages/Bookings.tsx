@@ -4,12 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useAllProviders } from "@/hooks/useAllProviders";
 import { useBookingReview } from "@/hooks/useReviews";
 import ReviewForm from "@/components/reviews/ReviewForm";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { useMyPackages } from "@/hooks/usePublicPackages";
@@ -17,23 +16,14 @@ import { MyPackageCard } from "@/components/packages/MyPackageCard";
 import type { Tables } from "@/integrations/supabase/types";
 import type { Provider } from "@/lib/mock-data";
 import { CustomerRescheduleSheet } from "@/components/booking/CustomerRescheduleSheet";
-import { useLiveSessionGuard } from "@/hooks/useLiveSessionGuard";
-import { SessionHandledError, isUnauthenticatedWriteError } from "@/lib/liveSession";
-
-// Fallback cutoff (hours) when a booking's provider can't be resolved (e.g. the
-// provider went invisible). Matches the column default; real cutoff comes from
-// each booking's OWN provider (provider_profiles.cancellation_notice_hours).
-const DEFAULT_CANCELLATION_HOURS = 5;
+import { CancelBookingDialog } from "@/components/booking/CancelBookingDialog";
+import { useCancelBooking } from "@/hooks/useCancelBooking";
+import { DEFAULT_CANCELLATION_HOURS, bookingActionState, bookingDateTime as toDateTime } from "@/lib/bookingActions";
 
 type TabId = "upcoming" | "history";
 type CardVariant = "upcoming" | "history";
 
 const LOCALES: Record<string, string> = { he: "he-IL", ar: "ar", en: "en-US" };
-
-// Combine the stored text date + time into a single Date. booking_date is an
-// ISO date ("2026-06-25"), booking_time is "HH:MM" — both stored as text.
-const toDateTime = (b: Tables<"bookings">) =>
-  new Date(`${b.booking_date}T${b.booking_time}:00`);
 
 // Same phone → wa.me formatting used by the provider dashboard (CalendarTab /
 // PendingTab): keep numbers already in 972 form, otherwise drop a leading 0 and
@@ -400,137 +390,22 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
   provider: Provider | null;
 }) {
   const { t } = useLang();
-  const { ensureLiveSession, endDeadSession } = useLiveSessionGuard();
   const [showReviewForm, setShowReviewForm] = useState(false);
   const { data: existingReview } = useBookingReview(booking.id);
 
-  const queryClient = useQueryClient();
-  const bookingDateTime = new Date(`${booking.booking_date}T${booking.booking_time}:00`);
-  const now = new Date();
-  const isPast = bookingDateTime < now;
-  const hoursUntilBooking = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-  const isActive = !isPast && (booking.status === "confirmed" || booking.status === "pending");
-  // Cutoff comes from THIS booking's provider. 0 = always cancellable while
-  // active (no late-cancel block / call-to-cancel state).
-  // Linked walk-ins are view-only for the customer: the UPDATE RLS policy is
-  // user_id-only, so a self-cancel would fail. Suppress ALL cancel affordances
-  // (self-cancel AND the call-to-cancel window notice) for them — a hint below
-  // explains why. Reviews are unaffected (they insert with user_id = me).
-  const canCancel = !isLinkedWalkin && isActive && (cancellationNoticeHours <= 0 || hoursUntilBooking > cancellationNoticeHours);
-  const canCallToCancel = !isLinkedWalkin && isActive && cancellationNoticeHours > 0 && hoursUntilBooking <= cancellationNoticeHours;
-  // Self-reschedule: the provider opted in, and the booking could be cancelled
-  // right now (same cutoff -- canCancel). Confirmed only, and never a class:
-  // classes run at fixed times. trg_enforce_customer_reschedule re-checks all
-  // of this in the DB; this gate only decides whether to show the button.
-  const canReschedule =
-    canCancel &&
-    booking.status === "confirmed" &&
-    !booking.class_schedule_id &&
-    !!provider?.allowCustomerReschedule &&
-    provider.category !== "fitness_studio";
+  const { isPast, isActive, canCancel, canCallToCancel, canReschedule } = bookingActionState({
+    booking,
+    linkedWalkin: isLinkedWalkin,
+    cancellationNoticeHours,
+    provider,
+  });
   const canReview = isPast && booking.status === "confirmed" && !existingReview;
   // Cancel UI lives ONLY on the Upcoming tab. (canCancel/canCallToCancel are
   // already false for anything in History, but gate explicitly so History
   // never renders cancel affordances.)
   const isUpcomingTab = variant === "upcoming";
 
-  const cancelMutation = useMutation({
-    mutationFn: async () => {
-      // Without a usable token supabase-js sends this UPDATE as anon, RLS
-      // filters it to zero rows, and PostgREST reports success. Check first.
-      if (!(await ensureLiveSession())) throw new SessionHandledError();
-
-      // .select("id") so we can SEE whether a row changed: a zero-row update
-      // is not an error to PostgREST, and must never reach "cancelled".
-      const { data: cancelled, error, status } = await supabase
-        .from("bookings")
-        .update({ status: "cancelled" })
-        .eq("id", booking.id)
-        .select("id");
-      if (error) {
-        if (isUnauthenticatedWriteError(error, status)) {
-          await endDeadSession();
-          throw new SessionHandledError();
-        }
-        throw error;
-      }
-      if (!cancelled || cancelled.length === 0) throw new Error("CANCEL_NO_ROWS");
-
-      // Save cancellation notification for the customer
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from("notifications").insert({
-          user_id: user.id,
-          title: "ביטלת תור ❌",
-          body: `התור בתאריך ${booking.booking_date} בשעה ${booking.booking_time} בוטל`,
-          url: `/provider/${booking.provider_id}`,
-          type: "booking_cancelled",
-        });
-        queryClient.invalidateQueries({ queryKey: ["unread-notifications"] });
-        queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      }
-
-      // Notify provider about customer cancellation
-      const { data: providerProfile } = await supabase
-        .from("provider_profiles")
-        .select("user_id")
-        .eq("id", booking.provider_id)
-        .single();
-      if (providerProfile?.user_id) {
-        await supabase.from("notifications").insert({
-          user_id: providerProfile.user_id,
-          title: "תור בוטל ❌",
-          body: `לקוח ביטל תור בתאריך ${booking.booking_date} בשעה ${booking.booking_time}`,
-          url: "/dashboard",
-          type: "booking_cancelled",
-        });
-      }
-
-      // Push the provider as well — additive to the bell row above, which is
-      // unchanged. Deliberately NOT awaited: the cancellation is already
-      // committed at this point, so a slow or failing push must never fail the
-      // mutation or surface an error to the customer. Errors are logged only.
-      // send-push resolves provider_profiles.id -> user_id itself, so this does
-      // not depend on the providerProfile lookup above.
-      void (async () => {
-        try {
-          const { data: customerProfile } = await supabase
-            .from("profiles")
-            .select("display_name")
-            .eq("user_id", user?.id ?? "")
-            .maybeSingle();
-          const customerName = customerProfile?.display_name || "לקוח";
-          const serviceName = getServiceNames(booking.service_ids);
-
-          const { error: pushError } = await supabase.functions.invoke("send-push", {
-            body: {
-              provider_id: booking.provider_id,
-              title: "בוטל תור ❌",
-              body: `${customerName} ביטל/ה את התור ל-${serviceName} בתאריך ${booking.booking_date} בשעה ${booking.booking_time}`,
-              url: "/calendar",
-              type: "booking_cancelled",
-            },
-          });
-          if (pushError) {
-            console.warn("send-push (cancellation) failed:", pushError.message);
-          }
-        } catch (err) {
-          console.warn("send-push (cancellation) threw:", err);
-        }
-      })();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bookings"] });
-      toast.success(t("bookingCancelled"));
-    },
-    onError: (err) => {
-      if (err instanceof SessionHandledError) return;
-      // The list may be stale (e.g. the booking changed elsewhere) — refresh it
-      // so what the customer sees matches the database.
-      queryClient.invalidateQueries({ queryKey: ["bookings"] });
-      toast.error(t("errorCancelBooking"));
-    },
-  });
+  const cancelMutation = useCancelBooking();
 
   const surface = variant === "upcoming" ? "glass-card-md" : "surface-soft opacity-[0.92]";
   const nameTone = variant === "upcoming" ? "text-foreground" : "text-foreground/80";
@@ -582,16 +457,23 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
         {/* Self-cancel — Upcoming tab, still outside the provider's cutoff window. */}
         {isUpcomingTab && canCancel && (
           <div className="mt-3 flex items-center gap-2 border-t border-border/40 pt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-[11px] h-7 px-2.5 text-red-600 border-red-200 hover:bg-red-50"
-              onClick={() => cancelMutation.mutate()}
-              disabled={cancelMutation.isPending}
-            >
-              <XCircle className="h-3 w-3 me-1" />
-              {cancelMutation.isPending ? t("cancelling") : t("cancelBooking")}
-            </Button>
+            <CancelBookingDialog
+              booking={booking}
+              onConfirm={() =>
+                cancelMutation.mutate({ booking, serviceName: getServiceNames(booking.service_ids) })
+              }
+              trigger={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-[11px] h-7 px-2.5 text-red-600 border-red-200 hover:bg-red-50"
+                  disabled={cancelMutation.isPending}
+                >
+                  <XCircle className="h-3 w-3 me-1" />
+                  {cancelMutation.isPending ? t("cancelling") : t("cancelBooking")}
+                </Button>
+              }
+            />
             {canReschedule && provider && (
               <CustomerRescheduleSheet
                 booking={booking}
