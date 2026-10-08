@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Download, Share, Plus } from "lucide-react";
-import { BackArrow } from "@/components/ui/directional-icon";
-import { useNavigate } from "react-router-dom";
+import { BackOrHomeIcon } from "@/components/ui/directional-icon";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { motion } from "framer-motion";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -10,7 +10,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const Install = () => {
-  const navigate = useNavigate();
+  const { isEntry, goBack } = useSmartBack();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
@@ -55,8 +55,8 @@ const Install = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="px-5 pt-12 pb-4 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-secondary transition-colors active:scale-95">
-          <BackArrow className="h-5 w-5" />
+        <button onClick={goBack} className="p-1.5 rounded-xl hover:bg-secondary transition-colors active:scale-95">
+          <BackOrHomeIcon home={isEntry} className="h-5 w-5" />
         </button>
         <h1 className="text-xl font-bold">התקן את האפליקציה</h1>
       </header>

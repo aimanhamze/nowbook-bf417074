@@ -8,7 +8,8 @@ import { useMyPackagesAt, useProviderPackages, useRequestPackage } from "@/hooks
 import { packageErrorKey } from "@/hooks/usePackageActions";
 import type { Service } from "@/lib/mock-data";
 import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote, UserRound, Ticket, Info } from "lucide-react";
-import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
+import { BackOrHomeIcon, ForwardArrow } from "@/components/ui/directional-icon";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
 import { Fragment, useState, useEffect, useRef } from "react";
@@ -75,6 +76,7 @@ function DraftRestoreCheck({ ready, onReady }: { ready: boolean; onReady: () => 
 const BookAppointment = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isEntry, goBack } = useSmartBack();
   const { lang, t } = useLang();
   const { user, isProvider } = useAuth();
   const { ensureLiveSession, endDeadSession } = useLiveSessionGuard();
@@ -295,7 +297,7 @@ const BookAppointment = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-5 gap-4">
         <p className="text-muted-foreground">{t("providerOnlyCannotBook")}</p>
-        <button onClick={() => navigate(-1)} className="text-accent font-semibold">← {t("backToHome")}</button>
+        <button onClick={() => navigate("/")} className="min-h-11 px-4 text-accent font-semibold">{t("backToHome")}</button>
       </div>
     );
   }
@@ -310,8 +312,14 @@ const BookAppointment = () => {
 
   if (!provider) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-5 px-6 text-center">
         <p className="text-muted-foreground">{t("providerNotFound")}</p>
+        <button
+          onClick={() => navigate("/")}
+          className="inline-flex h-11 items-center justify-center rounded-2xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-transform active:scale-[0.98]"
+        >
+          {t("backToHome")}
+        </button>
       </div>
     );
   }
@@ -552,7 +560,7 @@ const BookAppointment = () => {
 
   const handleBack = () => {
     if (step === 1) {
-      navigate(-1);
+      goBack();
       return;
     }
     // Session-based services skip the time step, so stepping back from the
@@ -931,9 +939,10 @@ const BookAppointment = () => {
           <div className="flex items-center gap-3">
             <button
               onClick={handleBack}
+              aria-label={t(step === 1 && isEntry ? "home" : "back")}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95 shrink-0"
             >
-              <BackArrow variant="arrow" className="h-5 w-5" />
+              <BackOrHomeIcon home={step === 1 && isEntry} variant="arrow" className="h-5 w-5" />
             </button>
             <h1 className="text-lg font-bold">{t("bookAt")} {provider.name[lang]}</h1>
           </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Briefcase, User, Clock, Bell, BellOff, Images, SlidersHorizontal, Ticket } from "lucide-react";
-import { BackArrow } from "@/components/ui/directional-icon";
+import { BackOrHomeIcon } from "@/components/ui/directional-icon";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -47,6 +48,7 @@ export default function Dashboard() {
   // remounted; it changes only when a multi-branch owner switches.
   const activeBranchId = useActiveBranchId(user?.id);
   const navigate = useNavigate();
+  const { isEntry, goBack } = useSmartBack();
   const location = useLocation();
   // Allow deep-linking to a specific tab via navigation state, e.g.
   // navigate("/dashboard", { state: { tab: "services" } }). Falls back to the
@@ -125,11 +127,11 @@ export default function Dashboard() {
         <header className="px-5 pt-12 pb-3">
           <div className="mb-5 flex items-center gap-3">
             <button
-              onClick={() => navigate(-1)}
+              onClick={goBack}
               className="-ms-1.5 rounded-xl p-1.5 transition-colors hover:bg-secondary/60 active:scale-95"
-              aria-label={t("back")}
+              aria-label={t(isEntry ? "home" : "back")}
             >
-              <BackArrow className="h-5 w-5" />
+              <BackOrHomeIcon home={isEntry} className="h-5 w-5" />
             </button>
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-2xl font-extrabold leading-tight">{t("providerDashboard")}</h1>

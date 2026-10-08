@@ -6,7 +6,8 @@ import { CalendarTab } from "@/components/dashboard/CalendarTab";
 import { PendingTab, usePendingCount } from "@/components/dashboard/PendingTab";
 import { WeeklyScheduleTab } from "@/components/dashboard/WeeklyScheduleTab";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
-import { BackArrow } from "@/components/ui/directional-icon";
+import { BackOrHomeIcon } from "@/components/ui/directional-icon";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
@@ -18,6 +19,7 @@ export default function ProviderCalendar() {
   const { t } = useLang();
   const { user, isProvider } = useAuth();
   const navigate = useNavigate();
+  const { isEntry, goBack } = useSmartBack();
   const location = useLocation();
   const { profile, isLoading } = useProviderProfile();
   const pendingCount = usePendingCount();
@@ -70,8 +72,8 @@ export default function ProviderCalendar() {
       <div className={`relative ${providerDesktopColumn}`}>
         <header className="px-5 pt-12 pb-4">
           <div className="flex items-center gap-3 mb-4">
-            <button onClick={() => navigate(-1)} className="active:scale-95">
-              <BackArrow className="h-5 w-5" />
+            <button onClick={goBack} aria-label={t(isEntry ? "home" : "back")} className="active:scale-95">
+              <BackOrHomeIcon home={isEntry} className="h-5 w-5" />
             </button>
             <ProviderPageTitle className="text-xl font-bold flex-1">{t("bookingsCalendar")}</ProviderPageTitle>
           </div>

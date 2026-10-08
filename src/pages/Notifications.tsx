@@ -1,5 +1,6 @@
 import { Bell, CheckCheck } from "lucide-react";
-import { BackArrow } from "@/components/ui/directional-icon";
+import { BackOrHomeIcon } from "@/components/ui/directional-icon";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -24,6 +25,7 @@ const typeIcons: Record<string, string> = {
 
 const Notifications = () => {
   const navigate = useNavigate();
+  const { isEntry, goBack } = useSmartBack();
   const { lang, t } = useLang();
   const { user, isProvider, isAdmin } = useAuth();
   // Shared page: only providers get the desktop column frame; customers and
@@ -124,8 +126,8 @@ const Notifications = () => {
 
       <div className={`relative ${providerView ? providerDesktopColumn : ""}`}>
       <header className="px-5 pt-12 pb-4 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="active:scale-95">
-          <BackArrow className="h-5 w-5" />
+        <button onClick={goBack} aria-label={t(isEntry ? "home" : "back")} className="active:scale-95">
+          <BackOrHomeIcon home={isEntry} className="h-5 w-5" />
         </button>
         <ProviderPageTitle className="text-xl font-bold flex-1">{t("notificationsLabel")}</ProviderPageTitle>
         {unreadCount > 0 && (

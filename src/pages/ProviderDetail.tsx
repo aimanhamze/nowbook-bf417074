@@ -9,7 +9,8 @@ import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
 import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
 import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight, Images, Sparkles, CalendarPlus, Ticket } from "lucide-react";
-import { BackArrow } from "@/components/ui/directional-icon";
+import { BackOrHomeIcon } from "@/components/ui/directional-icon";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { FaWhatsapp, FaInstagram, FaTiktok, FaFacebook, FaWaze } from "react-icons/fa6";
 import { motion } from "framer-motion";
@@ -123,6 +124,7 @@ function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | und
 const ProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isEntry, goBack } = useSmartBack();
   const [coverImgSrc, setCoverImgSrc] = useState("");
   const [avatarFailed, setAvatarFailed] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
@@ -225,9 +227,22 @@ const ProviderDetail = () => {
     }
   }, [provider?.name, t]);
 
+  // The BottomNav is hidden on /provider/*, so a visitor who landed on a dead
+  // or slow link from Instagram needs a way out of these two screens too.
+  const escapeButton = (
+    <button
+      onClick={goBack}
+      aria-label={t(isEntry ? "home" : "back")}
+      className="absolute start-4 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] flex h-11 w-11 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-black/5 backdrop-blur-md transition-transform active:scale-95"
+    >
+      <BackOrHomeIcon home={isEntry} variant="arrow" className="h-5 w-5" />
+    </button>
+  );
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="relative min-h-screen flex items-center justify-center">
+        {escapeButton}
         <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin" />
       </div>
     );
@@ -235,8 +250,15 @@ const ProviderDetail = () => {
 
   if (!provider) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="relative flex min-h-screen flex-col items-center justify-center gap-5 px-6 text-center">
+        {escapeButton}
         <p className="text-muted-foreground">{t("providerNotAvailable")}</p>
+        <button
+          onClick={() => navigate("/")}
+          className="inline-flex h-11 items-center justify-center rounded-2xl bg-accent px-6 text-sm font-semibold text-accent-foreground transition-transform active:scale-[0.98]"
+        >
+          {t("backToHome")}
+        </button>
       </div>
     );
   }
@@ -308,10 +330,11 @@ const ProviderDetail = () => {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/45 via-black/0 to-transparent" />
         <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]">
           <button
-            onClick={() => navigate(-1)}
+            onClick={goBack}
+            aria-label={t(isEntry ? "home" : "back")}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95"
           >
-            <BackArrow variant="arrow" className="h-5 w-5" />
+            <BackOrHomeIcon home={isEntry} variant="arrow" className="h-5 w-5" />
           </button>
           <div className="flex gap-2">
             <button onClick={handleShare} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/85 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-1 ring-white/40 backdrop-blur-md transition-transform active:scale-95">

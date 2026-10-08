@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
-import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, LocateFixed, Loader2, MapPin } from "lucide-react";
+import { useSmartBack } from "@/hooks/useSmartBack";
+import { BackOrHomeIcon } from "@/components/ui/directional-icon";
+import { LocateFixed, Loader2, MapPin } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { useProviderLocations, type ProviderLocation } from "@/hooks/useProviderLocations";
@@ -151,7 +152,7 @@ function CaptureMap({ onMap }: { onMap: (m: L.Map) => void }) {
 }
 
 export default function NearbyPage() {
-  const navigate = useNavigate();
+  const { isEntry, goBack } = useSmartBack();
   const { t, isRtl } = useLang();
   const [map, setMap] = useState<L.Map | null>(null);
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
@@ -192,18 +193,17 @@ export default function NearbyPage() {
   // RTL-aware overlay positions
   const backPos  = isRtl ? "top-4 right-4" : "top-4 left-4";
   const locatePos = isRtl ? "top-4 left-4"  : "top-4 right-4";
-  const BackIcon  = isRtl ? ChevronRight : ChevronLeft;
 
   return (
     <div className="relative h-screen w-full overflow-hidden">
 
       {/* Back button */}
       <button
-        aria-label={t("nearby")}
-        onClick={() => navigate(-1)}
+        aria-label={t(isEntry ? "home" : "back")}
+        onClick={goBack}
         className={`absolute z-[1000] ${backPos} bg-card border border-border rounded-full p-2 shadow-md active:scale-95 transition-transform`}
       >
-        <BackIcon className="h-5 w-5" />
+        <BackOrHomeIcon home={isEntry} className="h-5 w-5" />
       </button>
 
       {/* Locate-me button */}

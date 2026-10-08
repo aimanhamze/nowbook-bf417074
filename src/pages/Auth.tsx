@@ -4,7 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { useLang } from "@/contexts/LangContext";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { BackArrow } from "@/components/ui/directional-icon";
+import { BackOrHomeIcon } from "@/components/ui/directional-icon";
+import { useSmartBack } from "@/hooks/useSmartBack";
+import { ENTRY_STATE } from "@/lib/smartBack";
 import { Loader2, Eye, EyeOff, Mail, Phone, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -135,6 +137,7 @@ const SHOW_GOOGLE_SIGNIN = false;
 const Auth = () => {
   const { t } = useLang();
   const navigate = useNavigate();
+  const { isEntry, goBack } = useSmartBack();
   const reduceMotion = useReducedMotion();
 
   // ── Shared ─────────────────────────────────────────────────────────────────
@@ -235,7 +238,9 @@ const Auth = () => {
     // Back to wherever they were headed before being bounced to /auth; "/" keeps
     // the previous behaviour for a plain login (and routes staff to their own
     // dashboard).
-    navigate(redirect ?? "/", { replace: true });
+    // ENTRY_STATE: the entry behind this one is usually the page they are
+    // returning to, so its back control must offer Home, not a loop.
+    navigate(redirect ?? "/", { replace: true, state: ENTRY_STATE });
   };
 
   // ── Email handlers ─────────────────────────────────────────────────────────
@@ -353,11 +358,11 @@ const Auth = () => {
 
       {/* Back control — floats in the start corner, keeps the layout centered */}
       <button
-        onClick={() => navigate(-1)}
-        aria-label="חזרה"
+        onClick={goBack}
+        aria-label={t(isEntry ? "home" : "back")}
         className="absolute start-4 top-4 z-10 rounded-xl p-2 text-[#102038]/70 transition-all hover:bg-white/70 hover:text-[#102038] active:scale-95"
       >
-        <BackArrow className="h-5 w-5" />
+        <BackOrHomeIcon home={isEntry} className="h-5 w-5" />
       </button>
 
       <main className="relative flex flex-1 flex-col items-center justify-start px-5 pb-12 pt-14">
