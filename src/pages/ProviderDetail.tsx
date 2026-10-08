@@ -26,6 +26,7 @@ import { SessionHandledError } from "@/lib/liveSession";
 import { useProviderPackages, useMyPackagesAt, useRequestPackage } from "@/hooks/usePublicPackages";
 import { packageErrorKey } from "@/hooks/usePackageActions";
 import { MyPackageCard } from "@/components/packages/MyPackageCard";
+import { UpcomingAppointmentCard } from "@/components/provider-detail/UpcomingAppointmentCard";
 
 interface SocialLinkEntry {
   href: string;
@@ -439,6 +440,11 @@ const ProviderDetail = () => {
           <SocialLinksRow socialLinks={provider.socialLinks} />
         </div>
       </motion.div>
+
+      {/* The signed-in customer's next appointment here — renders nothing
+          otherwise. Above "about" so a returning customer sees it first; the
+          book button is pinned to the viewport, so this never hides it. */}
+      <UpcomingAppointmentCard provider={provider} />
 
       {/* About — soft card matching the rest of the page; long descriptions
           clamp to 4 lines with a read-more toggle so the section never
