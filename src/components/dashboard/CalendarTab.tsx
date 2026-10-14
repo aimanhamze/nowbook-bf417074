@@ -47,11 +47,19 @@ function applyTemplate(template: string, vars: Record<string, string>): string {
   return Object.entries(vars).reduce((msg, [key, val]) => msg.replaceAll(`{${key}}`, val), template);
 }
 
+// What a booking is "for": its services, or — for a class booking, which has
+// none — its class. Same fallback PendingTab uses.
+function bookingLabels(booking: EnrichedBooking): string[] {
+  if (booking.service_names.length > 0) return booking.service_names;
+  if (booking.class_schedule_id) return [booking.class_name || "שיעור"];
+  return [];
+}
+
 function buildReminderMessage(booking: EnrichedBooking, template: string): string {
   const date = format(parseISO(booking.booking_date), "d בMMM", { locale: he });
   return applyTemplate(template, {
     customer_name: booking.customer_name || "לקוח יקר",
-    service_name: booking.service_names.join(", "),
+    service_name: bookingLabels(booking).join(", "),
     date,
     time: booking.booking_time,
   });
@@ -366,7 +374,7 @@ function BookingCard({ booking, index, color = null, showDurationEditor = false 
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        {booking.service_names.map((name, i) => (
+        {bookingLabels(booking).map((name, i) => (
           <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground">{name}</span>
         ))}
         {/* Multi-staff: who serves this booking. Absent when staff_id is NULL
@@ -767,7 +775,7 @@ type ViewMode = 'daily' | 'weekly' | 'monthly';
 // Build the ordered list of calendar items (private bookings, grouped classes, or
 // fitness class slots) for a single date. Shared by every view mode so the daily,
 // weekly and monthly screens all render bookings identically.
-function buildCalendarItems(
+export function buildCalendarItems(
   date: Date,
   bookings: EnrichedBooking[],
   schedule: ClassScheduleEntry[],
@@ -785,16 +793,41 @@ function buildCalendarItems(
     const dateStr = format(date, "yyyy-MM-dd");
     const classesForDay = schedule.filter(c => c.day_of_week === dayOfWeek && c.is_active);
 
+    const activeSlotIds = new Set<string>();
     for (const classEntry of classesForDay) {
+      activeSlotIds.add(classEntry.id);
       const classBookings = bookings.filter(
         b => b.class_schedule_id === classEntry.id && b.booking_date === dateStr
       );
       items.push({ type: 'class_slot', classEntry, bookings: classBookings });
     }
 
-    const orphanBookings = bookingsForDate.filter(b => !b.class_schedule_id);
-    for (const b of orphanBookings) {
-      items.push({ type: 'private', booking: b });
+    // Every booking on this date that no active slot above claimed. This used
+    // to keep only class_schedule_id IS NULL rows, so a class booking whose
+    // class was deactivated, moved to another weekday, or missing from the
+    // active schedule matched nothing and silently disappeared from the
+    // calendar while still holding its spot. Such bookings are grouped into a
+    // card built from their OWN class row (read without the is_active filter),
+    // at the time they were booked for; with no readable class row they fall
+    // back to a plain booking card. Nothing is dropped.
+    const strayClassGroups = new Map<string, { classEntry: ClassScheduleEntry; bookings: EnrichedBooking[] }>();
+    for (const b of bookingsForDate) {
+      if (b.class_schedule_id && activeSlotIds.has(b.class_schedule_id)) continue;
+      if (b.class_schedule_id && b.class_entry) {
+        const key = `${b.class_schedule_id}::${b.booking_time}`;
+        if (!strayClassGroups.has(key)) {
+          strayClassGroups.set(key, {
+            classEntry: { ...b.class_entry, start_time: b.booking_time },
+            bookings: [],
+          });
+        }
+        strayClassGroups.get(key)!.bookings.push(b);
+      } else {
+        items.push({ type: 'private', booking: b });
+      }
+    }
+    for (const { classEntry, bookings: grp } of strayClassGroups.values()) {
+      items.push({ type: 'class_slot', classEntry, bookings: grp });
     }
 
     return items.sort((a, b) => {
@@ -981,8 +1014,8 @@ function blockInfo(item: CalendarItem): { time: string; name: string; sub: strin
     // Weekly-grid blocks are tiny — the staff name rides in the sub line
     // after the services (only present when the booking has one).
     sub: b.staff_name
-      ? `${b.service_names.join(", ")} · ${b.staff_name}`
-      : b.service_names.join(", "),
+      ? `${bookingLabels(b).join(", ")} · ${b.staff_name}`
+      : bookingLabels(b).join(", "),
     cls,
   };
 }
