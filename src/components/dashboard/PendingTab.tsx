@@ -26,9 +26,15 @@ function applyTemplate(template: string, vars: Record<string, string>): string {
   return Object.entries(vars).reduce((msg, [key, val]) => msg.replaceAll(`{${key}}`, val), template);
 }
 
+// A class booking (fitness_studio) is labelled by its class; anything else by
+// its services. Keyed on class_schedule_id, not on service_names being empty.
+function bookingLabels(booking: EnrichedBooking): string[] {
+  if (booking.class_schedule_id) return [booking.class_name || "שיעור"];
+  return booking.service_names;
+}
+
 function resolveServiceLabel(booking: EnrichedBooking): string {
-  if (booking.service_names.length > 0) return booking.service_names.join(", ");
-  return booking.class_name || "שיעור";
+  return bookingLabels(booking).join(", ");
 }
 
 function buildDepositMessage(booking: EnrichedBooking, template: string): string {
@@ -139,14 +145,9 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
 
       {/* Service / class chips */}
       <div className="flex flex-wrap gap-1">
-        {booking.service_names.length > 0
-          ? booking.service_names.map((name, i) => (
-              <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">{name}</span>
-            ))
-          : booking.class_name
-          ? <span className="text-[11px] px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">{booking.class_name}</span>
-          : null
-        }
+        {bookingLabels(booking).map((name, i) => (
+          <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">{name}</span>
+        ))}
       </div>
 
       {/* Date + time */}

@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { useProviderProfile } from "./useProviderProfile";
 import { pkgFrom, type CustomerPackageRow } from "@/integrations/supabase/packageTypes";
+import type { ClassScheduleEntry } from "./useProviderClassSchedule";
 import {
   notifyBookingConfirmed,
   notifyBookingCancelled,
@@ -36,6 +38,13 @@ export interface EnrichedBooking {
   service_capacity: number;
   class_schedule_id: string | null;
   class_name: string | null;
+  /**
+   * The full schedule row this class booking points at, read WITHOUT the
+   * is_active filter. The calendar uses it to still draw a class card for a
+   * booking whose class was since deactivated or moved to another weekday —
+   * without it such bookings matched no active slot and vanished.
+   */
+  class_entry: ClassScheduleEntry | null;
   // Multi-staff (Phase 6): which staff member serves this booking. NULL for
   // non-staff providers, group/class bookings, and everything pre-staff.
   staff_id: string | null;
@@ -67,6 +76,52 @@ export interface EnrichedBooking {
   package_total_entries: number | null;
 }
 
+// PostgREST caps every response at its max-rows setting (1000 on hosted
+// Supabase) and truncates SILENTLY — no error, no flag. A single unpaged select
+// therefore returned only a busy provider's OLDEST 1000 bookings (ordered by
+// date ascending), so their current and upcoming bookings — every pending one
+// included — never reached the calendar or the pending tab. Page until a short
+// page comes back. Must stay below the server cap, or a full-but-truncated page
+// would look like the last one.
+const BOOKINGS_PAGE_SIZE = 500;
+
+async function fetchAllProviderBookings(providerId: string): Promise<Tables<"bookings">[]> {
+  const rows: Tables<"bookings">[] = [];
+  for (let from = 0; ; from += BOOKINGS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("provider_id", providerId)
+      .in("status", ["confirmed", "pending", "cancelled"])
+      .order("booking_date", { ascending: true })
+      // Tie-breaker: without a unique sort key, rows sharing a date can shift
+      // between pages and be skipped or repeated.
+      .order("id", { ascending: true })
+      .range(from, from + BOOKINGS_PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < BOOKINGS_PAGE_SIZE) return rows;
+  }
+}
+
+// `.in(col, ids)` puts every id in the request URL; a few hundred UUIDs exceed
+// URL length limits, and the lookup's result is subject to the same row cap.
+// Split into small batches and concatenate. Errors are ignored, exactly as the
+// unbatched lookups did — a missing name must not blank the whole calendar.
+const IN_BATCH = 100;
+
+async function inBatches<T>(
+  ids: string[],
+  run: (batch: string[]) => PromiseLike<{ data: unknown }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += IN_BATCH) {
+    const { data } = await run(ids.slice(i, i + IN_BATCH));
+    out.push(...((data ?? []) as T[]));
+  }
+  return out;
+}
+
 export function useProviderBookings() {
   const { profile } = useProviderProfile();
 
@@ -75,21 +130,16 @@ export function useProviderBookings() {
     queryFn: async () => {
       if (!profile) return [];
 
-      const { data: bookings, error } = await supabase
-        .from("bookings")
-        .select("*")
-        .eq("provider_id", profile.id)
-        .in("status", ["confirmed", "pending", "cancelled"])
-        .order("booking_date", { ascending: true });
-      if (error) throw error;
-      if (!bookings || bookings.length === 0) return [];
+      const bookings = await fetchAllProviderBookings(profile.id);
+      if (bookings.length === 0) return [];
 
       // Walk-in bookings have user_id IS NULL — exclude those from the profiles lookup.
-      const userIds = [...new Set(bookings.map((b) => b.user_id).filter(Boolean))];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, display_name, phone, avatar_url")
-        .in("user_id", userIds);
+      const userIds = [...new Set(bookings.map((b) => b.user_id).filter(Boolean))] as string[];
+      const profiles = await inBatches<{
+        user_id: string; display_name: string | null; phone: string | null; avatar_url: string | null;
+      }>(userIds, (batch) =>
+        supabase.from("profiles").select("user_id, display_name, phone, avatar_url").in("user_id", batch),
+      );
 
       const { data: services } = await supabase
         .from("provider_services")
@@ -103,12 +153,14 @@ export function useProviderBookings() {
         (services || []).map((s) => [s.id, s])
       );
 
-      // Batch-fetch class names for any fitness_studio bookings
+      // Batch-fetch the class rows for any fitness_studio bookings. Deliberately
+      // NOT filtered to is_active: a booking keeps its class after the class is
+      // deactivated or edited, and must stay visible on the calendar.
       const classIds = [...new Set(bookings.map((b) => b.class_schedule_id).filter(Boolean))] as string[];
-      const { data: classRows } = classIds.length > 0
-        ? await supabase.from("provider_class_schedule").select("id, class_name").in("id", classIds)
-        : { data: [] };
-      const classMap = new Map((classRows || []).map((c) => [c.id, c.class_name as string]));
+      const classRows = await inBatches<ClassScheduleEntry>(classIds, (batch) =>
+        supabase.from("provider_class_schedule").select("*").in("id", batch),
+      );
+      const classMap = new Map(classRows.map((c) => [c.id, c]));
 
       // Batch-fetch staff names (same pattern as classMap). Deliberately NOT
       // filtered to is_active: a deactivated staff member must still be named
@@ -132,14 +184,13 @@ export function useProviderBookings() {
       const packageIds = [
         ...new Set(withPkg.map((b) => b.customer_package_id).filter(Boolean)),
       ] as string[];
-      const { data: packageRows } = packageIds.length > 0
-        ? await pkgFrom("customer_packages")
-            .select("id, entries_remaining, total_entries, template_id")
-            .in("id", packageIds)
-        : { data: [] };
-      const packages = (packageRows ?? []) as unknown as Pick<
+      const packages = await inBatches<Pick<
         CustomerPackageRow, "id" | "entries_remaining" | "total_entries" | "template_id"
-      >[];
+      >>(packageIds, (batch) =>
+        pkgFrom("customer_packages")
+          .select("id, entries_remaining, total_entries, template_id")
+          .in("id", batch),
+      );
       const { data: pkgTemplateRows } = packages.length > 0
         ? await pkgFrom("package_templates")
             .select("id, name")
@@ -168,7 +219,8 @@ export function useProviderBookings() {
           is_group_service: primaryService?.service_type === 'group',
           service_capacity: primaryService?.max_capacity ?? 1,
           class_schedule_id: b.class_schedule_id ?? null,
-          class_name: b.class_schedule_id ? (classMap.get(b.class_schedule_id) ?? null) : null,
+          class_name: b.class_schedule_id ? (classMap.get(b.class_schedule_id)?.class_name ?? null) : null,
+          class_entry: b.class_schedule_id ? (classMap.get(b.class_schedule_id) ?? null) : null,
           linked_user_id: b.linked_user_id ?? null,
           staff_id: b.staff_id ?? null,
           staff_name: b.staff_id ? (staffMap.get(b.staff_id) ?? null) : null,
