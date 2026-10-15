@@ -39,16 +39,29 @@ Deno.serve(async (req) => {
     const todayStr = israelNow.toISOString().split("T")[0];
     const tomorrowStr = new Date(israelNow.getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    // Get bookings for today and tomorrow that are confirmed
-    const { data: bookings, error: bErr } = await supabase
-      .from("bookings")
-      .select("id, user_id, provider_id, booking_date, booking_time, service_ids")
-      .eq("status", "confirmed")
-      .in("booking_date", [todayStr, tomorrowStr]);
+    // Get bookings for today and tomorrow that are confirmed. Platform-wide, so
+    // paged: PostgREST silently caps an unpaged select at 1000 rows (the
+    // service role included), and every booking past the cap would just never
+    // get its reminder. PAGE stays below the cap so a short page means "done".
+    const PAGE = 500;
+    const bookings: Array<{
+      id: string; user_id: string | null; provider_id: string;
+      booking_date: string; booking_time: string; service_ids: string[];
+    }> = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error: bErr } = await supabase
+        .from("bookings")
+        .select("id, user_id, provider_id, booking_date, booking_time, service_ids")
+        .eq("status", "confirmed")
+        .in("booking_date", [todayStr, tomorrowStr])
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (bErr) throw bErr;
+      bookings.push(...(data ?? []));
+      if (!data || data.length < PAGE) break;
+    }
 
-    if (bErr) throw bErr;
-
-    const remindable = (bookings || []).filter((b) => {
+    const remindable = bookings.filter((b) => {
       // Parse stored local time, then convert to UTC for comparison
       const bookingLocalMs = new Date(`${b.booking_date}T${b.booking_time}:00`).getTime();
       const bookingDateTime = new Date(bookingLocalMs - israelOffsetMs);

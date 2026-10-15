@@ -27,7 +27,8 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (table: string) => {
       const b: Record<string, unknown> = {};
-      for (const op of ["select", "in", "eq"]) {
+      // order/range: the grouped query pages (lib/fetchAll) past the row cap.
+      for (const op of ["select", "in", "eq", "order", "range"]) {
         b[op] = (...args: unknown[]) => {
           calls.push({ table, op, args });
           return b;

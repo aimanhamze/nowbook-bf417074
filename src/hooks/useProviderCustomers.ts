@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
 import { customerKey, isRegisteredKey } from "@/lib/customerKey";
+import { fetchAllPages, inBatches } from "@/lib/fetchAll";
 
 export interface ProviderCustomer {
   /** Stable React key + dedupe identity — see lib/customerKey. */
@@ -59,26 +60,29 @@ export function useProviderCustomers() {
       if (!profile) return [];
 
       // This provider's own bookings only. Select the minimum needed to group
-      // and identify customers — no service/price/notes columns.
-      const { data: bookings, error } = await supabase
-        .from("bookings")
-        .select("id, user_id, linked_user_id, customer_name, customer_phone, booking_date")
-        .eq("provider_id", profile.id);
-      if (error) throw error;
-      if (!bookings || bookings.length === 0) return [];
+      // and identify customers — no service/price/notes columns. Paged (see
+      // lib/fetchAll): unpaged, a provider past 1000 bookings silently lost
+      // whole customers and under-counted the rest.
+      const bookings = await fetchAllPages((from, to) =>
+        supabase
+          .from("bookings")
+          .select("id, user_id, linked_user_id, customer_name, customer_phone, booking_date")
+          .eq("provider_id", profile.id)
+          .order("id", { ascending: true })
+          .range(from, to),
+      );
+      if (bookings.length === 0) return [];
 
       // Resolve registered customers' name + phone from profiles.
       // Select ONLY display_name + phone (never `*`) — minimum PII for the view.
       const userIds = [...new Set(bookings.map((b) => b.user_id).filter(Boolean))] as string[];
-      const { data: profiles } = userIds.length
-        ? await supabase
-            .from("profiles")
-            .select("user_id, display_name, phone")
-            .in("user_id", userIds)
-        : { data: [] as { user_id: string; display_name: string | null; phone: string | null }[] };
+      const profiles = await inBatches<{ user_id: string; display_name: string | null; phone: string | null }>(
+        userIds,
+        (batch) => supabase.from("profiles").select("user_id, display_name, phone").in("user_id", batch),
+      );
 
       const profileMap = new Map(
-        (profiles || []).map((p) => [p.user_id, p])
+        profiles.map((p) => [p.user_id, p])
       );
 
       // Group bookings into unique customers + count.

@@ -4,6 +4,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useProviderProfile } from "./useProviderProfile";
 import { pkgFrom, type CustomerPackageRow } from "@/integrations/supabase/packageTypes";
 import type { ClassScheduleEntry } from "./useProviderClassSchedule";
+import { fetchAllPages, inBatches } from "@/lib/fetchAll";
 import {
   notifyBookingConfirmed,
   notifyBookingCancelled,
@@ -76,50 +77,20 @@ export interface EnrichedBooking {
   package_total_entries: number | null;
 }
 
-// PostgREST caps every response at its max-rows setting (1000 on hosted
-// Supabase) and truncates SILENTLY — no error, no flag. A single unpaged select
-// therefore returned only a busy provider's OLDEST 1000 bookings (ordered by
-// date ascending), so their current and upcoming bookings — every pending one
-// included — never reached the calendar or the pending tab. Page until a short
-// page comes back. Must stay below the server cap, or a full-but-truncated page
-// would look like the last one.
-const BOOKINGS_PAGE_SIZE = 500;
-
-async function fetchAllProviderBookings(providerId: string): Promise<Tables<"bookings">[]> {
-  const rows: Tables<"bookings">[] = [];
-  for (let from = 0; ; from += BOOKINGS_PAGE_SIZE) {
-    const { data, error } = await supabase
+// Paged (see lib/fetchAll): a single unpaged select returned only a busy
+// provider's OLDEST 1000 bookings, so their current and upcoming bookings —
+// every pending one included — never reached the calendar or the pending tab.
+function fetchAllProviderBookings(providerId: string): Promise<Tables<"bookings">[]> {
+  return fetchAllPages((from, to) =>
+    supabase
       .from("bookings")
       .select("*")
       .eq("provider_id", providerId)
       .in("status", ["confirmed", "pending", "cancelled"])
       .order("booking_date", { ascending: true })
-      // Tie-breaker: without a unique sort key, rows sharing a date can shift
-      // between pages and be skipped or repeated.
       .order("id", { ascending: true })
-      .range(from, from + BOOKINGS_PAGE_SIZE - 1);
-    if (error) throw error;
-    rows.push(...(data ?? []));
-    if (!data || data.length < BOOKINGS_PAGE_SIZE) return rows;
-  }
-}
-
-// `.in(col, ids)` puts every id in the request URL; a few hundred UUIDs exceed
-// URL length limits, and the lookup's result is subject to the same row cap.
-// Split into small batches and concatenate. Errors are ignored, exactly as the
-// unbatched lookups did — a missing name must not blank the whole calendar.
-const IN_BATCH = 100;
-
-async function inBatches<T>(
-  ids: string[],
-  run: (batch: string[]) => PromiseLike<{ data: unknown }>,
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let i = 0; i < ids.length; i += IN_BATCH) {
-    const { data } = await run(ids.slice(i, i + IN_BATCH));
-    out.push(...((data ?? []) as T[]));
-  }
-  return out;
+      .range(from, to),
+  );
 }
 
 export function useProviderBookings() {

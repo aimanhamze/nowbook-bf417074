@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { fetchAllPages } from "@/lib/fetchAll";
 
 // Typed wrappers around the Phase 1 admin RPCs (SECURITY DEFINER, admin-gated,
 // price-free). Each RPC raises 42501 for non-admins — TanStack surfaces that as
@@ -30,9 +31,16 @@ export function useAdminPendingBookings() {
   return useQuery({
     queryKey: ["admin-pending-bookings"],
     queryFn: async (): Promise<AdminBookingRow[]> => {
-      const { data, error } = await supabase.rpc("admin_pending_bookings");
-      if (error) throw error;
-      return data ?? [];
+      // Paged: platform-wide, so it can pass the silent 1000-row cap. Same
+      // display order as the RPC's own ORDER BY, ended on the unique id.
+      return fetchAllPages((from, to) =>
+        supabase
+          .rpc("admin_pending_bookings")
+          .order("booking_date", { ascending: true })
+          .order("booking_time", { ascending: true })
+          .order("booking_id", { ascending: true })
+          .range(from, to),
+      );
     },
     staleTime: 30_000,
   });
@@ -42,9 +50,14 @@ export function useAdminTodayBookings() {
   return useQuery({
     queryKey: ["admin-today-bookings"],
     queryFn: async (): Promise<AdminBookingRow[]> => {
-      const { data, error } = await supabase.rpc("admin_today_bookings");
-      if (error) throw error;
-      return data ?? [];
+      // Paged like admin_pending_bookings above.
+      return fetchAllPages((from, to) =>
+        supabase
+          .rpc("admin_today_bookings")
+          .order("booking_time", { ascending: true })
+          .order("booking_id", { ascending: true })
+          .range(from, to),
+      );
     },
     staleTime: 30_000,
   });

@@ -20,6 +20,7 @@ import {
 import { usePublicStaffHours } from "./useProviderStaffHours";
 import { usePublicStaffTimeOff } from "./useProviderStaffTimeOff";
 import { availabilityWindow } from "@/lib/availabilityWindow";
+import { fetchByDateWindow, PAGE_SIZE } from "@/lib/fetchAll";
 
 export interface DbProvider {
   id: string;
@@ -377,13 +378,21 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
       // direct select returned an incomplete set and offered taken slots. The
       // RPC returns only non-PII timing columns (booking_date, booking_time,
       // service_ids) for the provider's active bookings in the window.
-      const { data, error } = await supabase.rpc("get_provider_busy_slots", {
-        p_provider_id: providerId,
-        p_from_date: fromStr,
-        p_to_date: toStr,
-      });
-      if (error) throw error;
-      return data || [];
+      //
+      // Fetched through fetchByDateWindow: the RPC's rows have no unique column
+      // to page on, and an unpaged call is silently capped at 1000 rows — past
+      // that, customers were offered slots that are already taken. A window
+      // that comes back full is split by date and re-fetched; a normal window
+      // is still exactly one request.
+      return fetchByDateWindow(fromStr, toStr, (from, to) =>
+        supabase
+          .rpc("get_provider_busy_slots", {
+            p_provider_id: providerId,
+            p_from_date: from,
+            p_to_date: to,
+          })
+          .range(0, PAGE_SIZE - 1),
+      );
     },
     enabled: !!providerId,
   });

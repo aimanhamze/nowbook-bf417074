@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { usePendingCount } from "@/hooks/useProviderBookings";
+import { fetchAllPages } from "@/lib/fetchAll";
 
 /**
  * Multi-branch: pending-bookings count for EVERY branch of the owner, for the
@@ -33,14 +34,19 @@ export function useBranchPendingCounts() {
     // Same cadence as the bottom-nav badge (useProviderBookings).
     refetchInterval: 30000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("bookings")
-        .select("provider_id")
-        .in("provider_id", ids)
-        .eq("status", "pending");
-      if (error) throw error;
+      // Paged (see lib/fetchAll) so a count past the 1000-row cap is not
+      // silently clipped. One request in practice.
+      const data = await fetchAllPages((from, to) =>
+        supabase
+          .from("bookings")
+          .select("provider_id")
+          .in("provider_id", ids)
+          .eq("status", "pending")
+          .order("id", { ascending: true })
+          .range(from, to),
+      );
       const counts: Record<string, number> = {};
-      for (const row of data ?? []) counts[row.provider_id] = (counts[row.provider_id] ?? 0) + 1;
+      for (const row of data) counts[row.provider_id] = (counts[row.provider_id] ?? 0) + 1;
       return counts;
     },
   });
