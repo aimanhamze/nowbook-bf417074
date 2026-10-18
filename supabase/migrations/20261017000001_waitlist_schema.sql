@@ -219,7 +219,7 @@ CREATE INDEX IF NOT EXISTS waitlist_entries_provider_day_active_idx
 DROP TRIGGER IF EXISTS update_waitlist_entries_updated_at ON public.waitlist_entries;
 CREATE TRIGGER update_waitlist_entries_updated_at
   BEFORE UPDATE ON public.waitlist_entries
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 ALTER TABLE public.waitlist_entries ENABLE ROW LEVEL SECURITY;
 
@@ -466,7 +466,7 @@ CREATE INDEX IF NOT EXISTS waitlist_send_log_provider_created_idx
 DROP TRIGGER IF EXISTS update_waitlist_send_log_updated_at ON public.waitlist_send_log;
 CREATE TRIGGER update_waitlist_send_log_updated_at
   BEFORE UPDATE ON public.waitlist_send_log
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 ALTER TABLE public.waitlist_send_log ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.waitlist_send_log FROM anon;
