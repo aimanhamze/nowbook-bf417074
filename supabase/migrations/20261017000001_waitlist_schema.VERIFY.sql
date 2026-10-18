@@ -1,6 +1,8 @@
 -- VERIFY / test plan for 20261017000001_waitlist_schema.sql
 --
 -- ORDER:
+--   DEV ONLY, before anything else: supabase/scripts/
+--       dev_only_parity_provider_services_id_provider_id_key.sql (see §0.5).
 --   §0  BEFORE the migration. REQUIRED. Read-only. Run on DEV, and again on PROD
 --       before the prod apply. SAVE THE OUTPUT — §A compares against it.
 --   §A  after the migration. Read-only object checks. DEV and PROD.
@@ -47,7 +49,7 @@ ORDER BY a.attname;
 -- 0.2 Every existing trigger on bookings. SAVE THIS.
 --     Expect: no name beginning trg_waitlist_. (Repo history suggests about
 --     a dozen: trg_enforce_*, trg_handle_package_*, trg_link_walkin_to_account,
---     trg_prevent_booking_conflicts, update_bookings_updated_at.)
+--     trg_prevent_booking_conflicts, trg_bookings_updated_at.)
 SELECT t.tgname,
        t.tgenabled,
        p.oid::regprocedure AS function,
@@ -92,20 +94,28 @@ WHERE table_schema = 'public'
   AND column_name ILIKE '%waitlist%';
 
 -- 0.5 The composite-FK targets the entries table needs.
---     Expect 2 rows:
---       provider_services_id_provider_id_key  UNIQUE (id, provider_id)
---       provider_staff_id_provider_id_key     UNIQUE (id, provider_id)
-SELECT conname, pg_get_constraintdef(oid)
+--     Expect 2 rows, on BOTH projects:
+--       provider_services_id_provider_id_key  provider_services  UNIQUE (id, provider_id)
+--       provider_staff_id_provider_id_key     provider_staff     UNIQUE (id, provider_id)
+--     DEV drift: DEV was missing provider_services_id_provider_id_key (PROD has
+--     it). Run supabase/scripts/dev_only_parity_provider_services_id_provider_id_key.sql
+--     on DEV first; then this returns 2 rows there too. Only 1 row on PROD =
+--     STOP — do not run the parity script there blindly; find out why PROD
+--     changed.
+SELECT conname, conrelid::regclass AS on_table, pg_get_constraintdef(oid)
 FROM pg_constraint
 WHERE conname IN ('provider_services_id_provider_id_key',
                   'provider_staff_id_provider_id_key')
 ORDER BY conname;
 
--- 0.6 The shared updated_at helper exists (both new tables use it).
---     Expect 1 row; the body sets NEW.updated_at = now() and returns NEW.
+-- 0.6 The shared updated_at helper exists (both new tables use it; so does
+--     trg_bookings_updated_at). update_updated_at_column() does NOT exist on
+--     either project — set_updated_at() is the one.
+--     Expect 1 row, set_updated_at(); the body sets NEW.updated_at = now() and
+--     returns NEW.
 SELECT p.oid::regprocedure, p.prosrc
 FROM pg_proc p
-WHERE p.proname = 'update_updated_at_column'
+WHERE p.proname = 'set_updated_at'
   AND p.pronamespace = 'public'::regnamespace;
 
 -- 0.7 whatsapp_send_log fingerprint: columns, constraints, indexes, policies,
