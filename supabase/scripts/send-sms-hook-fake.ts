@@ -17,7 +17,7 @@
 // fake, and is never printed.
 //
 // ⚠ With SMS_DRY_RUN unset or false in the function's env, this sends a REAL,
-// billable SMS to <phone>.
+// billable SMS to <phone> — via Shmor, or via Twilio for non-Shmor numbers.
 
 import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
 

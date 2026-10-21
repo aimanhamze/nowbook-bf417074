@@ -17,21 +17,29 @@
 // JWT verification off — see [functions.send-sms-hook] in supabase/config.toml.
 //
 // ROUTING:
-//   Israeli mobile (normalizes to 9725XXXXXXXX)   → Shmor Makom
+//   Israeli mobile (normalizes to 9725XXXXXXXX)   → Shmor Makom, then Twilio
 //     …and, when SHMOR_TEST_PHONES is set, only if listed there
-//   everything else (07X, foreign, unlisted)      → fallback
-// The fallback slot is reserved for Twilio and is NOT implemented yet: it
-// reports not_configured, and the hook returns an error and logs loudly. With
-// the hook enabled, Auth never calls its built-in SMS provider, so a number
-// that reaches fallback today CANNOT log in. That is why the hook stays off on
-// PROD until the Twilio fallback ships.
+//   everything else (07X, foreign, unlisted)      → Twilio directly
+// With the hook enabled, Auth never calls its built-in SMS provider, so the
+// fallback calls Twilio's REST API itself (plain Messages API through a
+// Messaging Service — not Twilio Verify, which would generate its own code).
+// If the TWILIO_* vars are incomplete the fallback reports not_configured, the
+// hook returns an error and logs loudly, and that number CANNOT log in.
 //
 // TIME BUDGET: Supabase gives the whole hook invocation 5 s, and a cold start
 // is spent before our timer starts. Everything here runs inside a hard
 // HOOK_DEADLINE_MS from request arrival: one Shmor attempt, at most one retry
 // (only for 5xx / timeout / network errors, only if enough time is left, and
 // always with the SAME Idempotency-Key so Shmor never sends or charges twice),
-// then fallback only if time remains.
+// then fallback only if at least FALLBACK_MIN_REMAINING_MS remain. Twilio gets
+// exactly ONE attempt with whatever time is left: its message-create API has
+// no idempotency key, so a retry after an ambiguous timeout could text the
+// user twice.
+//
+// KNOWN DOUBLE-SEND WINDOW: if a Shmor attempt times out on OUR side but Shmor
+// had already queued the message, the Twilio fallback sends the same code a
+// second time. Same code, so harmless beyond the cost; accepted over leaving
+// the user with no code at all.
 //
 // IDEMPOTENCY KEY: ehj-otp-<metadata.uuid>. Auth generates metadata.uuid once
 // per OTP request and re-sends the same body on its own retries (read from the
@@ -40,14 +48,16 @@
 // hash of a 6-digit code plus a known phone number is trivially brute-forced,
 // and the key leaves our system.
 //
-// SMS_DRY_RUN=true calls /v1/sms/estimate instead of /v1/sms: nothing is sent
-// and nothing is charged, but the hook reports success — so the user receives
-// no code. For scripted tests only, never with the hook enabled for real users.
+// SMS_DRY_RUN=true calls /v1/sms/estimate instead of /v1/sms, and SKIPS the
+// Twilio call entirely (Twilio has no dry-run endpoint): nothing is sent and
+// nothing is charged, but the hook reports success — so the user receives no
+// code. For scripted tests only, never with the hook enabled for real users.
 //
 // LOGGING: never logs the OTP, the message text, the Idempotency-Key, the
-// Shmor API key or the hook secret. Phones appear as the last 4 digits only.
-// Shmor's error `message` is not logged either — only its `code` and the HTTP
-// status — because an upstream message may echo what we sent. Unexpected
+// Shmor API key, any Twilio credential or the hook secret. Phones appear as
+// the last 4 digits only. Neither Shmor's nor Twilio's error `message` is
+// logged — only the provider's error `code` and the HTTP status — because an
+// upstream message may echo what we sent (Twilio's quotes the To number). Unexpected
 // exceptions log their `name` only: a JSON.parse message can quote the body,
 // and the body holds the OTP.
 
@@ -60,6 +70,7 @@ const FN = "send-sms-hook";
 export const HOOK_DEADLINE_MS = 3500;
 export const SHMOR_ATTEMPT_TIMEOUT_MS = 1500;
 export const SHMOR_RETRY_MIN_REMAINING_MS = 1000;
+export const FALLBACK_MIN_REMAINING_MS = 500;
 
 export const SMS_MAX_CHARS = 201;
 export const MESSAGE_TEMPLATE = "Your Ehjezly verification code is: {otp}";
@@ -67,6 +78,10 @@ export const MESSAGE_TEMPLATE = "Your Ehjezly verification code is: {otp}";
 const SHMOR_SEND_URL = "https://capabilities.shmormakom.com/v1/sms";
 const SHMOR_ESTIMATE_URL = "https://capabilities.shmormakom.com/v1/sms/estimate";
 const SHMOR_DEFAULT_SENDER = "Ehjezly";
+
+// https://www.twilio.com/docs/messaging/api/message-resource#create-a-message-resource
+const twilioMessagesUrl = (accountSid: string) =>
+  `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`;
 
 // Shown to the user as the signInWithOtp error toast. Deliberately vague:
 // which provider failed, and why, belongs in the logs, not in the browser.
@@ -184,7 +199,8 @@ export interface SendRequest {
   deadline: number;
 }
 
-export type FailureCategory = "retryable" | "fallback" | "config" | "deadline";
+/** "provider_error" = a terminal failure of a provider that is never retried (Twilio). */
+export type FailureCategory = "retryable" | "fallback" | "config" | "deadline" | "provider_error";
 
 export type SendOutcome =
   | { kind: "sent"; providerMessageId: string | null; dryRun?: boolean }
@@ -195,12 +211,6 @@ export interface SmsProvider {
   name: string;
   send(req: SendRequest, deps: Deps): Promise<SendOutcome>;
 }
-
-/** Fallback slot. Twilio lands in a later phase; until then nothing is sent. */
-export const twilioFallback: SmsProvider = {
-  name: "twilio",
-  send: () => Promise.resolve({ kind: "not_configured" }),
-};
 
 /**
  * Shmor error → what to do next.
@@ -306,6 +316,140 @@ export const shmorProvider: SmsProvider = {
   },
 };
 
+// ── Twilio (fallback) ────────────────────────────────────────────────────────
+
+/** Any phone → "+<digits>" for Twilio's To, or null if it cannot be E.164. */
+export function toE164(raw: string): string | null {
+  const il = normalizeIsraeliMobile(raw);
+  if (il) return `+${il}`;
+  const d = raw.replace(/\D/g, "");
+  if (raw.trim().startsWith("0")) return null; // a national number with no country code
+  return /^[1-9]\d{7,14}$/.test(d) ? `+${d}` : null;
+}
+
+interface TwilioConfig {
+  accountSid: string;
+  messagingServiceSid: string;
+  username: string;
+  password: string;
+  authKind: "api_key" | "auth_token";
+}
+
+const TWILIO_ENV_NAMES = [
+  "TWILIO_ACCOUNT_SID",
+  "TWILIO_MESSAGING_SERVICE_SID",
+  "TWILIO_API_KEY_SID",
+  "TWILIO_API_KEY_SECRET",
+  "TWILIO_AUTH_TOKEN",
+] as const;
+
+/**
+ * Configured only with Account SID + Messaging Service SID + one auth pair.
+ * The API key pair wins when both halves are set (it can be revoked without
+ * rotating the account's master Auth Token); otherwise Account SID + Auth
+ * Token. The Account SID is always the one in the URL.
+ * https://www.twilio.com/docs/usage/requests-to-twilio
+ */
+export function loadTwilioConfig(env: Deps["env"]): TwilioConfig | null {
+  const get = (name: string) => env(name)?.trim() || undefined;
+  const accountSid = get("TWILIO_ACCOUNT_SID");
+  const messagingServiceSid = get("TWILIO_MESSAGING_SERVICE_SID");
+  const keySid = get("TWILIO_API_KEY_SID");
+  const keySecret = get("TWILIO_API_KEY_SECRET");
+  const authToken = get("TWILIO_AUTH_TOKEN");
+
+  if (accountSid && messagingServiceSid) {
+    if (keySid && keySecret) {
+      return { accountSid, messagingServiceSid, username: keySid, password: keySecret, authKind: "api_key" };
+    }
+    if (authToken) {
+      return { accountSid, messagingServiceSid, username: accountSid, password: authToken, authKind: "auth_token" };
+    }
+  }
+
+  // Half a config is almost certainly a mistake, not an intentional "off".
+  // Variable NAMES only — never values.
+  const present = TWILIO_ENV_NAMES.filter((n) => get(n));
+  if (present.length > 0) {
+    console.error(`${FN}: CONFIG ERROR`, {
+      provider: "twilio",
+      code: "partial_config",
+      missing: TWILIO_ENV_NAMES.filter((n) => !get(n)),
+    });
+  }
+  return null;
+}
+
+export const twilioProvider: SmsProvider = {
+  name: "twilio",
+  async send(req, deps) {
+    const cfg = loadTwilioConfig(deps.env);
+    if (!cfg) return { kind: "not_configured" };
+
+    if (deps.env("SMS_DRY_RUN") === "true") {
+      return { kind: "sent", providerMessageId: null, dryRun: true };
+    }
+
+    const to = toE164(req.to);
+    if (!to) return { kind: "failed", category: "provider_error", status: null, code: "invalid_destination" };
+
+    const remaining = req.deadline - deps.now();
+    if (remaining <= 0) return { kind: "failed", category: "deadline", status: null, code: "deadline" };
+
+    // ONE attempt, no retry — see the TIME BUDGET note in the header.
+    const startedAt = deps.now();
+    let outcome: Extract<SendOutcome, { kind: "failed" }>;
+    try {
+      const res = await deps.fetch(twilioMessagesUrl(cfg.accountSid), {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${btoa(`${cfg.username}:${cfg.password}`)}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ To: to, MessagingServiceSid: cfg.messagingServiceSid, Body: req.text }),
+        signal: deps.timeoutSignal(remaining),
+      });
+      const raw = await res.text();
+      let body: Record<string, unknown> | null = null;
+      try {
+        body = raw ? JSON.parse(raw) as Record<string, unknown> : null;
+      } catch {
+        body = null;
+      }
+
+      // 201 Created is Twilio's only success status for a POST that creates a
+      // resource. https://www.twilio.com/docs/usage/twilios-response
+      if (res.status === 201) {
+        const sid = body?.sid;
+        return { kind: "sent", providerMessageId: typeof sid === "string" ? sid : null };
+      }
+
+      const twilioCode = body?.code;
+      const code = typeof twilioCode === "number" || typeof twilioCode === "string"
+        ? String(twilioCode)
+        : `http_${res.status}`;
+      const category: FailureCategory = res.status === 401 || res.status === 403 ? "config" : "provider_error";
+      outcome = { kind: "failed", category, status: res.status, code };
+    } catch (err) {
+      const name = err instanceof Error ? err.name : "";
+      const code = name === "TimeoutError" || name === "AbortError" ? "timeout" : "network";
+      outcome = { kind: "failed", category: "provider_error", status: null, code };
+    }
+
+    const fields = {
+      provider: "twilio",
+      auth: cfg.authKind,
+      status: outcome.status,
+      code: outcome.code,
+      phone: maskPhone(req.to),
+      latency_ms: deps.now() - startedAt,
+    };
+    if (outcome.category === "config") console.error(`${FN}: CONFIG ERROR`, fields);
+    else console.warn(`${FN}: attempt failed`, fields);
+    return outcome;
+  },
+};
+
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 export const defaultDeps: Deps = {
@@ -313,7 +457,7 @@ export const defaultDeps: Deps = {
   fetch: (input, init) => fetch(input, init),
   now: () => Date.now(),
   timeoutSignal: (ms) => AbortSignal.timeout(ms),
-  fallback: twilioFallback,
+  fallback: twilioProvider,
 };
 
 export async function handleHook(req: Request, deps: Deps = defaultDeps): Promise<Response> {
@@ -322,6 +466,7 @@ export async function handleHook(req: Request, deps: Deps = defaultDeps): Promis
   let phoneForLog = "unknown";
   let routeForLog = "none";
   let resultForLog = "rejected";
+  let providerForLog = "none"; // which provider delivered, if any
 
   try {
     if (req.method !== "POST") return reject("method", 405, {});
@@ -368,35 +513,52 @@ export async function handleHook(req: Request, deps: Deps = defaultDeps): Promis
     const route = routeFor(rawPhone, deps.env("SHMOR_TEST_PHONES"));
     routeForLog = route.provider === "shmor" ? "shmor" : `fallback:${route.reason}`;
 
+    // Why the fallback ran: the router's reason, or the Shmor failure code.
+    let fallbackReason: string = route.provider === "fallback" ? route.reason : "none";
+
     if (route.provider === "shmor") {
       const outcome = await shmorProvider.send({ to: route.to, text, idempotencyKey: key, deadline }, deps);
       if (outcome.kind === "sent") {
         resultForLog = outcome.dryRun ? "sent_dry_run" : "sent";
+        providerForLog = "shmor";
         console.log(`${FN}: sent`, {
           provider: "shmor",
           dry_run: outcome.dryRun === true,
           provider_message_id: outcome.providerMessageId,
           phone: phoneForLog,
+          latency_ms: deps.now() - startedAt,
         });
         return json(200, {});
       }
-      routeForLog = `shmor_failed:${outcome.kind === "failed" ? outcome.code : outcome.kind}`;
+      const shmorCode = outcome.kind === "failed" ? outcome.code : outcome.kind;
+      routeForLog = `shmor_failed:${shmorCode}`;
+      fallbackReason = `shmor_${shmorCode}`;
     }
 
-    // ── 4. Fallback, only if time remains ──
-    if (deps.now() >= deadline) {
+    // ── 4. Fallback, only if enough time remains ──
+    if (deadline - deps.now() < FALLBACK_MIN_REMAINING_MS) {
       resultForLog = "deadline";
-      console.error(`${FN}: DEADLINE EXCEEDED before fallback`, { phone: phoneForLog, route: routeForLog });
+      console.error(`${FN}: DEADLINE EXCEEDED before fallback — OTP NOT DELIVERED`, {
+        provider: deps.fallback.name,
+        phone: phoneForLog,
+        route: routeForLog,
+        fallback_reason: fallbackReason,
+        remaining_ms: deadline - deps.now(),
+      });
       return hookError(503, USER_MSG_UNAVAILABLE);
     }
 
     const fb = await deps.fallback.send({ to: rawPhone, text, idempotencyKey: key, deadline }, deps);
     if (fb.kind === "sent") {
-      resultForLog = "sent_fallback";
+      resultForLog = fb.dryRun ? "sent_fallback_dry_run" : "sent_fallback";
+      providerForLog = deps.fallback.name;
       console.log(`${FN}: sent`, {
         provider: deps.fallback.name,
+        dry_run: fb.dryRun === true,
         provider_message_id: fb.providerMessageId,
+        fallback_reason: fallbackReason,
         phone: phoneForLog,
+        latency_ms: deps.now() - startedAt,
       });
       return json(200, {});
     }
@@ -407,6 +569,7 @@ export async function handleHook(req: Request, deps: Deps = defaultDeps): Promis
         provider: deps.fallback.name,
         phone: phoneForLog,
         route: routeForLog,
+        fallback_reason: fallbackReason,
       });
     } else {
       resultForLog = "fallback_failed";
@@ -414,6 +577,7 @@ export async function handleHook(req: Request, deps: Deps = defaultDeps): Promis
         provider: deps.fallback.name,
         status: fb.status,
         code: fb.code,
+        fallback_reason: fallbackReason,
         phone: phoneForLog,
       });
     }
@@ -427,6 +591,7 @@ export async function handleHook(req: Request, deps: Deps = defaultDeps): Promis
     console.log(`${FN}: request`, {
       phone: phoneForLog,
       route: routeForLog,
+      provider: providerForLog,
       result: resultForLog,
       latency_ms: deps.now() - startedAt,
     });

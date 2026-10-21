@@ -22,6 +22,9 @@ const {
   classifyShmorError,
   handleHook,
   shmorProvider,
+  twilioProvider,
+  loadTwilioConfig,
+  toE164,
   maskPhone,
   MESSAGE_TEMPLATE,
   SMS_MAX_CHARS,
@@ -99,7 +102,12 @@ function makeDeps(steps: Step[], env: Record<string, string | undefined> = {}, f
     },
     fetch: (input, init) => {
       const headers = Object.fromEntries(new Headers(init?.headers).entries());
-      calls.push({ url: String(input), headers, body: JSON.parse(String(init?.body)) });
+      // Shmor gets JSON, Twilio gets application/x-www-form-urlencoded.
+      const rawBody = String(init?.body);
+      const body = init?.body instanceof URLSearchParams
+        ? Object.fromEntries(init.body.entries())
+        : JSON.parse(rawBody);
+      calls.push({ url: String(input), headers, body });
       const step = queue.shift();
       if (!step) throw new Error("unexpected fetch");
       clock.t += step.ms ?? 50;
@@ -570,6 +578,247 @@ Deno.test("unhandled error: hook error 500, logs the error name only", async () 
   assert(logs.some((l) => l.includes("unhandled error") && l.includes('"name":"Error"')));
 });
 
+// ── Twilio fallback ──────────────────────────────────────────────────────────
+
+const FOREIGN = "14155550123";
+const TW_AUTH_TOKEN = "tw-auth-token-DO-NOT-LOG";
+const TW_KEY_SECRET = "tw-key-secret-DO-NOT-LOG";
+const TW: Record<string, string> = {
+  TWILIO_ACCOUNT_SID: "ACtestaccount0001",
+  TWILIO_MESSAGING_SERVICE_SID: "MGtestservice0001",
+  TWILIO_AUTH_TOKEN: TW_AUTH_TOKEN,
+};
+const TW_KEY: Record<string, string> = {
+  ...TW,
+  TWILIO_API_KEY_SID: "SKtestkey0001",
+  TWILIO_API_KEY_SECRET: TW_KEY_SECRET,
+};
+const TWILIO_URL = "https://api.twilio.com/2010-04-01/Accounts/ACtestaccount0001/Messages.json";
+const TWILIO_OK: Step = { status: 201, body: { sid: "SMtest0001", status: "accepted" } };
+const twilioErr = (status: number, code: number, ms?: number): Step => ({
+  status,
+  body: { status, code, message: `twilio says ${code} for +${FOREIGN}`, more_info: `https://www.twilio.com/docs/errors/${code}` },
+  ms,
+});
+const basic = (user: string, pass: string) => `Basic ${btoa(`${user}:${pass}`)}`;
+
+Deno.test("toE164: Israeli forms and foreign digits → +<digits>; junk → null", () => {
+  assertEquals(toE164("972501239876"), "+972501239876");
+  assertEquals(toE164("0501239876"), "+972501239876");
+  assertEquals(toE164("972721234567"), "+972721234567");
+  assertEquals(toE164("14155550123"), "+14155550123");
+  assertEquals(toE164("+14155550123"), "+14155550123");
+  assertEquals(toE164("0721234567"), null); // national, no country code
+  assertEquals(toE164("123"), null);
+  assertEquals(toE164(""), null);
+});
+
+Deno.test("loadTwilioConfig: API key pair wins, else account SID + token, else null", async () => {
+  await captureConsole(() => {
+    assertEquals(loadTwilioConfig((n) => TW_KEY[n])?.authKind, "api_key");
+    assertEquals(loadTwilioConfig((n) => TW_KEY[n])?.username, "SKtestkey0001");
+    assertEquals(loadTwilioConfig((n) => TW[n])?.authKind, "auth_token");
+    assertEquals(loadTwilioConfig((n) => TW[n])?.username, "ACtestaccount0001");
+    // Half an API key pair falls back to the auth token.
+    const halfKey: Record<string, string> = { ...TW, TWILIO_API_KEY_SID: "SKtestkey0001" };
+    assertEquals(loadTwilioConfig((n) => halfKey[n])?.authKind, "auth_token");
+    // No Messaging Service → not configured, even with credentials.
+    const noService: Record<string, string> = { ...TW_KEY, TWILIO_MESSAGING_SERVICE_SID: "" };
+    assertEquals(loadTwilioConfig((n) => noService[n]), null);
+    // No auth at all → not configured.
+    const noAuth: Record<string, string> = { TWILIO_ACCOUNT_SID: "AC1", TWILIO_MESSAGING_SERVICE_SID: "MG1" };
+    assertEquals(loadTwilioConfig((n) => noAuth[n]), null);
+    assertEquals(loadTwilioConfig(() => undefined), null);
+    return Promise.resolve();
+  });
+});
+
+Deno.test("twilio: non-Israeli number → Twilio directly, 201 → 200 {}", async () => {
+  const { deps, calls, timeouts } = makeDeps([TWILIO_OK], TW, twilioProvider);
+  const { res, body, logs } = await run(signedRequest(makeBody(FOREIGN)), deps);
+  assertEquals(res.status, 200);
+  assertEquals(body, {});
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].url, TWILIO_URL);
+  assertEquals(calls[0].headers["content-type"], "application/x-www-form-urlencoded");
+  assertEquals(calls[0].headers["authorization"], basic("ACtestaccount0001", TW_AUTH_TOKEN));
+  assertEquals(calls[0].body, {
+    To: "+14155550123",
+    MessagingServiceSid: "MGtestservice0001",
+    Body: `Your Ehjezly verification code is: ${OTP}`,
+  });
+  // Single attempt with the whole remaining budget (nothing spent before it).
+  assertEquals(timeouts, [HOOK_DEADLINE_MS]);
+  const sent = logs.find((l) => l.includes("send-sms-hook: sent"));
+  assert(sent?.includes('"provider":"twilio"'), sent);
+  assert(sent?.includes("SMtest0001"), sent);
+  assert(sent?.includes('"fallback_reason":"not_israeli_mobile"'), sent);
+  assert(logs.some((l) => l.includes("send-sms-hook: request") && l.includes('"provider":"twilio"')));
+});
+
+Deno.test("twilio: 07X number goes to Twilio as +9727…", async () => {
+  const { deps, calls } = makeDeps([TWILIO_OK], TW, twilioProvider);
+  const { body } = await run(signedRequest(makeBody("972721234567")), deps);
+  assertEquals(body, {});
+  assertEquals(calls[0].body.To, "+972721234567");
+});
+
+Deno.test("twilio: unlisted Israeli mobile with SHMOR_TEST_PHONES set → Twilio", async () => {
+  const { deps, calls } = makeDeps([TWILIO_OK], { ...TW, SHMOR_TEST_PHONES: "0547868325" }, twilioProvider);
+  const { body } = await run(signedRequest(makeBody(ISRAELI)), deps);
+  assertEquals(body, {});
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].url, TWILIO_URL);
+});
+
+Deno.test("twilio: auth header uses the API key pair when present", async () => {
+  const { deps, calls } = makeDeps([TWILIO_OK], TW_KEY, twilioProvider);
+  await run(signedRequest(makeBody(FOREIGN)), deps);
+  assertEquals(calls[0].headers["authorization"], basic("SKtestkey0001", TW_KEY_SECRET));
+  assertEquals(calls[0].url, TWILIO_URL); // URL still carries the Account SID
+});
+
+Deno.test("twilio: Shmor success → Twilio never called", async () => {
+  const { deps, calls } = makeDeps([SHMOR_OK], TW, twilioProvider);
+  const { body, logs } = await run(signedRequest(makeBody(ISRAELI)), deps);
+  assertEquals(body, {});
+  assertEquals(calls.length, 1);
+  assert(logs.some((l) => l.includes("send-sms-hook: request") && l.includes('"provider":"shmor"')));
+});
+
+for (
+  const [name, steps, reason] of [
+    ["5xx twice", [shmorErr(500, "internal_error"), shmorErr(503, "internal_error")], "shmor_internal_error"],
+    ["timeout twice", [{ throws: "TimeoutError", ms: 1500 }, { throws: "TimeoutError", ms: 1000 }], "shmor_timeout"],
+    ["429 rate_limited", [shmorErr(429, "rate_limited")], "shmor_rate_limited"],
+    ["400 invalid_phone", [shmorErr(400, "invalid_phone")], "shmor_invalid_phone"],
+    ["401 unauthorized", [shmorErr(401, "unauthorized")], "shmor_unauthorized"],
+  ] as Array<[string, Step[], string]>
+) {
+  Deno.test(`twilio: Shmor ${name} → Twilio delivers`, async () => {
+    const { deps, calls } = makeDeps([...steps, TWILIO_OK], TW, twilioProvider);
+    const { res, body, logs } = await run(signedRequest(makeBody(ISRAELI)), deps);
+    assertEquals(res.status, 200);
+    assertEquals(body, {});
+    assertEquals(calls.length, steps.length + 1);
+    assertEquals(calls.at(-1)!.url, TWILIO_URL);
+    assertEquals(calls.at(-1)!.body.To, "+972501239876");
+    const sent = logs.find((l) => l.includes("send-sms-hook: sent"));
+    assert(sent?.includes('"provider":"twilio"') && sent.includes(`"fallback_reason":"${reason}"`), sent);
+  });
+}
+
+Deno.test("twilio: not configured → previous not_configured behavior, unchanged", async () => {
+  const { deps, calls } = makeDeps([], {}, twilioProvider);
+  const { res, body, logs } = await run(signedRequest(makeBody(FOREIGN)), deps);
+  assertEquals(calls.length, 0);
+  assertEquals(res.status, 200);
+  assertEquals(body, UNAVAILABLE);
+  assert(logs.some((l) => l.includes("FALLBACK_NOT_CONFIGURED") && l.includes('"provider":"twilio"')));
+  assertFalse(logs.some((l) => l.includes("partial_config")), "no partial-config noise when Twilio is simply off");
+});
+
+Deno.test("twilio: not configured after Shmor failure → same not_configured result", async () => {
+  const { deps, calls } = makeDeps([shmorErr(429, "rate_limited")], {}, twilioProvider);
+  const { body, logs } = await run(signedRequest(makeBody(ISRAELI)), deps);
+  assertEquals(calls.length, 1);
+  assertEquals(body, UNAVAILABLE);
+  assert(logs.some((l) => l.includes("FALLBACK_NOT_CONFIGURED") && l.includes("shmor_rate_limited")));
+});
+
+Deno.test("twilio: partial config → not_configured + CONFIG ERROR naming the missing vars", async () => {
+  const { deps, calls } = makeDeps([], { TWILIO_ACCOUNT_SID: "ACtestaccount0001", TWILIO_AUTH_TOKEN: TW_AUTH_TOKEN }, twilioProvider);
+  const { body, logs } = await run(signedRequest(makeBody(FOREIGN)), deps);
+  assertEquals(calls.length, 0);
+  assertEquals(body, UNAVAILABLE);
+  const cfg = logs.find((l) => l.includes("partial_config"));
+  assert(cfg?.includes("TWILIO_MESSAGING_SERVICE_SID"), cfg);
+  assert(logs.some((l) => l.includes("FALLBACK_NOT_CONFIGURED")));
+});
+
+for (
+  const [name, step, code, status] of [
+    ["400 21211 invalid To", twilioErr(400, 21211), "21211", 400],
+    ["401 20003 auth error", twilioErr(401, 20003), "20003", 401],
+    ["429 20429 too many requests", twilioErr(429, 20429), "20429", 429],
+    ["500 with non-JSON body", { status: 500, body: undefined }, "http_500", 500],
+    ["200 is not 201", { status: 200, body: { sid: "SMx" } }, "http_200", 200],
+    ["timeout", { throws: "TimeoutError" }, "timeout", null],
+    ["network error", { throws: "TypeError" }, "network", null],
+  ] as Array<[string, Step, string, number | null]>
+) {
+  Deno.test(`twilio: ${name} → 503 hook error, single attempt, code logged`, async () => {
+    const { deps, calls } = makeDeps([step], TW, twilioProvider);
+    const { res, body, logs } = await run(signedRequest(makeBody(FOREIGN)), deps);
+    assertEquals(res.status, 200);
+    assertEquals(body, UNAVAILABLE);
+    assertEquals(calls.length, 1); // no retry
+    const failed = logs.find((l) => l.includes("fallback failed — OTP NOT DELIVERED"));
+    assert(failed?.includes(`"code":"${code}"`) && failed.includes(`"status":${status}`), failed);
+    if (status === 401) assert(logs.some((l) => l.includes("CONFIG ERROR") && l.includes('"provider":"twilio"')));
+  });
+}
+
+Deno.test("twilio: SMS_DRY_RUN=true skips the Twilio call and reports success", async () => {
+  const { deps, calls } = makeDeps([], { ...TW, SMS_DRY_RUN: "true" }, twilioProvider);
+  const { body, logs } = await run(signedRequest(makeBody(FOREIGN)), deps);
+  assertEquals(calls.length, 0);
+  assertEquals(body, {});
+  const sent = logs.find((l) => l.includes("send-sms-hook: sent"));
+  assert(sent?.includes('"provider":"twilio"') && sent.includes('"dry_run":true'), sent);
+});
+
+Deno.test("twilio: SMS_DRY_RUN=true but Twilio not configured → still not_configured", async () => {
+  const { deps } = makeDeps([], { SMS_DRY_RUN: "true" }, twilioProvider);
+  const { body, logs } = await run(signedRequest(makeBody(FOREIGN)), deps);
+  assertEquals(body, UNAVAILABLE);
+  assert(logs.some((l) => l.includes("FALLBACK_NOT_CONFIGURED")));
+});
+
+// Deadline across Shmor retry + Twilio.
+
+Deno.test("deadline: Shmor 1500 + retry 1500 → Twilio gets exactly the 500 ms left", async () => {
+  const { deps, timeouts, calls } = makeDeps(
+    [{ throws: "TimeoutError", ms: 1500 }, { throws: "TimeoutError", ms: 1500 }, TWILIO_OK],
+    TW,
+    twilioProvider,
+  );
+  const { body } = await run(signedRequest(makeBody(ISRAELI)), deps);
+  assertEquals(timeouts, [1500, 1500, 500]);
+  assertEquals(calls.at(-1)!.url, TWILIO_URL);
+  assertEquals(body, {});
+});
+
+Deno.test("deadline: Shmor 2600 (no retry) → Twilio gets the 900 ms left", async () => {
+  const { deps, timeouts, calls } = makeDeps([{ throws: "TimeoutError", ms: 2600 }, TWILIO_OK], TW, twilioProvider);
+  await run(signedRequest(makeBody(ISRAELI)), deps);
+  assertEquals(calls.length, 2);
+  assertEquals(timeouts, [1500, 900]);
+});
+
+Deno.test("deadline: < 500 ms left after Shmor → Twilio skipped, 503", async () => {
+  // 3100 ms spent on attempt 1 → 400 ms left: no retry (< 1000), no Twilio (< 500).
+  const { deps, calls, timeouts } = makeDeps([{ throws: "TimeoutError", ms: 3100 }, TWILIO_OK], TW, twilioProvider);
+  const { res, body, logs } = await run(signedRequest(makeBody(ISRAELI)), deps);
+  assertEquals(calls.length, 1);
+  assertEquals(timeouts, [1500]);
+  assertEquals(res.status, 200);
+  assertEquals(body, UNAVAILABLE);
+  assert(logs.some((l) => l.includes("DEADLINE EXCEEDED") && l.includes('"remaining_ms":400')));
+});
+
+Deno.test("deadline: exactly 500 ms left → Twilio still runs", async () => {
+  // 2300 + 700 = 3000 ms spent → 500 ms left.
+  const { deps, calls } = makeDeps(
+    [{ throws: "TimeoutError", ms: 2300 }, { throws: "TimeoutError", ms: 700 }, TWILIO_OK],
+    TW,
+    twilioProvider,
+  );
+  const { body } = await run(signedRequest(makeBody(ISRAELI)), deps);
+  assertEquals(calls.length, 3);
+  assertEquals(body, {});
+});
+
 // ── No leaks (runs last; also scans every log line captured above) ─────────
 
 Deno.test("no-leak: logs never contain the OTP, message, key, secrets or full phone", async () => {
@@ -593,6 +842,23 @@ Deno.test("no-leak: logs never contain the OTP, message, key, secrets or full ph
   const { deps } = makeDeps([]);
   await run(signedRequest(makeBody(ISRAELI), { badSig: true }), deps);
 
+  // Twilio outcomes, with both auth styles.
+  const twilioScenarios: Array<[Step[], Record<string, string>, string]> = [
+    [[TWILIO_OK], TW, FOREIGN],
+    [[TWILIO_OK], TW_KEY, FOREIGN],
+    [[shmorErr(500, "internal_error"), shmorErr(500, "internal_error"), TWILIO_OK], TW_KEY, ISRAELI],
+    [[twilioErr(400, 21211)], TW, FOREIGN],
+    [[twilioErr(401, 20003)], TW_KEY, FOREIGN],
+    [[{ throws: "TimeoutError" }], TW, FOREIGN],
+    [[], { ...TW_KEY, SMS_DRY_RUN: "true" }, FOREIGN],
+    [[], { TWILIO_ACCOUNT_SID: "ACtestaccount0001", TWILIO_API_KEY_SECRET: TW_KEY_SECRET }, FOREIGN],
+    [[{ throws: "TimeoutError", ms: 3100 }], TW, ISRAELI],
+  ];
+  for (const [steps, env, phone] of twilioScenarios) {
+    const { deps } = makeDeps(steps, env, twilioProvider);
+    await run(signedRequest(makeBody(phone)), deps);
+  }
+
   assert(ALL_LOGS.length > 50, `expected many captured lines, got ${ALL_LOGS.length}`);
   const forbidden = [
     OTP,
@@ -606,6 +872,14 @@ Deno.test("no-leak: logs never contain the OTP, message, key, secrets or full ph
     ISRAELI,
     "501239876",
     "upstream says", // Shmor's error message is never logged
+    TW_AUTH_TOKEN,
+    TW_KEY_SECRET,
+    btoa(`ACtestaccount0001:${TW_AUTH_TOKEN}`),
+    btoa(`SKtestkey0001:${TW_KEY_SECRET}`),
+    "Basic ",
+    "twilio says", // Twilio's error message (it quotes the To number) is never logged
+    FOREIGN,
+    "Body",
   ];
   for (const needle of forbidden) {
     const hit = ALL_LOGS.find((l) => l.includes(needle));
