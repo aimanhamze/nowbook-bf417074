@@ -5,7 +5,10 @@
 --       before the prod apply. SAVE THE OUTPUT — §A compares against it.
 --   §A  after the migration. Read-only. DEV and PROD. (§A6/§A7 after the cron.)
 --   §B  after the migration. Behaviour tests, all rolled back. DEV ONLY.
---   §C  end-to-end through the deployed function and the real app. DEV ONLY.
+--   §C  end-to-end through the deployed function and the real app. DEV ONLY,
+--       no WhatsApp (DEV has no SendPulse secrets).
+--   §C2 PROD: first WhatsApp test — one test provider, only your number.
+--       CRON_SECRET is reused, never changed.
 --   §D  ongoing monitoring.
 --   §E  rollback script (commented out).
 --
@@ -220,7 +223,7 @@ WHERE jobname IN ('waitlist-dispatch-1min', 'waitlist-housekeeping-15min')
 ORDER BY jobname;
 
 -- A7. AFTER the first cancellation on an opted-in provider (or on DEV, after
---     §C step 5): the dispatch job really reaches the function.
+--     §C step 15): the dispatch job really reaches the function.
 --     Expect status 200 rows. A row with status_code NULL and error_msg set,
 --     or no row at all while cron.job_run_details says "succeeded", is the
 --     booking-reminder failure mode: STOP and report.
@@ -823,31 +826,54 @@ SELECT count(*) AS leftover_test_staff    FROM public.provider_staff    WHERE na
 
 
 -- ═════════════════════════════════════════════════════════════════════════════
--- §C. END-TO-END — DEV ONLY, through the deployed function and the real app
+-- §C. END-TO-END — DEV ONLY, through the deployed function and the real app.
+--     NO WHATSAPP: DEV has no SendPulse secrets, by decision. WhatsApp is
+--     tested on PROD (§C2). Here every claimed round's ledger row must be
+--     'skipped' — never 'failed', never 'sent'.
 -- ═════════════════════════════════════════════════════════════════════════════
 -- Prerequisites:
+--   * §0, the migration, §A and §B done on DEV.
 --   * waitlist-dispatch deployed to DEV:
---       supabase functions deploy waitlist-dispatch --project-ref ovpfljqlfzxjfcbrtwra
---   * DEV secrets (supabase secrets list --project-ref ovpfljqlfzxjfcbrtwra):
---       CRON_SECRET, SENDPULSE_CLIENT_ID + SENDPULSE_CLIENT_SECRET (or the bare
---       client_id/client_secret), SENDPULSE_BOT_ID, VAPID_KEYS, and
---       WHATSAPP_WAITLIST_PHONES = the two test phones below (comma-separated).
+--       supabase functions deploy waitlist-dispatch --project-ref ovpfjlqlfzxjfcbrtwra
+--   * DEV secrets (supabase secrets list --project-ref ovpfjlqlfzxjfcbrtwra):
+--       CRON_SECRET
+--       WHATSAPP_WAITLIST_PHONES = ONE number that none of A, B, C has (your
+--         own) — step 4 tests the gate, step 5 opens it to '*'.
+--       VAPID_KEYS = DEV keys (below), or unset to skip push (step 14).
+--       NO SendPulse secrets (client_id / client_secret / SENDPULSE_BOT_ID).
 --   * Daytime, Israel (08:00–22:00), or nothing is sent — by design.
---   * The cron is NOT scheduled yet: steps 1–9 call the function by hand, so
---     every run is one you started.
+--   * The cron is NOT scheduled yet: steps 1–14 call the function by hand.
 --
--- People:
---   provider P  — a DEV provider; customers A, B, D book with it.
---   A — allowlisted phone, display_name set, push enabled on a real phone
---       (Profile → notifications).
---   B — allowlisted phone, display_name set.
---   C — NOT allowlisted.
+-- DEV push (optional; without it, run step 14 instead of checking push):
+--   1. Generate a key pair (deno at ~/.deno/bin/deno.exe):
+--        deno eval --no-lock 'import * as w from "jsr:@negrel/webpush@0.5.0"; const k = await w.generateVapidKeys({ extractable: true }); console.log(JSON.stringify(await w.exportVapidKeys(k))); console.log(await w.exportApplicationServerKey(k));'
+--      Line 1 (a JWK pair) → DEV secret VAPID_KEYS.
+--      Line 2 (87 chars)  → VITE_VAPID_PUBLIC_KEY in your local .env.
+--   2. npm run build:dev && npm run preview — `npm run dev` registers no
+--      service worker, so it cannot receive push.
+--   3. As A, turn notifications off and on in the profile, so the
+--      subscription is re-made against the DEV key. An old subscription made
+--      with the PROD key gets 403 from the push service (counted as failed).
+--
+-- People (none needs a phone; '*' lets a phoneless account through the gate):
+--   provider P — a DEV provider with a business name and a private service S.
+--   A — push enabled (above), display_name set.
+--   B — any customer account.
+--   C — NO phone and NO display_name.
 --   D — any other account; makes and cancels the bookings.
 --
 -- Manual run (bash; the JSON reply is the run summary):
---   curl -s -X POST https://ovpfljqlfzxjfcbrtwra.supabase.co/functions/v1/waitlist-dispatch \
+--   curl -s -X POST https://ovpfjlqlfzxjfcbrtwra.supabase.co/functions/v1/waitlist-dispatch \
 --     -H "Authorization: Bearer <DEV_ANON_KEY>" -H "x-cron-secret: <DEV_CRON_SECRET>" \
 --     -H "Content-Type: application/json" -d '{}'
+--
+-- Ledger check used below:
+--   SELECT e.user_id, l.message_kind, l.status, l.error_code, l.template_name
+--   FROM waitlist_send_log l JOIN waitlist_entries e ON e.id = l.waitlist_entry_id
+--   ORDER BY l.created_at DESC LIMIT 5;
+--
+-- One ACTIVE entry per (user, provider, day): before a step says "new entry
+-- for B", set B's previous entry to 'left' (ended_at = now()).
 --
 --  #   Step                                                          Expect
 --  ──  ────────────────────────────────────────────────────────────  ─────────────────────────────────────
@@ -856,26 +882,28 @@ SELECT count(*) AS leftover_test_staff    FROM public.provider_staff    WHERE na
 --  3   SQL: UPDATE provider_profiles SET waitlist_enabled = true,
 --      whatsapp_message_language = 'he' WHERE id = '<P>';
 --      Insert entries for TOMORROW (the Phase 3 join RPC does not
---      exist yet), using a private service S of P:
---        A: anyone, afternoon, notify_lang 'he'
+--      exist yet), using S:
+--        A: anyone, afternoon only, notify_lang 'he'
 --        B: named staff member (or anyone if P has no staff),
 --           morning only
---        C: anyone, all windows
+--        C: anyone, all windows, notify_lang NULL
 --      INSERT INTO public.waitlist_entries (user_id, provider_id,
 --        entry_date, service_id, staff_id, wants_morning,
 --        wants_afternoon, wants_evening, notify_lang) VALUES (…);
---  4   D books S tomorrow at 14:00 in the app, then cancels it.      +1 event (Phase 1 C-check)
---  5   Run the function.                                             A: WhatsApp (Hebrew; date, 14:00,
---                                                                    business), button opens
---                                                                    /provider/<P>; bell row; push.
+--  4   GATE. D books S tomorrow at 14:00 (on P's slot grid) and      Summary reasons.NOT_ALLOWLISTED >= 1;
+--      cancels it. Run.                                                no ledger rows; no bell rows; A's and
+--                                                                      C's notify_count still 0; event
+--                                                                      outcome no_match
+--  5   Set WHATSAPP_WAITLIST_PHONES = '*' (next invocation picks     A: bell + push in Hebrew; tapping
+--      it up; if a run still says NOT_ALLOWLISTED, redeploy). D        opens /provider/<P>. Ledger
+--      books + cancels 14:30; run.                                     waitlist_slot:1, skipped /
+--                                                                      WHATSAPP_NOT_CONFIGURED.
+--                                                                    C: bell (Hebrew, provider language);
+--                                                                      ledger skipped / INVALID_PHONE.
 --                                                                    B: nothing (morning only).
---                                                                    C: nothing on any channel (not
---                                                                    allowlisted), no ledger row.
---      SQL: SELECT * FROM waitlist_send_log ORDER BY created_at DESC LIMIT 5;
---           → A, waitlist_slot:1, status sent, sendpulse_message_id set
---      SQL: SELECT id, outcome FROM waitlist_events ORDER BY id DESC LIMIT 3;
---           → notified:1
---  6   D books + cancels tomorrow 15:00 (within 60 min of step 5)    A: nothing (TOO_SOON); event
+--      SQL: SELECT id, outcome, processed_at, attempts                 Event notified:2, processed_at set,
+--           FROM waitlist_events ORDER BY id DESC LIMIT 3;             attempts 1; NO ledger row 'failed'
+--  6   D books + cancels tomorrow 15:00 (within 60 min of step 5)    A, C: nothing (TOO_SOON); event
 --      and runs the function.                                          outcome no_match
 --  7   SQL: UPDATE waitlist_entries SET last_notified_at =
 --      now() - interval '61 minutes' WHERE id = '<A entry>';
@@ -885,22 +913,107 @@ SELECT count(*) AS leftover_test_staff    FROM public.provider_staff    WHERE na
 --      another account books 13:00. Run.                             no_match
 --  9   Fulfilment: A books any slot tomorrow in the app. Run.        A's entry status = fulfilled
 --  10  Provider off: SET waitlist_enabled = false; D cancels a       Event outcome provider_off; nothing
---      booking; run.                                                 sent. Turn it back on.
+--      booking; run. Turn it back on.                                sent
 --  11  Group: cancel a booking of a group service of P; run.         Event outcome group
---  12  English bell: new entry for B with notify_lang 'en'; free a   B: WhatsApp in Hebrew (provider
---      morning slot; run.                                            language), bell + push in English
---  13  Arabic: ONLY after the Arabic template's URL button is        WhatsApp waitlist_slot_available_
---      confirmed. SET whatsapp_message_language = 'ar'; new entry      arabic, bell/push Arabic when
---      for B with notify_lang NULL; free a morning slot; run.          notify_lang is NULL
---  14  No phone: an account with no phone, WHATSAPP_WAITLIST_PHONES  Ledger row skipped / INVALID_PHONE;
---      temporarily '*'. Free a slot; run. Restore the allowlist.       bell + push still delivered
+--  12  English: new entry for B with notify_lang 'en'; free a        B: bell + push in English; ledger
+--      morning slot; run.                                              skipped / WHATSAPP_NOT_CONFIGURED,
+--                                                                      template ..._hebrew
+--  13  Arabic: SET whatsapp_message_language = 'ar'; new entry      B: bell + push in Arabic; ledger
+--      for B with notify_lang NULL; free a morning slot; run.          template waitlist_slot_available_
+--      Set it back to 'he'.                                            arabic, skipped
+--  14  Only if DEV push is NOT set up: unset VAPID_KEYS; new entry   Summary reasons.PUSH_NO_VAPID_KEYS
+--      for B; free a slot; run.                                        = 1; bell still delivered
 --  15  Schedule BOTH cron jobs (migration §10, DEV values), then     Within a minute: §A7 shows 200s;
 --      §A6. D cancels another booking; do NOT run by hand.             the event is processed
 --  16  Leave it 10 minutes with no cancellations.                    net._http_response gains no rows
 --                                                                    (the EXISTS guard holds the cron)
 --
+-- Not covered on DEV, left to §C2: the WhatsApp text and button, a ledger row
+-- reaching 'sent' with sendpulse_message_id, and the allowlist matching a real
+-- number.
+--
 -- Clean up afterwards: set the test entries to 'left' (ended_at = now()), turn
 -- waitlist_enabled back off if P should not stay opted in.
+
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- §C2. PROD — FIRST WHATSAPP TEST. One test provider opted in, ONLY your
+--      number on WHATSAPP_WAITLIST_PHONES.
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Preconditions:
+--   * §C passed on DEV.
+--   * On PROD: §0 (saved), the migration, §A. NOT §B — it is DEV only.
+--   * The Arabic template's URL button is confirmed, or skip step 7.
+--   * The cron is NOT scheduled yet.
+--
+-- ⚠ CRON_SECRET: DO NOT SET OR CHANGE IT IN THIS ROLLOUT. It is one
+--   project-wide secret that whatsapp-booking-reminder already reads, and the
+--   reminder's cron job carries its value in its stored command. Changing it
+--   makes the reminder reject its own cron — customer reminders stop, silently.
+--   waitlist-dispatch reads the same secret; reuse its value for the waitlist
+--   cron (§10) and the manual curl. Rotating it is a SEPARATE ticket (new
+--   secret, BOTH cron jobs updated, reminders verified firing).
+--
+--   Read the current value from the reminder's cron command (PROD, SQL
+--   editor). Do not paste the result into a chat or a ticket:
+--     SELECT jobname,
+--            COALESCE(
+--              substring(command FROM $re$'x-cron-secret'\s*,\s*'([^']+)'$re$),
+--              substring(command FROM $re$"x-cron-secret"\s*:\s*"([^"]+)"$re$)
+--            ) AS cron_secret
+--     FROM cron.job
+--     WHERE command LIKE '%x-cron-secret%'
+--       AND jobname NOT LIKE 'waitlist%';
+--   Expect one row (the reminder job) and a non-null cron_secret. Several rows
+--   must all show the same value. A NULL means the header is written another
+--   way: SELECT command for that job and read it by eye.
+--
+-- Manual run (bash):
+--   curl -s -X POST https://aqlcjjrgsxispdjwrnqf.supabase.co/functions/v1/waitlist-dispatch \
+--     -H "Authorization: Bearer <PROD_ANON_KEY>" -H "x-cron-secret: <value read above>" \
+--     -H "Content-Type: application/json" -d '{}'
+--
+--  #   Step                                                          Expect
+--  ──  ────────────────────────────────────────────────────────────  ─────────────────────────────────────
+--  1   Secrets. supabase secrets list --project-ref                  CRON_SECRET, VAPID_KEYS, the
+--      aqlcjjrgsxispdjwrnqf. Set ONLY:                                 SendPulse pair (SENDPULSE_CLIENT_ID +
+--        WHATSAPP_WAITLIST_PHONES = <your number>                      _SECRET or client_id + client_secret)
+--      Nothing else is set or changed.                                 and SENDPULSE_BOT_ID already listed
+--  2   SQL: SELECT id, business_name FROM provider_profiles          0 rows. Nobody is opted in yet.
+--      WHERE waitlist_enabled;
+--  3   Deploy waitlist-dispatch to PROD. Run once by hand.           200. Every backlog event since
+--      SQL: SELECT outcome, count(*) FROM waitlist_events              Phase 1 closes stale / provider_off;
+--           GROUP BY 1;                                                notified 0, whatsapp.sent 0;
+--      SQL: SELECT count(*) FROM waitlist_send_log;                    waitlist_send_log empty
+--  4   Opt in ONE test provider you control (business name set,
+--      open tomorrow, whatsapp_message_language 'he'). Insert an
+--      entry for YOUR customer account — role user, OTP-verified
+--      phone = your number, display_name set — anyone, all
+--      windows, notify_lang 'he'.
+--  5   Your second account books + cancels a slot tomorrow at the    WhatsApp to your phone: Hebrew
+--      test provider (it receives PROD's normal confirmations, so      template, your name, business, DD/
+--      it must be yours). Run.                                         MM/YYYY, HH:MM; the button opens
+--                                                                      https://www.ehjezly.co.il/provider/
+--                                                                      <id>. Bell + push. Ledger 'sent',
+--                                                                      sendpulse_message_id set. Event
+--                                                                      notified:1
+--  6   Negative: an entry for your second account (its number is     Summary NOT_ALLOWLISTED; no ledger
+--      NOT on the list); free another slot; run.                       row for it; nothing on any channel
+--  7   Arabic (only after the button is confirmed): SET the test     waitlist_slot_available_arabic
+--      provider's whatsapp_message_language = 'ar'; new entry for      arrives, button works. (This setting
+--      your account (step-5 entry 'left' first); free a slot;          also switches that provider's
+--      run. Set it back.                                               booking confirmations.)
+--  8   Schedule both cron jobs (migration §10, PROD values, the      §A6 no CR; §A7 200s after the next
+--      CRON_SECRET read above). Then §A6, §A7.                         cancellation
+--  9   Leave ONLY the test provider opted in for a day. Watch §D.    No 'failed' ledger rows; reminders
+--      Check the reminders still fire (unchanged secret).              unaffected
+--  10  Wider rollout: opt in real providers while the list still     Their customers get nothing;
+--      holds only your number.                                         reasons.NOT_ALLOWLISTED in the
+--                                                                      run logs shows the matching volume.
+--                                                                      Open the list to '*' only after.
+--
+-- Kill switches: unset WHATSAPP_WAITLIST_PHONES (nothing on ANY channel, no
+-- round claimed), or SELECT cron.unschedule('waitlist-dispatch-1min');
 
 
 -- ═════════════════════════════════════════════════════════════════════════════

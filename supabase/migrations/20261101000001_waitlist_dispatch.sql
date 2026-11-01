@@ -15,7 +15,9 @@
 -- ║    3. VERIFY §A, then §B (DEV ONLY), then deploy waitlist-dispatch to    ║
 -- ║       DEV with its secrets, then §C (end-to-end, DEV ONLY).              ║
 -- ║    4. §10 below — the two cron jobs — on DEV, LAST. Then §A6.            ║
--- ║    5. PROD: §0, this migration, §A, the function + secrets, §10, §A6.    ║
+-- ║    5. PROD: §0, this migration, §A, then VERIFY §C2 — the function,      ║
+-- ║       the first WhatsApp test, §10, §A6. CRON_SECRET is REUSED from the  ║
+-- ║       reminder's cron; never set or change it in this rollout.           ║
 -- ║                                                                          ║
 -- ║  Deploy order is SQL → function → cron. The cron calls the function and  ║
 -- ║  the function calls these RPCs; any other order is a stream of 404s or   ║
@@ -732,7 +734,7 @@ COMMIT;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- §10. Cron — RUN SEPARATELY, LAST: after the function is deployed with its
---      secrets and §C has passed on that project.
+--      secrets and §C (DEV) / §C2 steps 1–7 (PROD) have passed.
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ⚠  Each statement is ONE LINE and an ORDINARY string literal (quotes doubled),
 --    never a $cron$ dollar-quoted block, and headers are built with
@@ -740,9 +742,10 @@ COMMIT;
 --    command carried CRLF line endings into the headers JSON. After scheduling,
 --    VERIFY §A6 checks the stored commands for CR and MUST pass.
 --
--- Replace <REF> (aqlcjjrgsxispdjwrnqf on PROD, ovpfljqlfzxjfcbrtwra on DEV),
+-- Replace <REF> (aqlcjjrgsxispdjwrnqf on PROD, ovpfjlqlfzxjfcbrtwra on DEV),
 -- <ANON_KEY> (that project's anon key) and <CRON_SECRET> (that project's
--- CRON_SECRET secret).
+-- CRON_SECRET secret — on PROD, read it from the reminder's cron command as
+-- VERIFY §C2 shows; do not set a new one).
 --
 -- The dispatch job posts only when there is an unprocessed event AND it is not
 -- quiet hours, so an idle minute costs one indexed EXISTS and no HTTP call.
