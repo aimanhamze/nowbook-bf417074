@@ -3,7 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-const VAPID_PUBLIC_KEY = "BHylGaszUAFTncHgaDvpE1OtowqzGafenfmwi5rHF54f7vIHn2l-mGMhx8PWWJJ2mapI3yVM9j3MWqzs02CeP-o";
+// Must be the public half of the VAPID_KEYS secret of the Supabase project
+// this build talks to. The fallback is PROD's; set VITE_VAPID_PUBLIC_KEY only
+// for a build against another project (e.g. DEV with its own keys).
+const VAPID_PUBLIC_KEY =
+  import.meta.env.VITE_VAPID_PUBLIC_KEY ||
+  "BHylGaszUAFTncHgaDvpE1OtowqzGafenfmwi5rHF54f7vIHn2l-mGMhx8PWWJJ2mapI3yVM9j3MWqzs02CeP-o";
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
