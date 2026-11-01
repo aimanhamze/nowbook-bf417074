@@ -30,6 +30,8 @@ const {
   notifyLanguage,
   bellText,
   buildTemplatePayload,
+  whatsappSkipCode,
+  whatsappConfigured,
   slotFitsHours,
   groupByEntry,
 } = mod;
@@ -170,6 +172,42 @@ Deno.test("template payload: exact body, language and URL button", () => {
       ],
     },
   });
+});
+
+// ── WhatsApp skip ────────────────────────────────────────────────────────────
+
+Deno.test("whatsapp skip: customer data first, then config; null = attempt", () => {
+  assertEquals(whatsappSkipCode(null, "דנה", true), "INVALID_PHONE");
+  assertEquals(whatsappSkipCode(null, "", false), "INVALID_PHONE");
+  assertEquals(whatsappSkipCode("972501234567", "", true), "NO_NAME");
+  assertEquals(whatsappSkipCode("972501234567", "", false), "NO_NAME");
+  assertEquals(whatsappSkipCode("972501234567", "דנה", false), "WHATSAPP_NOT_CONFIGURED");
+  assertEquals(whatsappSkipCode("972501234567", "דנה", true), null);
+});
+
+Deno.test("whatsapp configured: needs a full credential pair AND SENDPULSE_BOT_ID", () => {
+  const names = ["SENDPULSE_CLIENT_ID", "SENDPULSE_CLIENT_SECRET", "client_id", "client_secret", "SENDPULSE_BOT_ID"];
+  const saved = new Map(names.map((n) => [n, Deno.env.get(n)]));
+  const set = (vars: Record<string, string>) => {
+    for (const n of names) Deno.env.delete(n);
+    for (const [k, v] of Object.entries(vars)) Deno.env.set(k, v);
+  };
+  try {
+    set({});
+    assertFalse(whatsappConfigured(), "nothing set (DEV)");
+    set({ SENDPULSE_CLIENT_ID: "id", SENDPULSE_CLIENT_SECRET: "secret" });
+    assertFalse(whatsappConfigured(), "no bot id — would send bot_id: undefined");
+    set({ SENDPULSE_BOT_ID: "bot" });
+    assertFalse(whatsappConfigured(), "bot id without credentials");
+    set({ SENDPULSE_CLIENT_ID: "id", SENDPULSE_BOT_ID: "bot" });
+    assertFalse(whatsappConfigured(), "half a credential pair");
+    set({ SENDPULSE_CLIENT_ID: "id", SENDPULSE_CLIENT_SECRET: "secret", SENDPULSE_BOT_ID: "bot" });
+    assert(whatsappConfigured());
+    set({ client_id: "id", client_secret: "secret", SENDPULSE_BOT_ID: "bot" });
+    assert(whatsappConfigured(), "the bare client_id / client_secret names");
+  } finally {
+    for (const [n, v] of saved) v === undefined ? Deno.env.delete(n) : Deno.env.set(n, v);
+  }
 });
 
 // ── Opening-hours gate ───────────────────────────────────────────────────────

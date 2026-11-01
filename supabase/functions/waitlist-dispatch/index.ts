@@ -30,6 +30,11 @@
 // Unset or empty = nobody. "*" = everyone. There is deliberately no fallback to
 // another allowlist.
 //
+// NO SENDPULSE CONFIG (no credential pair, or no SENDPULSE_BOT_ID): WhatsApp
+// is skipped — the ledger row is written 'skipped' / WHATSAPP_NOT_CONFIGURED
+// and SendPulse is never contacted — while bell and push still go out and the
+// event closes normally. DEV runs this way.
+//
 // TIMEZONE: no clock arithmetic over booking dates happens here. Quiet hours,
 // staleness, lead time and the 60-minute spacing are SQL (AT TIME ZONE
 // 'Asia/Jerusalem'). The only date handling here is weekday lookup for the
@@ -181,6 +186,23 @@ export function parseAllowlist(raw: string | null | undefined): Allowlist {
 export function isAllowlisted(list: Allowlist, phoneDigits: string | null): boolean {
   if (list.all) return true;
   return phoneDigits !== null && list.phones.has(phoneDigits);
+}
+
+/**
+ * Why WhatsApp is NOT attempted for this customer, or null to attempt it.
+ * Customer data first (a permanent property of the account), then config.
+ * Any code here makes waitlist_claim_round write the ledger row 'skipped' from
+ * the start; bell and push still go out on the same claim.
+ */
+export function whatsappSkipCode(
+  phoneDigits: string | null,
+  name: string,
+  whatsappConfigured: boolean,
+): "INVALID_PHONE" | "NO_NAME" | "WHATSAPP_NOT_CONFIGURED" | null {
+  if (!phoneDigits) return "INVALID_PHONE";
+  if (!name) return "NO_NAME";
+  if (!whatsappConfigured) return "WHATSAPP_NOT_CONFIGURED";
+  return null;
 }
 
 /** "2026-11-06" → "06/11/2026". Pure string work. */
@@ -390,6 +412,20 @@ function loadSendPulseCreds(): { clientId: string; clientSecret: string; grantTy
   throw new Error("SENDPULSE_CREDENTIALS_NOT_CONFIGURED");
 }
 
+/**
+ * A full credential pair AND a bot id. Without the bot id SendPulse would be
+ * called with bot_id: undefined and reject — a 'failed' row that looks like a
+ * delivery problem. Checked once per run, before any round is claimed.
+ */
+export function whatsappConfigured(): boolean {
+  try {
+    loadSendPulseCreds();
+  } catch {
+    return false;
+  }
+  return !!Deno.env.get("SENDPULSE_BOT_ID");
+}
+
 async function getAccessToken(): Promise<string> {
   const now = Date.now();
   if (cachedToken && cachedToken.expiresAt - TOKEN_EXPIRY_SKEW_SECONDS * 1000 > now) return cachedToken.token;
@@ -578,6 +614,7 @@ async function processEntry(
   slots: Candidate[],
   provider: ProviderInfo,
   allowlist: Allowlist,
+  canSendWhatsApp: boolean,
   tally: Tally,
 ): Promise<number | null> {
   const first = slots[0];
@@ -597,8 +634,8 @@ async function processEntry(
 
   const waLang = whatsappLanguage(provider.whatsappLang);
   const template = TEMPLATES[waLang];
-  // Data-quality skips for WhatsApp only; bell and push still go out.
-  const whatsappSkip = !customer.phoneDigits ? "INVALID_PHONE" : !customer.name ? "NO_NAME" : null;
+  // WhatsApp-only skips; bell and push still go out.
+  const whatsappSkip = whatsappSkipCode(customer.phoneDigits, customer.name, canSendWhatsApp);
 
   // Earliest slot first; a slot taken since the match falls through to the next.
   let claimed: { logId: string; slot: Candidate } | null = null;
@@ -665,6 +702,7 @@ async function processEntry(
     tally.push.sent += push.sent;
     tally.push.failed += push.failed;
     if (push.skipped === "NO_SUBSCRIPTIONS") tally.push.users_without_subscription += 1;
+    if (push.skipped === "NO_VAPID_KEYS") count(tally, "PUSH_NO_VAPID_KEYS");
   } catch (err) {
     tally.push.failed += 1;
     console.error("waitlist-dispatch: push failed", {
@@ -800,9 +838,20 @@ async function runDispatch(admin: Admin, batchLimit: number) {
   // 5. Notify, one entry at a time.
   const notifiedPerEvent = new Map<number, number>();
   const allowlist = parseAllowlist(Deno.env.get("WHATSAPP_WAITLIST_PHONES"));
+  const canSendWhatsApp = whatsappConfigured();
+  if (!canSendWhatsApp && fitting.length > 0) {
+    console.warn("waitlist-dispatch: SendPulse credentials or SENDPULSE_BOT_ID not configured — WhatsApp skipped");
+  }
   for (const slots of groupByEntry(fitting).values()) {
     try {
-      const eventId = await processEntry(admin, slots, providers.get(slots[0].provider_id)!, allowlist, tally);
+      const eventId = await processEntry(
+        admin,
+        slots,
+        providers.get(slots[0].provider_id)!,
+        allowlist,
+        canSendWhatsApp,
+        tally,
+      );
       if (eventId !== null) notifiedPerEvent.set(eventId, (notifiedPerEvent.get(eventId) ?? 0) + 1);
     } catch (err) {
       // The claim (if any) protects against a duplicate; leave the events
