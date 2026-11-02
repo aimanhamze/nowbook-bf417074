@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { NameGate } from "@/components/NameGate";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ProviderIdGuard } from "@/components/ProviderIdGuard";
 import { Suspense, lazy, useEffect } from "react";
 import { BranchScope } from "@/components/branch/BranchScope";
 
@@ -98,8 +99,8 @@ const App = () => (
                   <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
                   <Route path="/explore" element={<ErrorBoundary><Explore /></ErrorBoundary>} />
                   <Route path="/nearby" element={<ErrorBoundary><Nearby /></ErrorBoundary>} />
-                  <Route path="/provider/:id" element={<ErrorBoundary><ProviderDetail /></ErrorBoundary>} />
-                  <Route path="/provider/:id/book" element={<ProtectedRoute><ErrorBoundary><BookAppointment /></ErrorBoundary></ProtectedRoute>} />
+                  <Route path="/provider/:id" element={<ProviderIdGuard><ErrorBoundary><ProviderDetail /></ErrorBoundary></ProviderIdGuard>} />
+                  <Route path="/provider/:id/book" element={<ProviderIdGuard subpath="/book"><ProtectedRoute><ErrorBoundary><BookAppointment /></ErrorBoundary></ProtectedRoute></ProviderIdGuard>} />
                   <Route path="/booking-confirmed" element={<ProtectedRoute><ErrorBoundary><BookingConfirmed /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/bookings" element={<ProtectedRoute><ErrorBoundary><Bookings /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/favorites" element={<ProtectedRoute><ErrorBoundary><Favorites /></ErrorBoundary></ProtectedRoute>} />
