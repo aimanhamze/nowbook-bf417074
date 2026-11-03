@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback, createContext, useContext, type CSSProperties } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, createContext, useContext, type CSSProperties, type ReactNode } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
 import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote, UserRound, MoonStar, Timer } from "lucide-react";
@@ -13,6 +13,8 @@ import { useProviderServices } from "@/hooks/useProviderServices";
 import { useProviderActiveStaff } from "@/hooks/useProviderStaff";
 import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useProviderClassSchedule, ClassScheduleEntry } from "@/hooks/useProviderClassSchedule";
+import { useProviderWaitlistCounts } from "@/hooks/useProviderWaitlist";
+import { WaitlistDayPill } from "@/components/dashboard/WaitlistDayPill";
 import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { NewBookingSheet } from "@/components/dashboard/NewBookingSheet";
 import { RescheduleSheet } from "@/components/dashboard/RescheduleSheet";
@@ -951,7 +953,7 @@ function NoServicesCard() {
 }
 
 // Shared prev/next navigation header used by the daily and weekly views.
-function NavHeader({ title, prevLabel, nextLabel, onPrev, onNext, selectedDate, showNewBooking }: {
+function NavHeader({ title, prevLabel, nextLabel, onPrev, onNext, selectedDate, showNewBooking, extra }: {
   title: string;
   prevLabel: string;
   nextLabel: string;
@@ -959,6 +961,8 @@ function NavHeader({ title, prevLabel, nextLabel, onPrev, onNext, selectedDate, 
   onNext: () => void;
   selectedDate: Date;
   showNewBooking: boolean;
+  /** Optional start-side item on the new-booking row (the waiting-list pill). */
+  extra?: ReactNode;
 }) {
   return (
     <div className="space-y-3">
@@ -973,10 +977,22 @@ function NavHeader({ title, prevLabel, nextLabel, onPrev, onNext, selectedDate, 
           <ForwardArrow className="h-3.5 w-3.5" />
         </Button>
       </div>
-      {showNewBooking && (
-        <div className="flex justify-end">
-          <NewBookingSheet selectedDate={selectedDate} />
+      {extra ? (
+        // ms-auto keeps the new-booking button exactly where justify-end put it.
+        <div className="flex items-center gap-2">
+          {extra}
+          {showNewBooking && (
+            <div className="ms-auto">
+              <NewBookingSheet selectedDate={selectedDate} />
+            </div>
+          )}
         </div>
+      ) : (
+        showNewBooking && (
+          <div className="flex justify-end">
+            <NewBookingSheet selectedDate={selectedDate} />
+          </div>
+        )
       )}
     </div>
   );
@@ -1344,6 +1360,10 @@ function DailyView({ selectedDate, bookings, schedule, isFitnessStudio, reminder
   });
 
   const title = format(selectedDate, "EEEE, d MMM", { locale: dateFnsLocale });
+  // Waiting customers this day (0 when the waiting list is off): only then does
+  // the header row change at all.
+  const { counts: waitlistCounts } = useProviderWaitlistCounts();
+  const waitlistDayCount = waitlistCounts.get(format(selectedDate, "yyyy-MM-dd")) ?? 0;
 
   return (
     <div className="space-y-4">
@@ -1355,6 +1375,7 @@ function DailyView({ selectedDate, bookings, schedule, isFitnessStudio, reminder
         onNext={onNext}
         selectedDate={selectedDate}
         showNewBooking={!noServices}
+        extra={waitlistDayCount > 0 ? <WaitlistDayPill date={selectedDate} /> : undefined}
       />
 
       {noServices ? (
@@ -1520,16 +1541,36 @@ export function CalendarTab() {
     return map;
   }, [colorsEnabled, visibleBookings, bookingColor]);
 
-  // Custom day cell (number + dots) only while colors are on — otherwise the
-  // Calendar keeps react-day-picker's stock DayContent.
+  // Waiting-list counts per day — an empty map (and no request) while the
+  // waiting list is off.
+  const { enabled: waitlistOn, counts: waitlistCounts } = useProviderWaitlistCounts();
+
+  // Custom day cell (number + dots + waiting-list badge) only while colors or
+  // the waiting list are on — otherwise the Calendar keeps react-day-picker's
+  // stock DayContent, exactly as before.
   const calendarComponents = useMemo(() => {
-    if (!colorsEnabled) return undefined;
+    if (!colorsEnabled && !waitlistOn) return undefined;
     const DayWithDots = ({ date }: DayContentProps) => {
-      const colors = dotColorsByDate.get(format(date, "yyyy-MM-dd")) ?? [];
+      const key = format(date, "yyyy-MM-dd");
+      const colors = colorsEnabled ? dotColorsByDate.get(key) ?? [] : [];
+      const waiting = waitlistCounts.get(key) ?? 0;
       return (
         <span className="relative flex h-full w-full items-center justify-center">
           {/* Same locale-formatted numeral react-day-picker renders by default */}
           <span>{format(date, "d", { locale: dateFnsLocale })}</span>
+          {waiting > 0 && (
+            <>
+              {/* Corner badge; the day cell itself stays the tap target. */}
+              <span
+                aria-hidden
+                dir="ltr"
+                className="absolute -top-1 end-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-accent-foreground ring-2 ring-card"
+              >
+                {waiting}
+              </span>
+              <span className="sr-only">{t("waitlistCellAria").replace("{count}", String(waiting))}</span>
+            </>
+          )}
           {colors.length > 0 && (
             <span className="absolute bottom-0.5 left-1/2 flex -translate-x-1/2 gap-0.5">
               {colors.map((c) => (
@@ -1541,7 +1582,7 @@ export function CalendarTab() {
       );
     };
     return { DayContent: DayWithDots };
-  }, [colorsEnabled, dotColorsByDate, dateFnsLocale]);
+  }, [colorsEnabled, dotColorsByDate, dateFnsLocale, waitlistOn, waitlistCounts, t]);
 
   // ── Derived out-of-hours marker ──
   // Adapters onto resolveDayHours' signature: blocked dates arrive as rows (it
@@ -1750,6 +1791,7 @@ export function CalendarTab() {
                 {!noServices && <NewBookingSheet selectedDate={selectedDate} />}
               </div>
             </div>
+            <WaitlistDayPill date={selectedDate} className="mb-3" />
 
             {noServices ? (
               <NoServicesCard />
