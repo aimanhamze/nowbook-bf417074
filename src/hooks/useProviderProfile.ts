@@ -335,6 +335,29 @@ export function useProviderProfile() {
     },
   });
 
+  // Customer waiting list opt-in. Turning it OFF closes this branch's active
+  // entries in the same transaction (trg_waitlist_close_on_disable,
+  // 20261103000002) — no client step needed, and customers are not told.
+  const updateWaitlistEnabled = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
+      // Cast: column added by 20261017000001; types.ts regenerated after apply.
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update({ waitlist_enabled: value } as never)
+        .eq("id", profileId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+      // Customers read the flag through useAllProviders; the calendar counts
+      // and lists are emptied by the trigger on OFF.
+      queryClient.invalidateQueries({ queryKey: ["all-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-waitlist"] });
+    },
+  });
+
   // 'he' | 'ar' only — there is no approved English template, and the DB CHECK
   // constraint rejects anything else.
   const updateWhatsAppMessageLanguage = useMutation({
@@ -472,6 +495,7 @@ export function useProviderProfile() {
     updateMonthlyDefaults,
     updateWhatsAppTemplates,
     updateWhatsAppConfirmEnabled,
+    updateWaitlistEnabled,
     updateWhatsAppMessageLanguage,
     updateWhatsAppReminderEnabled,
     updateWhatsAppReminderHours,

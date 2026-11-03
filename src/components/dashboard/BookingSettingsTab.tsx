@@ -17,6 +17,7 @@ import {
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { usePendingCount } from "@/components/dashboard/PendingTab";
+import { useProviderWaitlistCounts } from "@/hooks/useProviderWaitlist";
 import { toast } from "sonner";
 
 const LEAD_TIME_OPTIONS = [15, 30, 60, 120, 240, 1440] as const;
@@ -45,7 +46,12 @@ export function BookingSettingsTab() {
     updateBookingWindow,
     updateCancellationNoticeHours,
     updateSlotInterval,
+    updateWaitlistEnabled,
   } = useProviderProfile();
+  const { fetchTotal: fetchWaitlistTotal } = useProviderWaitlistCounts();
+  const [waitlistChecking, setWaitlistChecking] = useState(false);
+  // How many were waiting when the turn-off confirmation opened; null = closed.
+  const [waitlistOffCount, setWaitlistOffCount] = useState<number | null>(null);
   const pendingCount = usePendingCount();
   const [pendingGuardOpen, setPendingGuardOpen] = useState(false);
 
@@ -75,6 +81,42 @@ export function BookingSettingsTab() {
     h === 0
       ? t("cancellationNoticeAlways")
       : t("cancellationNoticeHoursValue").replace("{n}", String(h));
+
+  // Cast: column added by 20261017000001 migration; types.ts regenerated after apply.
+  const waitlistEnabled =
+    (profile as { waitlist_enabled?: boolean } | null)?.waitlist_enabled ?? false;
+  const saveWaitlistEnabled = async (next: boolean) => {
+    try {
+      await updateWaitlistEnabled.mutateAsync(next);
+      toast.success(t("profileSaved"));
+    } catch {
+      // Never raw error text: the switch stays where it was (it is driven by
+      // the cached profile, which only changes on success).
+      toast.error(t("waitlistSaveError"));
+    }
+  };
+  // Turning OFF with people waiting removes them (silently, by the DB
+  // trigger) — confirm first. With nobody waiting, or turning ON, save now.
+  const handleWaitlistToggle = async (next: boolean) => {
+    if (!next) {
+      let waiting: number;
+      setWaitlistChecking(true);
+      try {
+        waiting = await fetchWaitlistTotal();
+      } catch {
+        // Can't tell whether anyone would be removed: don't guess, don't save.
+        toast.error(t("waitlistSaveError"));
+        return;
+      } finally {
+        setWaitlistChecking(false);
+      }
+      if (waiting > 0) {
+        setWaitlistOffCount(waiting);
+        return;
+      }
+    }
+    await saveWaitlistEnabled(next);
+  };
 
   const handleApprovalToggle = async (next: boolean) => {
     if (!next && pendingCount > 0) {
@@ -187,6 +229,25 @@ export function BookingSettingsTab() {
         </div>
       </div>
 
+      {/* Waiting list — private services only, so never for a fitness studio
+          (its customers book classes, which have no waiting list). */}
+      {!isFitnessStudio && (
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <div className="flex items-start gap-3">
+            <Switch
+              id="waitlist-enabled"
+              checked={waitlistEnabled}
+              onCheckedChange={handleWaitlistToggle}
+              disabled={updateWaitlistEnabled.isPending || waitlistChecking}
+            />
+            <div className="flex-1">
+              <Label htmlFor="waitlist-enabled" className="text-sm font-medium">{t("waitlistProviderLabel")}</Label>
+              <p className="text-xs text-muted-foreground mt-1">{t("waitlistProviderHelp")}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Scheduling policy selects */}
       <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
         <div>
@@ -291,6 +352,30 @@ export function BookingSettingsTab() {
           </Select>
         </div>
       </div>
+
+      {/* Waiting-list turn-off confirmation — only when someone is waiting */}
+      <AlertDialog open={waitlistOffCount !== null} onOpenChange={(open) => !open && setWaitlistOffCount(null)}>
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("waitlistOffConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {waitlistOffCount === 1
+                ? t("waitlistOffConfirmBodyOne")
+                : t("waitlistOffConfirmBody").replace("{count}", String(waitlistOffCount ?? 0))}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:space-x-0">
+            <AlertDialogCancel type="button" className="mt-0 h-11 rounded-2xl">{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => void saveWaitlistEnabled(false)}
+              className="h-11 rounded-2xl bg-red-600 text-white hover:bg-red-700"
+            >
+              {t("waitlistOffConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Pending-guard dialog — coupled to the require-approval turn-off */}
       <AlertDialog open={pendingGuardOpen} onOpenChange={setPendingGuardOpen}>
