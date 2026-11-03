@@ -128,3 +128,13 @@ describe("waiting-list strings", () => {
     }
   });
 });
+
+describe("waitlistWindowsLabel", () => {
+  const t = (k: string) => (translations.en as Record<string, string>)[k];
+  it("says Any time for all three, otherwise lists in fixed order", async () => {
+    const { waitlistWindowsLabel } = await import("./waitlistDay");
+    expect(waitlistWindowsLabel(["evening", "morning", "afternoon"], t)).toBe("Any time");
+    expect(waitlistWindowsLabel(["evening", "morning"], t)).toBe("Morning · Evening");
+    expect(waitlistWindowsLabel(["afternoon"], t)).toBe("Afternoon");
+  });
+});

@@ -113,3 +113,15 @@ export function waitlistDateLabel(entryDate: string, lang: string): string {
     month: "long",
   });
 }
+
+const WINDOW_KEYS: Record<TimeWindow, TranslationKey> = {
+  morning: "waitlistMorning",
+  afternoon: "waitlistAfternoon",
+  evening: "waitlistEvening",
+};
+
+/** "Morning · Evening", or "Any time" when all three were asked for. */
+export function waitlistWindowsLabel(windows: readonly TimeWindow[], t: (k: TranslationKey) => string): string {
+  if (windows.length === TIME_WINDOWS.length) return t("waitlistAnyTime");
+  return TIME_WINDOWS.filter((w) => windows.includes(w)).map((w) => t(WINDOW_KEYS[w])).join(" · ");
+}

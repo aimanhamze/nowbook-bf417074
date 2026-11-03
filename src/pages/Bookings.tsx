@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { useMyPackages } from "@/hooks/usePublicPackages";
 import { MyPackageCard } from "@/components/packages/MyPackageCard";
+import { WaitlistEntryCard } from "@/components/booking/WaitlistEntryCard";
+import { useMyWaitlist } from "@/hooks/useWaitlist";
 import type { Tables } from "@/integrations/supabase/types";
 import type { Provider } from "@/lib/mock-data";
 import { CustomerRescheduleSheet } from "@/components/booking/CustomerRescheduleSheet";
@@ -29,6 +31,7 @@ const Bookings = () => {
   const { lang, t } = useLang();
   const { user } = useAuth();
   const { providers: allProviders } = useAllProviders();
+  const { data: myWaitlist = [] } = useMyWaitlist();
 
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(0);
@@ -170,6 +173,23 @@ const Bookings = () => {
                       providerName={pkg.provider_name}
                       templateName={pkg.template_name}
                       index={i}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Waiting list — only when the customer is on one. Above the tabs:
+                these are days still being watched, not bookings. */}
+            {myWaitlist.length > 0 && (
+              <section className="mb-5 px-5" aria-labelledby="waitlist-section-title">
+                <h2 id="waitlist-section-title" className="mb-2 text-sm font-bold">{t("waitlistSection")}</h2>
+                <div className="flex flex-col gap-2">
+                  {myWaitlist.map((entry) => (
+                    <WaitlistEntryCard
+                      key={entry.id}
+                      entry={entry}
+                      staffEnabled={allProviders.find((p) => p.id === entry.provider_id)?.staffEnabled ?? false}
                     />
                   ))}
                 </div>
