@@ -38,6 +38,9 @@ export interface Provider {
   // Provider opted in to customer self-reschedule (Bookings page). Enforced in
   // the DB by trg_enforce_customer_reschedule, not only by this flag.
   allowCustomerReschedule: boolean;
+  // Provider opted in to the customer waiting list (waitlist_enabled, default
+  // false). Every waiting-list affordance is gated on it: false = zero change.
+  waitlistEnabled: boolean;
 }
 
 export const categories = [

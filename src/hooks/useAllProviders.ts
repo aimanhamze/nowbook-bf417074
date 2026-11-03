@@ -16,6 +16,7 @@ import {
   toLocalDateStr,
   type MonthlySettings,
   type DateOverrideRow,
+  type DayWindow,
 } from "@/lib/availabilityResolver";
 import { usePublicStaffHours } from "./useProviderStaffHours";
 import { usePublicStaffTimeOff } from "./useProviderStaffTimeOff";
@@ -48,6 +49,9 @@ export interface DbProvider {
   // Customer self-reschedule opt-in (added by 20261003000001 migration; same
   // typed-here-before-regen convention).
   allow_customer_reschedule?: boolean;
+  // Waiting-list opt-in (20261017000001 migration; same typed-here-before-regen
+  // convention).
+  waitlist_enabled?: boolean;
 }
 
 export interface DbService {
@@ -98,6 +102,7 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCoun
     phone: dbp.phone ?? null,
     staffEnabled: dbp.staff_enabled ?? false,
     allowCustomerReschedule: dbp.allow_customer_reschedule ?? false,
+    waitlistEnabled: dbp.waitlist_enabled ?? false,
     services: services.filter(s => s.is_active).map(s => ({
       id: s.id,
       name: { he: s.name, ar: s.name, en: s.name },
@@ -551,7 +556,19 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
    * (new_start < b.end && b.start < new_start + new_duration), so the client
    * never offers a slot the trigger would reject, nor hides one it would allow.
    */
-  const getAvailableSlots = (date: Date, requestedDuration?: number, capacity = 1, primaryServiceId?: string, latestStartTime?: string | null): string[] => {
+  // `options.ignoreBookings` (waiting list): run the SAME pipeline as if the day
+  // had no bookings at all — same hours, staff narrowing, break, grid, duration
+  // and latest_start_time. It answers "could this day offer anything?", which
+  // tells a genuinely full day apart from one that lead time, latest_start_time
+  // or a too-short window leaves empty. Omitted = byte-identical to before.
+  const getAvailableSlots = (
+    date: Date,
+    requestedDuration?: number,
+    capacity = 1,
+    primaryServiceId?: string,
+    latestStartTime?: string | null,
+    options?: { ignoreBookings?: boolean },
+  ): string[] => {
     if (!providerId) return [];
 
     const dateStr = toLocalDateStr(date);
@@ -593,7 +610,7 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     // booking's primary service id (service_ids[0], = the trigger's
     // service_ids[1]) so the same-service / cross-service rule can be applied.
     const bookedIntervals: { start: number; end: number; serviceId: string | undefined }[] = [];
-    (bookingsQuery.data || [])
+    (options?.ignoreBookings ? [] : bookingsQuery.data || [])
       .filter(b => b.booking_date === dateStr)
       // STAFF LANES (mirrors the trigger's `b.staff_id IS NOT DISTINCT FROM
       // NEW.staff_id` in clauses 5+7, added in the same PR — 20260724000002):
@@ -754,10 +771,33 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     );
   };
 
+  /**
+   * The two windows classifyDay needs, for the CUSTOMER flow: the shop's own
+   * hours for `date`, and those hours narrowed to the selected member — the
+   * same resolveDayHours → narrowToStaff composition getAvailableSlots runs, so
+   * the verdict can never disagree with the slots. (useResolvedDayWindow is the
+   * provider-side equivalent and resolves only the signed-in provider.)
+   * Read-only; nothing calls it unless the provider has the waiting list on.
+   */
+  const resolveDayWindows = (date: Date): { shop: DayWindow | null; narrowed: DayWindow | null } => {
+    const shop = resolveDayHours(
+      date,
+      monthlySettings,
+      availabilityQuery.data || [],
+      blockedDatesQuery.data || [],
+      overridesQuery.data || [],
+    );
+    return {
+      shop,
+      narrowed: narrowToStaff(shop, staffDayWindow(date, selectedStaffDays, selectedStaffTimeOff)),
+    };
+  };
+
   return {
     getAvailableSlots,
     getGroupSlotsWithCapacity,
     staffOffOnDate,
+    resolveDayWindows,
     isLoading: availabilityQuery.isLoading,
     // True until EVERY input to the slot calculation has arrived. Rendering can
     // ignore it; a caller that DECIDES something from the slots (e.g. "is the
