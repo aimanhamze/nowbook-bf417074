@@ -27,6 +27,7 @@ import { useProviderPackages, useMyPackagesAt, useRequestPackage } from "@/hooks
 import { packageErrorKey } from "@/hooks/usePackageActions";
 import { MyPackageCard } from "@/components/packages/MyPackageCard";
 import { UpcomingAppointmentCard } from "@/components/provider-detail/UpcomingAppointmentCard";
+import { WaitlistRow } from "@/components/provider-detail/WaitlistRow";
 import { CollapsingHeader, HeaderIconButton } from "@/components/provider-detail/CollapsingHeader";
 
 interface SocialLinkEntry {
@@ -465,6 +466,9 @@ const ProviderDetail = () => {
           otherwise. Above "about" so a returning customer sees it first; the
           book button is pinned to the viewport, so this never hides it. */}
       <UpcomingAppointmentCard provider={provider} />
+      {/* Waiting list: one slim row, only with the provider's opt-in and an
+          active entry here. */}
+      <WaitlistRow provider={provider} />
 
       {/* About — soft card matching the rest of the page; long descriptions
           clamp to 4 lines with a read-more toggle so the section never
