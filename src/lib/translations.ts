@@ -1010,7 +1010,7 @@ export const translations = {
     waitlistCallAria: "התקשרות אל {name}",
     waitlistNoPhone: "אין מספר טלפון",
     waitlistUnknownCustomer: "לקוח",
-    waitlistListNote: "הלקוחות יקבלו הודעה אוטומטית כשתור יתפנה. הראשון שמזמין — מקבל.",
+    waitlistListNote: "הלקוחות יקבלו הודעה אוטומטית כשתור יתפנה, ומי שמזמין ראשון מקבל אותו.",
   },
   ar: {
     appName: "Ehjezly",

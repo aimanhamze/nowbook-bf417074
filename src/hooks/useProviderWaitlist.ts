@@ -54,3 +54,37 @@ function sum(m: Map<string, number>): number {
 }
 
 const EMPTY: Map<string, number> = new Map();
+
+export interface ProviderWaitlistRow {
+  entry_id: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  service_name: string | null;
+  /** null = "anyone" */
+  staff_name: string | null;
+  wants_morning: boolean;
+  wants_afternoon: boolean;
+  wants_evening: boolean;
+  created_at: string;
+}
+
+/**
+ * One day's waiting customers for the active branch, oldest first — fetched
+ * only while the list sheet is open (`open`) and the waiting list is on.
+ * Phones come back only to the owner of this branch (waitlist_provider_day).
+ */
+export function useProviderWaitlistDay(date: string, open: boolean) {
+  const { profile } = useProviderProfile();
+  const providerId = profile?.id;
+  const on = !!providerId && (profile as { waitlist_enabled?: boolean } | null)?.waitlist_enabled === true;
+  return useQuery({
+    queryKey: ["provider-waitlist", "day", providerId, date],
+    enabled: open && on,
+    staleTime: 30 * 1000,
+    queryFn: async (): Promise<ProviderWaitlistRow[]> => {
+      const { data, error } = await db.rpc("waitlist_provider_day", { p_provider_id: providerId, p_date: date });
+      if (error) throw error;
+      return (data || []) as ProviderWaitlistRow[];
+    },
+  });
+}

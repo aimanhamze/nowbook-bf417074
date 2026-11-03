@@ -138,3 +138,23 @@ describe("waitlistWindowsLabel", () => {
     expect(waitlistWindowsLabel(["afternoon"], t)).toBe("Afternoon");
   });
 });
+
+describe("waitlist phones (provider list)", () => {
+  it("builds tel: targets", async () => {
+    const { waitlistTelHref } = await import("./waitlistDay");
+    expect(waitlistTelHref("972501234567")).toBe("tel:+972501234567");
+    expect(waitlistTelHref("+972501234567")).toBe("tel:+972501234567");
+    expect(waitlistTelHref("050-123 4567")).toBe("tel:0501234567");
+    expect(waitlistTelHref("")).toBeNull();
+    expect(waitlistTelHref(null)).toBeNull();
+    expect(waitlistTelHref("call me")).toBeNull();
+  });
+  it("shows Israeli numbers the local way, anything else as given", async () => {
+    const { waitlistPhoneLabel } = await import("./waitlistDay");
+    expect(waitlistPhoneLabel("972501234567")).toBe("050-123-4567");
+    expect(waitlistPhoneLabel("+972501234567")).toBe("050-123-4567");
+    expect(waitlistPhoneLabel("0529876543")).toBe("052-987-6543");
+    expect(waitlistPhoneLabel("97248123456")).toBe("04-812-3456");
+    expect(waitlistPhoneLabel("+44 20 7946 0958")).toBe("+44 20 7946 0958");
+  });
+});

@@ -125,3 +125,28 @@ export function waitlistWindowsLabel(windows: readonly TimeWindow[], t: (k: Tran
   if (windows.length === TIME_WINDOWS.length) return t("waitlistAnyTime");
   return TIME_WINDOWS.filter((w) => windows.includes(w)).map((w) => t(WINDOW_KEYS[w])).join(" · ");
 }
+
+// ── Provider list: phones ───────────────────────────────────────────────────
+// waitlist_provider_day returns auth.users.phone (digits, "972…", no "+") or,
+// failing that, profiles.phone as the customer typed it.
+
+/** A tel: target: "972…" gains its "+", anything else is kept with only
+ *  spaces/dashes removed. null when there is nothing dialable. */
+export function waitlistTelHref(phone: string | null | undefined): string | null {
+  const raw = (phone ?? "").trim();
+  if (!raw) return null;
+  const compact = raw.replace(/[\s()-]/g, "");
+  if (/^972\d{8,9}$/.test(compact)) return `tel:+${compact}`;
+  if (/^\+?\d{6,15}$/.test(compact)) return `tel:${compact}`;
+  return null;
+}
+
+/** How an Israeli number is read aloud locally: "972501234567" → "050-123-4567".
+ *  Anything that is not an Israeli mobile/landline is shown as given. */
+export function waitlistPhoneLabel(phone: string | null | undefined): string {
+  const compact = (phone ?? "").trim().replace(/[\s()-]/g, "").replace(/^\+/, "");
+  const local = /^972\d{8,9}$/.test(compact) ? `0${compact.slice(3)}` : compact;
+  if (/^05\d{8}$/.test(local)) return `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`;
+  if (/^0[2-9]\d{7}$/.test(local)) return `${local.slice(0, 2)}-${local.slice(2, 5)}-${local.slice(5)}`;
+  return (phone ?? "").trim();
+}
