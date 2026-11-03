@@ -158,9 +158,11 @@ BEGIN
    ORDER BY u.created_at, u.id LIMIT 1;
   IF u2 IS NULL THEN RAISE EXCEPTION 'SETUP: need 2 customer accounts'; END IF;
 
-  -- Nothing of the customers' own at these two providers gets in the way.
+  -- Start both test providers with no active entries at all — anyone's,
+  -- not just the two test customers' (leftovers from earlier phone tests
+  -- would otherwise change the counts). Rolled back with everything else.
   UPDATE public.waitlist_entries SET status = 'left', ended_at = now()
-   WHERE user_id IN (u1, u2) AND provider_id IN (v_provider, v_other) AND status = 'active';
+   WHERE provider_id IN (v_provider, v_other) AND status = 'active';
 
   UPDATE public.provider_profiles SET waitlist_enabled = true WHERE id IN (v_provider, v_other);
 
