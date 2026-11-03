@@ -1,3 +1,4 @@
+import { parseISO } from "date-fns";
 import { classifyDay, type DayWindow } from "@/lib/availabilityResolver";
 import type { TranslationKey } from "@/lib/translations";
 
@@ -98,4 +99,17 @@ export function waitlistJoinErrorKey(code: string | null | undefined): Translati
   return code && Object.prototype.hasOwnProperty.call(JOIN_ERROR_KEYS, code)
     ? JOIN_ERROR_KEYS[code as keyof typeof JOIN_ERROR_KEYS]
     : "waitlistErrGeneric";
+}
+
+// ── Display ─────────────────────────────────────────────────────────────────
+
+const LOCALES: Record<string, string> = { he: "he-IL", ar: "ar", en: "en-US" };
+
+/** A waiting-list date ("yyyy-MM-dd") as "Thursday, 12 November" in the UI language. */
+export function waitlistDateLabel(entryDate: string, lang: string): string {
+  return parseISO(entryDate).toLocaleDateString(LOCALES[lang] ?? "he-IL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 }

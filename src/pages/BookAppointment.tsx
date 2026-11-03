@@ -7,7 +7,7 @@ import { useProviderClassScheduleById, ClassScheduleEntry } from "@/hooks/usePro
 import { useMyPackagesAt, useProviderPackages, useRequestPackage } from "@/hooks/usePublicPackages";
 import { packageErrorKey } from "@/hooks/usePackageActions";
 import type { Service } from "@/lib/mock-data";
-import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote, UserRound, Ticket, Info } from "lucide-react";
+import { Check, Clock, CalendarDays, Users, Calendar, CalendarX, Lock, Sparkles, Dumbbell, CalendarCheck, StickyNote, UserRound, Ticket, Info, BellRing } from "lucide-react";
 import { BackOrHomeIcon, ForwardArrow } from "@/components/ui/directional-icon";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { SectionLabel } from "@/components/ui/SectionLabel";
@@ -34,6 +34,11 @@ import { useLiveSessionGuard } from "@/hooks/useLiveSessionGuard";
 import { notifyBookingConfirmed } from "@/lib/whatsappConfirm";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMyWaitlist, useJoinWaitlist, useLeaveWaitlist } from "@/hooks/useWaitlist";
+import { useMyUpcomingAt } from "@/hooks/useMyUpcomingAt";
+import { isWaitlistableDay, possibleWindows, waitlistDateLabel } from "@/lib/waitlistDay";
+import { WaitlistJoinSheet } from "@/components/booking/WaitlistJoinSheet";
+import { WaitlistLeaveDialog } from "@/components/booking/WaitlistLeaveDialog";
 
 const SPRING = { duration: 0.5, ease: [0.16, 1, 0.3, 1] } as const;
 
@@ -63,6 +68,14 @@ function getUpcomingDates(dayOfWeek: number, weeksAhead = 6, windowDays = 90, ex
  *  verdict reads slot values derived AFTER that component's early returns,
  *  where hooks cannot go. The ref keeps StrictMode's double effect from
  *  resolving (and toasting) twice. */
+/** The customer calendar's "fully booked — waiting list" day: a dashed accent
+ *  ring on a faint accent wash. Distinct from an open day (accent dot) and from
+ *  a disabled one (faded text). Selected wins, as for every other day. */
+const WAITLIST_DAY_CLASS =
+  "border border-dashed border-accent/50 bg-accent/[0.07] text-foreground/70 " +
+  "aria-selected:border-transparent aria-selected:bg-accent aria-selected:text-accent-foreground";
+const WAITLIST_DAY_SWATCH = "border border-dashed border-accent/50 bg-accent/[0.07]";
+
 function DraftRestoreCheck({ ready, onReady }: { ready: boolean; onReady: () => void }) {
   const doneRef = useRef(false);
   useEffect(() => {
@@ -112,7 +125,15 @@ const BookAppointment = () => {
   // is why this is resolved here rather than at each use site.
   const effectiveStaffId =
     selectedStaffId && eligibleStaff.some((s) => s.id === selectedStaffId) ? selectedStaffId : "";
-  const { getAvailableSlots, getGroupSlotsWithCapacity, staffOffOnDate, slotsLoading } = useRealAvailability(id, effectiveStaffId || undefined);
+  const { getAvailableSlots, getGroupSlotsWithCapacity, staffOffOnDate, resolveDayWindows, slotsLoading } = useRealAvailability(id, effectiveStaffId || undefined);
+  // Waiting list. Both queries are gated on the provider's opt-in, so a
+  // provider without it costs no request and renders nothing new.
+  const waitlistOn = provider?.waitlistEnabled === true;
+  const { data: myWaitlist = [], isLoading: myWaitlistLoading } = useMyWaitlist(waitlistOn);
+  const { data: myUpcomingHere = [], isLoading: myUpcomingLoading } = useMyUpcomingAt(waitlistOn ? id : undefined);
+  const joinWaitlist = useJoinWaitlist();
+  const leaveWaitlist = useLeaveWaitlist();
+  const [waitlistSheetOpen, setWaitlistSheetOpen] = useState(false);
   const { data: allSessions = [], isLoading: sessionsLoading } = useProviderSessionsById(id);
   const { data: classSchedule = [], isLoading: scheduleLoading } = useProviderClassScheduleById(id);
   // Blocked dates for the FITNESS class path. The class flow builds its dates from
@@ -474,6 +495,71 @@ const BookAppointment = () => {
     !hasScheduledSessions &&
     !!primaryService &&
     !eachDayOfInterval({ start: todayStart, end: bookingWindowEnd }).some(dayHasAvailability);
+
+  // ── Waiting list ──
+  // Offered only on a GENUINELY full day of a private, session-less service at
+  // a provider who opted in (see isWaitlistableDay). Everything below is inert
+  // when waitlistEligible is false: the calendar gets no override, the time
+  // step renders exactly as before.
+  const waitlistEligible =
+    waitlistOn && !isFitnessStudio && !!primaryService && !isGroupBooking && !hasScheduledSessions;
+  const usablePrivateSlots = (date: Date, ignoreBookings: boolean): string[] => {
+    const raw = getAvailableSlots(
+      date,
+      totalDuration || 15,
+      primaryService?.max_capacity ?? 1,
+      primaryService?.id,
+      primaryService?.latest_start_time,
+      ignoreBookings ? { ignoreBookings: true } : undefined,
+    );
+    return isSameDayAsNow(date) ? raw.filter((s) => slotMins(s) > leadTimeCutoff) : raw;
+  };
+  const myBookingDaysHere = new Set(myUpcomingHere.map((b) => b.booking_date));
+  const dayIsWaitlistable = (date: Date): boolean => {
+    if (!waitlistEligible) return false;
+    const { shop, narrowed } = resolveDayWindows(date);
+    return isWaitlistableDay({
+      eligible: true,
+      inWindow: date >= todayStart && date <= bookingWindowEnd,
+      loading: slotsLoading || myUpcomingLoading,
+      shopWindow: shop,
+      narrowedWindow: narrowed,
+      usableSlots: usablePrivateSlots(date, false),
+      usableSlotsIgnoringBookings: usablePrivateSlots(date, true),
+      customerHasBooking: myBookingDaysHere.has(format(date, "yyyy-MM-dd")),
+    });
+  };
+  const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
+  const myEntryForSelectedDay = waitlistEligible
+    ? myWaitlist.find((e) => e.provider_id === provider.id && e.entry_date === selectedDateStr)
+    : undefined;
+  const selectedDayWaitlistable = waitlistEligible && dateChosen && dayIsWaitlistable(selectedDate);
+  // Does the displayed month hold a full day? Drives the legend line.
+  const monthHasWaitlistDay =
+    waitlistEligible &&
+    (() => {
+      const first = new Date(calMonth.getFullYear(), calMonth.getMonth(), 1);
+      const last = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0);
+      const from = first < todayStart ? todayStart : first;
+      const to = last > bookingWindowEnd ? bookingWindowEnd : last;
+      if (from > to) return false;
+      return eachDayOfInterval({ start: from, end: to }).some(
+        (d) => !dayHasAvailability(d) && dayIsWaitlistable(d),
+      );
+    })();
+
+  // Session died mid-join: keep the day, return to it with the sheet open.
+  const saveWaitlistDraft = () => {
+    if (!user || !primaryService) return;
+    saveBookingDraft({
+      userId: user.id,
+      providerId: provider.id,
+      serviceId: primaryService.id,
+      staffId: effectiveStaffId || undefined,
+      date: selectedDateStr,
+      intent: "waitlist",
+    });
+  };
 
   const effectiveDate = selectedSession
     ? selectedSession.session_date
@@ -844,6 +930,22 @@ const BookAppointment = () => {
     }
 
     const inWindow = selectedDate >= todayStart && selectedDate <= bookingWindowEnd;
+
+    // Waiting-list draft: back to the same day. A slot that opened meanwhile is
+    // simply offered; a still-full day reopens the join sheet (unless the join
+    // went through after all, in which case the time step shows "on the list").
+    if (draft.intent === "waitlist" && !hasScheduledSessions && inWindow) {
+      if (dayHasAvailability(selectedDate)) {
+        setStep(timeStep as 3 | 4);
+        toast.success(t("bookingDraftRestored"));
+        return;
+      }
+      if (dayIsWaitlistable(selectedDate)) {
+        setStep(timeStep as 3 | 4);
+        if (!myEntryForSelectedDay) setWaitlistSheetOpen(true);
+        return;
+      }
+    }
     const slotFree = hasScheduledSessions
       ? !!selectedSession &&
         new Date(`${selectedSession.session_date}T${selectedSession.session_time}`) >=
@@ -873,7 +975,9 @@ const BookAppointment = () => {
     !!pendingDraft &&
     (isFitnessStudio
       ? !classCountsLoading && !myPkgsLoading
-      : !slotsLoading && !(provider.staffEnabled && (staffLoading || staffServicesLoading)));
+      : !slotsLoading &&
+        !(provider.staffEnabled && (staffLoading || staffServicesLoading)) &&
+        !(pendingDraft.intent === "waitlist" && (myUpcomingLoading || myWaitlistLoading)));
 
   // ── Fitness-studio step labels ──
   const fitnessStepLabels = [t("pickClass"), t("selectOccurrence"), t("confirm")];
@@ -917,6 +1021,32 @@ const BookAppointment = () => {
       style={{ background: "var(--bg-atmosphere)" }}
     >
       {pendingDraft && <DraftRestoreCheck ready={restoredDraftReady} onReady={resolveRestoredDraft} />}
+      {waitlistEligible && primaryService && (
+        <WaitlistJoinSheet
+          open={waitlistSheetOpen}
+          onOpenChange={setWaitlistSheetOpen}
+          serviceName={primaryService.name[lang]}
+          dateLabel={waitlistDateLabel(selectedDateStr, lang)}
+          availableWindows={waitlistSheetOpen ? possibleWindows(usablePrivateSlots(selectedDate, true)) : []}
+          staffOptions={staffStepEnabled ? eligibleStaff.map((s) => ({ id: s.id, name: s.name })) : null}
+          defaultStaffId={effectiveStaffId || null}
+          submitting={joinWaitlist.isPending}
+          onSubmit={({ windows, staffId }) =>
+            joinWaitlist.mutate(
+              {
+                providerId: provider.id,
+                date: selectedDateStr,
+                serviceId: primaryService.id,
+                staffId,
+                windows,
+                lang,
+                onDeadSession: saveWaitlistDraft,
+              },
+              { onSuccess: () => setWaitlistSheetOpen(false) },
+            )
+          }
+        />
+      )}
       <div
         aria-hidden
         className="pointer-events-none absolute top-[6rem] [inset-inline-end:-5rem] h-[22rem] w-[22rem] rounded-full blur-3xl opacity-55"
@@ -1626,6 +1756,11 @@ const BookAppointment = () => {
                       fromDate={todayStart}
                       toDate={bookingWindowEnd}
                       dayHasAvailability={dayHasAvailability}
+                      // Only for providers with the waiting list on: a
+                      // genuinely full day stays tappable, with its own look.
+                      // Off → undefined → the calendar's "never" default.
+                      dayIsOverridable={waitlistEligible ? dayIsWaitlistable : undefined}
+                      overridableClassName={waitlistEligible ? WAITLIST_DAY_CLASS : undefined}
                       selected={dateChosen ? selectedDate : undefined}
                       onSelectDay={(day) => {
                         setSelectedDate(day);
@@ -1635,6 +1770,13 @@ const BookAppointment = () => {
                       }}
                     />
                   </div>
+
+                  {monthHasWaitlistDay && (
+                    <div className="mt-3 flex items-center gap-2 px-1">
+                      <span aria-hidden className={cn("h-4 w-4 shrink-0 rounded-md", WAITLIST_DAY_SWATCH)} />
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">{t("waitlistLegend")}</p>
+                    </div>
+                  )}
 
                   {/* Every day greyed out with no explanation is a dead end —
                       the customer cannot tell a fully-booked month from a member
@@ -1759,6 +1901,50 @@ const BookAppointment = () => {
                         {slot}
                       </button>
                     ))}
+                  </div>
+                ) : myEntryForSelectedDay ? (
+                  /* Already on this day's waiting list. */
+                  <div className="glass-card-md rounded-2xl p-5">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <Check className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold">{t("waitlistOnList")}</p>
+                        <p className="text-xs text-muted-foreground">{t("waitlistDayFull")}</p>
+                      </div>
+                      <WaitlistLeaveDialog
+                        entryDate={myEntryForSelectedDay.entry_date}
+                        providerName={provider.name[lang]}
+                        onConfirm={() => leaveWaitlist.mutate(myEntryForSelectedDay.id)}
+                        trigger={
+                          <button
+                            type="button"
+                            disabled={leaveWaitlist.isPending}
+                            className="inline-flex min-h-11 shrink-0 items-center px-3 text-sm font-semibold text-red-600 disabled:opacity-50"
+                          >
+                            {t("waitlistLeave")}
+                          </button>
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : selectedDayWaitlistable ? (
+                  /* Genuinely full: offer the waiting list. */
+                  <div className="glass-card-md rounded-2xl p-6 text-center">
+                    <CalendarX className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+                    <p className="text-sm font-semibold">{t("waitlistDayFull")}</p>
+                    <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
+                      {t("waitlistDayFullSub")}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setWaitlistSheetOpen(true)}
+                      className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-accent px-5 text-sm font-semibold text-accent-foreground shadow-[0_8px_20px_-8px_hsl(var(--accent)/0.6)] transition-transform active:scale-[0.98]"
+                    >
+                      <BellRing className="h-4 w-4" />
+                      {t("waitlistJoin")}
+                    </button>
                   </div>
                 ) : (
                   <div className="glass-card-md rounded-2xl p-8 text-center">

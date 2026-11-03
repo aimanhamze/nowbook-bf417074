@@ -36,6 +36,12 @@ interface BookingMonthCalendarProps {
    * resolveDayHours instead.
    */
   dayIsOverridable?: (date: Date) => boolean;
+  /**
+   * OPTIONAL look for overridable days. Defaults to the walk-in "closed but
+   * bookable" dashed style, so the walk-in sheet renders exactly as before; the
+   * customer flow passes its own "fully booked — waiting list" look.
+   */
+  overridableClassName?: string;
   /** Highlighted day, if the user already picked one. */
   selected?: Date;
   onSelectDay: (day: Date) => void;
@@ -43,6 +49,11 @@ interface BookingMonthCalendarProps {
 
 /** Stable default for `dayIsOverridable` — no caller opts in, nothing changes. */
 const NEVER_OVERRIDABLE = () => false;
+
+/** The walk-in flow's overridable look (the default). */
+const WALKIN_OVERRIDABLE_CLASS =
+  "border border-dashed border-muted-foreground/45 bg-muted/50 text-muted-foreground/80 " +
+  "aria-selected:border-transparent aria-selected:bg-accent aria-selected:text-accent-foreground";
 
 /**
  * Shared month calendar for BOOKING day selection — used by the customer flow
@@ -62,6 +73,7 @@ export function BookingMonthCalendar({
   toDate,
   dayHasAvailability,
   dayIsOverridable = NEVER_OVERRIDABLE,
+  overridableClassName = WALKIN_OVERRIDABLE_CLASS,
   selected,
   onSelectDay,
 }: BookingMonthCalendarProps) {
@@ -144,9 +156,7 @@ export function BookingMonthCalendar({
           // tappable. The aria-selected overrides win on specificity (attribute
           // selector) so a picked overridable day still shows the accent fill
           // rather than depending on stylesheet ordering against day_selected.
-          overridable:
-            "border border-dashed border-muted-foreground/45 bg-muted/50 text-muted-foreground/80 " +
-            "aria-selected:border-transparent aria-selected:bg-accent aria-selected:text-accent-foreground",
+          overridable: overridableClassName,
         }}
         classNames={{
           caption: "hidden",

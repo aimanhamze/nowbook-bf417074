@@ -26,6 +26,9 @@ export interface BookingDraft {
   /** HH:mm */
   time?: string;
   notes?: string;
+  /** "waitlist": the session died while joining a waiting list — restore to
+   *  the same day's time step with the join sheet open, not to confirm. */
+  intent?: "waitlist";
   // Fitness flow
   classId?: string;
   /** yyyy-MM-dd */
