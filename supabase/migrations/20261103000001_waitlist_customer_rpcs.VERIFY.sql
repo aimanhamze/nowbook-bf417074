@@ -220,7 +220,10 @@ BEGIN
   PERFORM pg_temp.expect('ALREADY_BOOKED booker', pg_temp.wl_join(u2, v_provider, d[2], s, NULL, true, true, true, 'he'), 'ALREADY_BOOKED');
   PERFORM pg_temp.expect('ALREADY_BOOKED linked', pg_temp.wl_join(u3, v_provider, d[3], s, NULL, true, true, true, 'he'), 'ALREADY_BOOKED');
 
-  SELECT count(*) INTO v_n FROM public.waitlist_entries WHERE user_id IN (u1, u2, u3);
+  -- Only rows made in this run: the test customers may have ended entries
+  -- from earlier testing (the setup only requires no ACTIVE ones).
+  SELECT count(*) INTO v_n FROM public.waitlist_entries
+   WHERE user_id IN (u1, u2, u3) AND created_at = now();
   PERFORM pg_temp.expect('refusals wrote nothing', v_n::text, '0');
 
   -- ── Joins, one-per-day ─────────────────────────────────────────────────────
