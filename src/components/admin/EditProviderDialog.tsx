@@ -33,6 +33,7 @@ const categoryLabels: Record<string, string> = {
   dental: "🦷 רפואת שיניים",
   physio: "🏃 פיזיותרפיה",
   aesthetic_medicine: "💉 רפואה אסתטית",
+  counseling: "💬 ייעוץ והדרכות",
 };
 
 interface EditProviderDialogProps {

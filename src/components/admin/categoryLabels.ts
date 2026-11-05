@@ -17,4 +17,5 @@ export const categoryLabels: Record<string, string> = {
   pediatrician: "👶 רופא ילדים",
   gym: "🏋️ סטודיו אימונים",
   fitness_studio: "🤸 סטודיו כושר",
+  counseling: "💬 ייעוץ והדרכות",
 };
