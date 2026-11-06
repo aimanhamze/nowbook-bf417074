@@ -766,8 +766,20 @@ const ProviderDetail = () => {
                 transition={{ delay: 0.25 + i * 0.06, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
                 className="surface-soft flex items-center gap-3.5 rounded-2xl p-4 transition-colors hover:border-accent/30"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
-                  <Sparkles className="h-4 w-4" />
+                {/* Same fixed tile either way; an image only replaces the icon inside it. */}
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-accent/10 text-accent">
+                  {service.image_url ? (
+                    <img
+                      src={service.image_url}
+                      alt={service.name[lang]}
+                      loading="lazy"
+                      width={40}
+                      height={40}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1 text-start">
                   <p className="line-clamp-2 text-sm font-medium leading-snug">{service.name[lang]}</p>

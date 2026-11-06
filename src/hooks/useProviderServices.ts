@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "./useProviderProfile";
 import { normalizeColor } from "@/lib/serviceColors";
+import { deleteServiceImage, uploadServiceImage } from "@/lib/serviceImage";
 
 // Local YYYY-MM-DD — mirrors toLocalDateStr in useAllProviders. Kept local to
 // avoid a cross-module import; booking_date comparisons must use local dates.
@@ -18,6 +20,7 @@ function toLocalDateStr(date: Date): string {
 // provider has staff members: a provider with none must not gain a fetch it
 // did not make before.
 export function useProviderServices(enabled = true) {
+  const { user } = useAuth();
   const { profile } = useProviderProfile();
   const queryClient = useQueryClient();
 
@@ -65,7 +68,13 @@ export function useProviderServices(enabled = true) {
       customer_notes_enabled?: boolean;
       customer_notes_placeholder?: string | null;
       color?: string;
-    }) => {
+      // Service image (provider_services.image_url). imageFile = upload and
+      // replace; removeImage = clear. current_image_url is the stored value the
+      // form opened with, so the old file can be deleted once replaced/cleared.
+      imageFile?: File | null;
+      removeImage?: boolean;
+      current_image_url?: string | null;
+    }): Promise<{ id: string; imageError: boolean }> => {
       if (!profile) throw new Error("No provider profile");
       const isFitness = profile.category === 'fitness_studio';
       // Group remains fitness-only. Private services (any provider) may now
@@ -94,18 +103,61 @@ export function useProviderServices(enabled = true) {
         // colors switch is off (it only hides the picker, never wipes values).
         color: normalizeColor(service.color),
       };
+      let id: string;
       if (service.id) {
         const { error } = await supabase
           .from("provider_services")
           .update(payload)
           .eq("id", service.id);
         if (error) throw error;
+        id = service.id;
       } else {
+        // The image path embeds the service id, so a new service must exist
+        // before its image can be uploaded.
+        const { data, error } = await supabase
+          .from("provider_services")
+          .insert({ provider_id: profile.id, ...payload })
+          .select("id")
+          .single();
+        if (error) throw error;
+        id = data.id;
+      }
+
+      // Image step runs AFTER the service is saved and never fails the save:
+      // the service row is already written, so an image failure is reported
+      // back (imageError) instead of thrown — a throw here would leave a new
+      // service's sheet open with no id, and a retry would insert a duplicate.
+      const oldUrl = service.current_image_url ?? null;
+      if (service.imageFile && user) {
+        let newUrl: string | null = null;
+        try {
+          newUrl = await uploadServiceImage({ userId: user.id, serviceId: id, file: service.imageFile });
+          // image_url is not in types.ts yet (typed-here-before-regen).
+          const { error } = await supabase
+            .from("provider_services")
+            .update({ image_url: newUrl } as never)
+            .eq("id", id);
+          if (error) throw error;
+        } catch (err) {
+          console.error("[service-image] upload failed:", err);
+          // Uploaded but not linked: remove the stray file. Old image untouched.
+          if (newUrl) await deleteServiceImage(newUrl, user.id);
+          return { id, imageError: true };
+        }
+        // New image is live; only now is it safe to drop the old file.
+        if (oldUrl && oldUrl !== newUrl) await deleteServiceImage(oldUrl, user.id);
+      } else if (service.removeImage && oldUrl && user) {
         const { error } = await supabase
           .from("provider_services")
-          .insert({ provider_id: profile.id, ...payload });
-        if (error) throw error;
+          .update({ image_url: null } as never)
+          .eq("id", id);
+        if (error) {
+          console.error("[service-image] remove failed:", error);
+          return { id, imageError: true };
+        }
+        await deleteServiceImage(oldUrl, user.id);
       }
+      return { id, imageError: false };
     },
     onSuccess: invalidateServiceCaches,
   });

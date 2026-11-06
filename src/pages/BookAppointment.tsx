@@ -1511,14 +1511,24 @@ const BookAppointment = () => {
                           : "border-white/60 bg-white/70 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] backdrop-blur-md hover:border-accent/30"
                       )}
                     >
-                      {/* Icon tile */}
+                      {/* Icon tile — a service image, when set, fills the same
+                          fixed tile instead of the icon (no layout change). */}
                       <div
                         className={cn(
-                          "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-colors duration-300",
+                          "flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl transition-colors duration-300",
                           isSelected ? "bg-accent text-accent-foreground shadow-[0_4px_12px_-4px_hsl(var(--accent)/0.5)]" : "bg-accent/10 text-accent"
                         )}
                       >
-                        {isGroup ? <Users className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+                        {service.image_url ? (
+                          <img
+                            src={service.image_url}
+                            alt={service.name[lang]}
+                            loading="lazy"
+                            width={48}
+                            height={48}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : isGroup ? <Users className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
                       </div>
 
                       {/* Details */}
