@@ -12,6 +12,7 @@ export interface Service {
   latest_start_time?: string | null; // HH:MM — customer cannot book after this time
   customer_notes_enabled?: boolean; // provider opted to collect a note before booking
   customer_notes_placeholder?: string | null; // guidance text shown in the customer's notes field
+  image_url?: string | null; // optional illustrative image; null = show the default icon
 }
 
 export interface Provider {

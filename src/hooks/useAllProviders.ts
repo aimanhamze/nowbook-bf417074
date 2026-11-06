@@ -68,6 +68,9 @@ export interface DbService {
   latest_start_time: string | null;
   customer_notes_enabled?: boolean;
   customer_notes_placeholder?: string | null;
+  // Optional service image (added by 20261106000001 migration; same
+  // typed-here-before-regen convention as cancellation_notice_hours).
+  image_url?: string | null;
 }
 
 export interface SlotCapacity {
@@ -78,7 +81,7 @@ export interface SlotCapacity {
   isFull: boolean;
 }
 
-function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCount = 0): Provider {
+export function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCount = 0): Provider {
   const name = { he: dbp.business_name, ar: dbp.business_name, en: dbp.business_name };
   const address = { he: dbp.address, ar: dbp.address, en: dbp.address };
   const about = { he: dbp.about, ar: dbp.about, en: dbp.about };
@@ -114,6 +117,8 @@ function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCoun
       latest_start_time: s.latest_start_time ?? null,
       customer_notes_enabled: s.customer_notes_enabled ?? false,
       customer_notes_placeholder: s.customer_notes_placeholder ?? null,
+      // Blank string treated as "no image" so the UI never renders an empty <img>.
+      image_url: s.image_url?.trim() || null,
     })),
   };
 }

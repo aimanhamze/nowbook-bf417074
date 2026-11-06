@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Pencil, Trash2, Clock, Users, User, CalendarPlus, X, Calendar } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Pencil, Trash2, Clock, Users, User, CalendarPlus, X, Calendar, ImagePlus, Image as ImageIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { format } from "date-fns";
 import { BranchSuffix } from "@/components/branch/BranchSuffix";
+import { validateServiceImage } from "@/lib/serviceImage";
 
 const serviceSchema = z.object({
   name: z.string().min(1, "שם השירות נדרש").max(100),
@@ -59,6 +60,13 @@ type EditState = {
   customer_notes_enabled: boolean;
   customer_notes_placeholder: string;
   color: string;
+  // Service image. image_url = the stored value the form opened with;
+  // imageFile/imagePreview = a newly picked file (preview is an object URL);
+  // removeImage = the provider cleared the stored image.
+  image_url: string | null;
+  imageFile: File | null;
+  imagePreview: string | null;
+  removeImage: boolean;
 };
 
 // Default guidance text shown to the customer when the provider enables notes
@@ -83,6 +91,33 @@ export function ServicesTab() {
   const [addingSession, setAddingSession] = useState<AddSessionState | null>(null);
   const [expandedService, setExpandedService] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Release each preview object URL once it is replaced or the sheet closes.
+  const imagePreview = editing?.imagePreview ?? null;
+  useEffect(() => {
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
+  const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset so picking the same file again still fires onChange.
+    e.target.value = "";
+    if (!file || !editing) return;
+    const invalid = validateServiceImage(file);
+    if (invalid) {
+      toast.error(t(invalid === "IMAGE_TOO_LARGE" ? "imageTooLarge" : "imageInvalidType"));
+      return;
+    }
+    setEditing({ ...editing, imageFile: file, imagePreview: URL.createObjectURL(file), removeImage: false });
+  };
+
+  const handleImageRemove = () => {
+    if (!editing) return;
+    setEditing({ ...editing, imageFile: null, imagePreview: null, removeImage: true });
+  };
 
   const handleSave = async () => {
     if (!editing) return;
@@ -110,9 +145,13 @@ export function ServicesTab() {
     }
 
     try {
-      await upsertService.mutateAsync({
-        ...editing,
+      const { imageError } = await upsertService.mutateAsync({
+        id: editing.id,
         name: editing.name.trim(),
+        duration: editing.duration,
+        price: editing.price,
+        service_type: editing.service_type,
+        color: editing.color,
         // Capacity input is hidden for PRIVATE services (SHOW_PRIVATE_CAPACITY),
         // so hard-default them to 1 rather than trusting the now-unedited field.
         // Group/class services keep their configured capacity.
@@ -120,8 +159,14 @@ export function ServicesTab() {
         latest_start_time: editing.latest_start_time || null,
         customer_notes_enabled: editing.customer_notes_enabled,
         customer_notes_placeholder: editing.customer_notes_placeholder.trim() || DEFAULT_NOTES_PLACEHOLDER,
+        imageFile: editing.imageFile,
+        removeImage: editing.removeImage,
+        current_image_url: editing.image_url,
       });
-      toast.success(t("serviceSaved"));
+      // The service itself is saved either way; only the image step can fail
+      // separately, and the sheet closes so a retry edits rather than re-inserts.
+      if (imageError) toast.error(t("serviceImageFailed"));
+      else toast.success(t("serviceSaved"));
       setEditing(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("reviewError"));
@@ -171,7 +216,7 @@ export function ServicesTab() {
     }
   };
 
-  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 1, latest_start_time: "", customer_notes_enabled: false, customer_notes_placeholder: "", color: DEFAULT_SERVICE_COLOR });
+  const openNew = () => setEditing({ name: "", duration: 60, price: 0, service_type: 'private', max_capacity: 1, latest_start_time: "", customer_notes_enabled: false, customer_notes_placeholder: "", color: DEFAULT_SERVICE_COLOR, image_url: null, imageFile: null, imagePreview: null, removeImage: false });
 
   const openEdit = (svc: typeof services[number]) => setEditing({
     id: svc.id,
@@ -184,6 +229,11 @@ export function ServicesTab() {
     customer_notes_enabled: (svc as { customer_notes_enabled?: boolean }).customer_notes_enabled ?? false,
     customer_notes_placeholder: (svc as { customer_notes_placeholder?: string | null }).customer_notes_placeholder ?? "",
     color: normalizeColor(svc.color),
+    // image_url is not in types.ts yet (typed-here-before-regen).
+    image_url: (svc as { image_url?: string | null }).image_url?.trim() || null,
+    imageFile: null,
+    imagePreview: null,
+    removeImage: false,
   });
 
   const openAddSession = (svc: typeof services[number]) => {
@@ -270,6 +320,39 @@ export function ServicesTab() {
                 <Label>{t("serviceName")}</Label>
                 <Input value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />
               </div>
+
+              {/* Service image — optional. Preview tile matches the customer-side
+                  service tile (h-12 w-12 rounded-2xl), so what the provider sees
+                  here is what customers see in the booking flow. */}
+              {(() => {
+                const shownImage = editing.imagePreview ?? (editing.removeImage ? null : editing.image_url);
+                return (
+                  <div>
+                    <Label>{t("serviceImage")}</Label>
+                    <div className="mt-1.5 flex items-center gap-3">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-accent/10 text-accent">
+                        {shownImage ? (
+                          <img src={shownImage} alt={editing.name} width={48} height={48} className="h-12 w-12 object-cover" />
+                        ) : (
+                          <ImageIcon className="h-5 w-5" />
+                        )}
+                      </div>
+                      <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => imageInputRef.current?.click()}>
+                        <ImagePlus className="h-4 w-4" />
+                        {shownImage ? t("replaceImage") : t("uploadImage")}
+                      </Button>
+                      {shownImage && (
+                        <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-destructive" onClick={handleImageRemove}>
+                          <Trash2 className="h-4 w-4" />
+                          {t("removeImage")}
+                        </Button>
+                      )}
+                      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{t("serviceImageHelper")}</p>
+                  </div>
+                );
+              })()}
 
               {isFitness && (
                 <div>
