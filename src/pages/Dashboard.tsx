@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Briefcase, User, Clock, Bell, BellOff, Images, SlidersHorizontal, Ticket } from "lucide-react";
+import { Briefcase, User, Clock, Bell, BellOff, Images, SlidersHorizontal, Ticket, BookOpen } from "lucide-react";
 import { BackOrHomeIcon } from "@/components/ui/directional-icon";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { motion } from "framer-motion";
@@ -15,6 +15,9 @@ import { BookingSettingsTab } from "@/components/dashboard/BookingSettingsTab";
 import { AvailabilityTab } from "@/components/dashboard/AvailabilityTab";
 import { PhotosTab } from "@/components/dashboard/PhotosTab";
 import { PackagesTab } from "@/components/dashboard/PackagesTab";
+import { CoursesTab } from "@/components/academy/CoursesTab";
+import { isAcademyCategory } from "@/lib/academyCategory";
+import { visibleDashboardTabs } from "@/lib/dashboardTabs";
 import { Button } from "@/components/ui/button";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
@@ -24,6 +27,7 @@ const tabs = [
   { id: "booking", icon: SlidersHorizontal },
   { id: "availability", icon: Clock },
   { id: "services", icon: Briefcase },
+  { id: "courses", icon: BookOpen },
   { id: "gallery", icon: Images },
   { id: "packages", icon: Ticket },
 ] as const;
@@ -32,6 +36,7 @@ type TabId = typeof tabs[number]["id"];
 
 const TAB_LABELS: Record<TabId, string> = {
   services: "manageServices",
+  courses: "academyCoursesTab",
   profile: "businessProfile",
   booking: "bookingSettingsTitle",
   availability: "availability",
@@ -72,12 +77,13 @@ export default function Dashboard() {
   // studio (the class grid IS its availability) but keeps the blocked-dates
   // card, the only place a studio can close a day. Hiding the whole tab
   // (880e09f) took that away.
-  const HIDDEN_FOR_FITNESS: TabId[] = ["services"];
-  const visibleTabs = tabs.filter((tab) => {
-    if (tab.id === "packages") return isFitnessStudio;
-    if (isFitnessStudio && HIDDEN_FOR_FITNESS.includes(tab.id)) return false;
-    return true;
-  });
+  //
+  // An academy runs on courses (academy_courses + sessions), not on services,
+  // weekly hours or packages, so those tabs are replaced by "courses".
+  // The per-category rule lives in lib/dashboardTabs (unit-tested).
+  const isAcademy = isAcademyCategory(profile?.category);
+  const allowed = visibleDashboardTabs(profile?.category);
+  const visibleTabs = tabs.filter((tab) => allowed.includes(tab.id));
 
   // A deep link (navigate("/dashboard", { state: { tab: "services" } })) can
   // still name a tab this provider cannot see -- BookingSettingsTab links to
@@ -212,6 +218,7 @@ export default function Dashboard() {
           {effectiveTab === "booking" && <BookingSettingsTab />}
           {effectiveTab === "availability" && <AvailabilityTab />}
           {effectiveTab === "services" && <ServicesTab />}
+          {effectiveTab === "courses" && isAcademy && <CoursesTab />}
           {effectiveTab === "gallery" && <PhotosTab />}
           {effectiveTab === "packages" && isFitnessStudio && <PackagesTab />}
         </motion.div>

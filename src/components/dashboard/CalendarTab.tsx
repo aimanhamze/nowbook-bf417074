@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, createContext, useContext, type CSSProperties, type ReactNode } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
+import { isAcademyCategory } from "@/lib/academyCategory";
 import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote, UserRound, MoonStar, Timer } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -1437,8 +1438,10 @@ export function CalendarTab() {
   // confirmed empty (not merely still loading), show a getting-started card
   // instead of the bare "no bookings" empty state. Gating on the resolved load
   // avoids flashing the setup card at established providers mid-fetch.
-  // fitness_studio providers use class schedule, not provider_services — never show the setup card for them
-  const noServices = !servicesLoading && services.length === 0 && !isFitnessStudio;
+  // fitness_studio providers use class schedule, not provider_services — never show the setup card for them.
+  // Same for an academy: it runs on courses, so "set up your services" would be a dead end.
+  const isAcademy = isAcademyCategory(profile?.category);
+  const noServices = !servicesLoading && services.length === 0 && !isFitnessStudio && !isAcademy;
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // ── Multi-staff filter (Phase 6, display only) ──

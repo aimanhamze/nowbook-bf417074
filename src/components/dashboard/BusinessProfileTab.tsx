@@ -15,6 +15,9 @@ import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { categories, categoryNames } from "@/lib/mock-data";
 import { buildSocialLinks } from "@/lib/socialLinks";
+import { isAcademyCategory } from "@/lib/academyCategory";
+import { academyErrorMessage } from "@/lib/academyErrors";
+import { supabaseErrorMessage } from "@/lib/supabaseError";
 import { toast } from "sonner";
 
 export const DEFAULT_DEPOSIT_TEMPLATE = `שלום {customer_name} 😊
@@ -55,6 +58,7 @@ type FormValues = z.infer<typeof profileSchema>;
 export function BusinessProfileTab() {
   const { t, lang } = useLang();
   const { profile, upsertProfile, updateWhatsAppTemplates, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
+  const isAcademy = isAcademyCategory(profile?.category);
 
   const [accordionValue, setAccordionValue] = useState("");
   const [locationAccordionValue, setLocationAccordionValue] = useState("");
@@ -160,6 +164,12 @@ export function BusinessProfileTab() {
       });
       toast.success(t("profileSaved"));
     } catch (err) {
+      // The category guard is the one DB refusal this form can hit that needs
+      // words; everything else keeps the existing message.
+      if (supabaseErrorMessage(err, "").includes("CATEGORY_CHANGE_BLOCKED")) {
+        toast.error(academyErrorMessage(err, t));
+        return;
+      }
       toast.error(err instanceof Error ? err.message : "Error saving profile");
     }
   };
@@ -266,23 +276,36 @@ export function BusinessProfileTab() {
           {errors.business_name && <p className="text-xs text-destructive mt-1">{errors.business_name.message}</p>}
         </div>
 
-        <div>
-          <Label>{t("category")}</Label>
-          <Controller
-            name="category"
-            control={control}
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {categories.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.icon} {categoryNames[c.id]?.[lang]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </div>
+        {/* An academy cannot pick its category here: "academy" is not in the
+            customer list yet, and the DB refuses leaving academy while course
+            registrations are live (CATEGORY_CHANGE_BLOCKED). The form still
+            submits category = 'academy' unchanged. */}
+        {isAcademy ? (
+          <div>
+            <Label>{t("category")}</Label>
+            <p className="mt-1.5 rounded-xl bg-secondary/60 px-3 py-2 text-sm text-muted-foreground">
+              {t("academyCategoryLocked")}
+            </p>
+          </div>
+        ) : (
+          <div>
+            <Label>{t("category")}</Label>
+            <Controller
+              name="category"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.icon} {categoryNames[c.id]?.[lang]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+        )}
 
         <div>
           <Label>{t("aboutBusiness")}</Label>

@@ -21,6 +21,8 @@ import {
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import { ADMIN_CATEGORY_IDS, categoryLabels } from "./categoryLabels";
+import { academyErrorMessage } from "@/lib/academyErrors";
+import { translations } from "@/lib/translations";
 
 interface EditProviderDialogProps {
   provider: Tables<"provider_profiles"> | null;
@@ -68,6 +70,12 @@ export function EditProviderDialog({ provider, open, onOpenChange }: EditProvide
       onOpenChange(false);
     },
     onError: (err: any) => {
+      // Leaving 'academy' while course registrations are live is refused by
+      // the DB guard; say why (admin UI is Hebrew-only) instead of the raw code.
+      if (typeof err?.message === "string" && err.message.includes("CATEGORY_CHANGE_BLOCKED")) {
+        toast.error(academyErrorMessage(err, (key) => translations.he[key]));
+        return;
+      }
       toast.error(err.message || "שגיאה בעדכון הספק");
     },
   });
