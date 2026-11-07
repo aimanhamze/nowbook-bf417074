@@ -15,6 +15,7 @@
 // is regenerated from there: switch call sites to `supabase.from(...)` /
 // `Tables<"academy_courses">` and delete `academyFrom` / `academyRpc`.
 // ─────────────────────────────────────────────────────────────────────────────
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "./client";
 
 export type CourseLocationType = "physical" | "online";
@@ -118,9 +119,9 @@ type AcademyTable =
  * registration RPCs (Phase 4) for that.
  */
 export function academyFrom(table: AcademyTable) {
-  return (supabase as unknown as {
-    from: (t: AcademyTable) => ReturnType<typeof supabase.from<never>>;
-  }).from(table);
+  // An untyped client's builder: rows come back loosely typed and every call
+  // site narrows them to the interfaces above.
+  return (supabase as unknown as SupabaseClient).from(table);
 }
 
 /** Typed wrapper for the academy RPCs (customer/provider registration flow). */
