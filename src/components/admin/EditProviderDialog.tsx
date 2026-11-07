@@ -21,20 +21,7 @@ import {
 import { toast } from "sonner";
 import { categories } from "@/lib/mock-data";
 import type { Tables } from "@/integrations/supabase/types";
-
-const categoryLabels: Record<string, string> = {
-  barber: "💈 ספר",
-  salon: "💇 מספרה",
-  nails: "💅 ציפורניים",
-  brows: "✨ גבות",
-  spa: "🧖 ספא",
-  skincare: "🧴 טיפוח עור",
-  makeup: "💄 איפור",
-  dental: "🦷 רפואת שיניים",
-  physio: "🏃 פיזיותרפיה",
-  aesthetic_medicine: "💉 רפואה אסתטית",
-  counseling: "💬 ייעוץ והדרכות",
-};
+import { categoryLabels } from "./categoryLabels";
 
 interface EditProviderDialogProps {
   provider: Tables<"provider_profiles"> | null;
