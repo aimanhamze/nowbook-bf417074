@@ -1,5 +1,6 @@
-// Hebrew category labels for the admin create dialogs, as CreateProviderDialog
-// always had them. Shared by CreateProviderDialog and CreateBranchDialog.
+// Hebrew category labels for the admin dialogs, as CreateProviderDialog
+// always had them. Shared by CreateProviderDialog, CreateBranchDialog and
+// EditProviderDialog.
 export const categoryLabels: Record<string, string> = {
   barber: "💈 ספר",
   salon: "💇 מספרה",
@@ -18,4 +19,5 @@ export const categoryLabels: Record<string, string> = {
   gym: "🏋️ סטודיו אימונים",
   fitness_studio: "🤸 סטודיו כושר",
   counseling: "💬 ייעוץ והדרכות",
+  piercing: "💎 פירסינג",
 };
