@@ -88,6 +88,12 @@ export function dbProviderToProvider(dbp: DbProvider, services: DbService[], rev
 
   return {
     id: dbp.id,
+    // DEPENDENCY: "Other branches" on the provider page groups branches by this
+    // value, read from the public select("*") above. The open ticket to stop
+    // exposing provider_profiles.user_id publicly would make every page's
+    // section silently vanish — keep an owner-group key (an opaque one is
+    // fine) or derive siblings server-side when that ticket lands.
+    ownerId: dbp.user_id,
     name,
     category: dbp.category || "barber",
     rating: dbp.average_rating ?? 0,

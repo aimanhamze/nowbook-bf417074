@@ -9,6 +9,7 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { getProviderStatus } from "@/lib/providerStatus";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import type { ProviderSchedule } from "@/hooks/useAllProviders";
+import { cityFromAddress } from "@/lib/cityFromAddress";
 
 interface ProviderCardGridProps {
   provider: Provider;
@@ -51,10 +52,7 @@ export function ProviderCardGrid({ provider, schedule, now }: ProviderCardGridPr
 
   // City short-form: most providers store just the city in `address`; for full
   // addresses the city is conventionally the last comma-separated segment.
-  const fullAddress = (provider.address?.[lang] ?? "").trim();
-  const city = fullAddress
-    ? fullAddress.split(",").pop()!.trim().replace(/\.+$/, "").trim() || null
-    : null;
+  const city = cityFromAddress(provider.address?.[lang]);
 
   return (
     <button

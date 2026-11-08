@@ -17,6 +17,9 @@ export interface Service {
 
 export interface Provider {
   id: string;
+  // Owner's auth user id (provider_profiles.user_id). Branches of one owner
+  // share it; the provider page uses it to list "Other branches".
+  ownerId: string;
   name: Record<Lang, string>;
   category: string;
   rating: number;
