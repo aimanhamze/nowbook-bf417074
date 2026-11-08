@@ -1,5 +1,36 @@
 import { describe, it, expect } from "vitest";
-import { courseCancelState, courseHasStarted, courseSpan, seatsState, FEW_SEATS_THRESHOLD } from "./academyCustomer";
+import { courseCancelState, courseCta, courseHasStarted, courseSpan, seatsState, FEW_SEATS_THRESHOLD } from "./academyCustomer";
+
+describe("courseCta (what the card offers)", () => {
+  const first = { session_date: "2030-01-10", start_time: "18:00:00" };
+  const now = { date: "2030-01-05", time: "12:00" };
+  const open = seatsState({ max_seats: 10, taken: 2, free: 8 });
+
+  it("an active registration wins over everything", () => {
+    expect(courseCta({ myStatus: "pending", firstSession: first, seats: { kind: "full" }, now })).toEqual({
+      kind: "registered",
+      status: "pending",
+    });
+    expect(courseCta({ myStatus: "confirmed", firstSession: first, seats: open, now }).kind).toBe("registered");
+  });
+
+  it("rejected / cancelled can register again", () => {
+    expect(courseCta({ myStatus: "rejected", firstSession: first, seats: open, now })).toEqual({ kind: "register" });
+    expect(courseCta({ myStatus: "cancelled", firstSession: first, seats: open, now })).toEqual({ kind: "register" });
+  });
+
+  it("no sessions, started, full — in the RPC's order", () => {
+    expect(courseCta({ myStatus: null, firstSession: null, seats: { kind: "full" }, now }).kind).toBe("no_sessions");
+    expect(
+      courseCta({ myStatus: null, firstSession: first, seats: { kind: "full" }, now: { date: "2030-01-10", time: "18:00" } }).kind,
+    ).toBe("started");
+    expect(courseCta({ myStatus: null, firstSession: first, seats: { kind: "full" }, now }).kind).toBe("full");
+  });
+
+  it("unknown seat counts do not hide the button (the RPC decides)", () => {
+    expect(courseCta({ myStatus: null, firstSession: first, seats: { kind: "unknown" }, now }).kind).toBe("register");
+  });
+});
 
 describe("seatsState (seats-left rendering)", () => {
   it("no counts row -> unknown (course not open or not loaded): show nothing", () => {

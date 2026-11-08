@@ -102,6 +102,34 @@ export function courseCancelState(
   return { kind: "open", deadline };
 }
 
+export type CourseCta =
+  /** The customer already holds a seat (pending or confirmed): show the status, not a button. */
+  | { kind: "registered"; status: "pending" | "confirmed" }
+  | { kind: "started" }
+  | { kind: "no_sessions" }
+  | { kind: "full" }
+  | { kind: "register" };
+
+/**
+ * What a course card offers, in the same order register_for_course checks:
+ * an existing active registration first, then started, no sessions, full.
+ * Unknown seat counts do not block the button — the RPC is the authority.
+ */
+export function courseCta(input: {
+  myStatus: "pending" | "confirmed" | "rejected" | "cancelled" | null;
+  firstSession: Pick<AcademyCourseSessionRow, "session_date" | "start_time"> | null;
+  seats: SeatsState;
+  now: WallClock;
+}): CourseCta {
+  if (input.myStatus === "pending" || input.myStatus === "confirmed") {
+    return { kind: "registered", status: input.myStatus };
+  }
+  if (!input.firstSession) return { kind: "no_sessions" };
+  if (courseHasStarted(input.firstSession, input.now)) return { kind: "started" };
+  if (input.seats.kind === "full") return { kind: "full" };
+  return { kind: "register" };
+}
+
 /** Registration is offered only before the first session starts (the RPC agrees). */
 export function courseHasStarted(
   firstSession: Pick<AcademyCourseSessionRow, "session_date" | "start_time"> | null,
