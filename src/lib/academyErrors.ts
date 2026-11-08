@@ -65,7 +65,8 @@ const RPC_ERRORS: Record<string, AcademyErrorKey> = {
   CANCELLATION_WINDOW_CLOSED: "academyErrWindowClosed",
   REGISTRATION_NOT_ACTIVE: "academyErrRegistrationNotActive",
   REGISTRATION_NOT_FOUND: "academyErrRegistrationNotFound",
-  REGISTRATION_NOT_PENDING: "academyErrRegistrationNotActive",
+  REGISTRATION_NOT_PENDING: "academyErrRegistrationNotPending",
+  INVALID_DECISION: "academyErrInvalid",
   NOT_AUTHENTICATED: "academyErrNotSignedIn",
 };
 

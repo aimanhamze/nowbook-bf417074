@@ -74,6 +74,8 @@ describe("academyErrorInfo", () => {
     ["REGISTRATION_NOT_ACTIVE", "academyErrRegistrationNotActive"],
     ["REGISTRATION_NOT_FOUND", "academyErrRegistrationNotFound"],
     ["NOT_AUTHENTICATED", "academyErrNotSignedIn"],
+    ["REGISTRATION_NOT_PENDING", "academyErrRegistrationNotPending"],
+    ["INVALID_DECISION", "academyErrInvalid"],
   ])("registration RPC %s -> %s", (message, key) => {
     expect(academyErrorInfo(pg("P0001", message)).key).toBe(key);
   });
