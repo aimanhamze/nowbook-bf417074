@@ -459,14 +459,13 @@ const ProviderDetail = () => {
             <MapPin className="h-3.5 w-3.5 shrink-0 text-accent" />
             {provider.address[lang]}
           </p>
+          {/* Branch switcher — renders nothing for a single-branch owner.
+              Under the location line so a visitor on the wrong city sees it
+              before booking. */}
+          <OtherBranches provider={provider} />
           <SocialLinksRow socialLinks={provider.socialLinks} />
         </div>
       </motion.div>
-
-      {/* Sibling branches of the same owner — renders nothing for a
-          single-branch owner. Under the info card so a visitor on the wrong
-          city sees it before booking. */}
-      <OtherBranches provider={provider} />
 
       {/* The signed-in customer's next appointment here — renders nothing
           otherwise. Above "about" so a returning customer sees it first; the
