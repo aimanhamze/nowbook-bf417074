@@ -63,6 +63,26 @@ describe("academyErrorInfo", () => {
     expect(academyErrorInfo(new Error("IMAGE_TOO_LARGE")).key).toBe("academyErrImageSize");
   });
 
+  it.each([
+    ["COURSE_FULL", "academyErrCourseFull"],
+    ["ALREADY_REGISTERED", "academyErrAlreadyRegistered"],
+    ["COURSE_ALREADY_STARTED", "academyErrCourseStarted"],
+    ["CANNOT_REGISTER_OWN_COURSE", "academyErrOwnCourse"],
+    ["COURSE_NOT_AVAILABLE", "academyErrCourseUnavailable"],
+    ["COURSE_HAS_NO_SESSIONS", "academyErrNoSessions"],
+    ["CANCELLATION_WINDOW_CLOSED", "academyErrWindowClosed"],
+    ["REGISTRATION_NOT_ACTIVE", "academyErrRegistrationNotActive"],
+    ["REGISTRATION_NOT_FOUND", "academyErrRegistrationNotFound"],
+    ["NOT_AUTHENTICATED", "academyErrNotSignedIn"],
+  ])("registration RPC %s -> %s", (message, key) => {
+    expect(academyErrorInfo(pg("P0001", message)).key).toBe(key);
+  });
+
+  it("an RPC message does not collide with a longer one sharing a word", () => {
+    // COURSE_ALREADY_STARTED contains "ALREADY" but is not ALREADY_REGISTERED.
+    expect(academyErrorInfo(pg("P0001", "COURSE_ALREADY_STARTED")).key).toBe("academyErrCourseStarted");
+  });
+
   it("anything unknown -> generic", () => {
     expect(academyErrorInfo(pg("XX000", "boom")).key).toBe("academyErrGeneric");
     expect(academyErrorInfo(new Error("network down")).key).toBe("academyErrGeneric");

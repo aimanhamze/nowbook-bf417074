@@ -51,10 +51,31 @@ function checkViolationKey(name: string): AcademyErrorKey {
   return "academyErrInvalid";
 }
 
+/**
+ * The registration RPCs (register / cancel / decide) RAISE these exact
+ * UPPER_SNAKE messages (SQLSTATE P0001), like the package RPCs.
+ */
+const RPC_ERRORS: Record<string, AcademyErrorKey> = {
+  COURSE_FULL: "academyErrCourseFull",
+  ALREADY_REGISTERED: "academyErrAlreadyRegistered",
+  COURSE_ALREADY_STARTED: "academyErrCourseStarted",
+  CANNOT_REGISTER_OWN_COURSE: "academyErrOwnCourse",
+  COURSE_NOT_AVAILABLE: "academyErrCourseUnavailable",
+  COURSE_HAS_NO_SESSIONS: "academyErrNoSessions",
+  CANCELLATION_WINDOW_CLOSED: "academyErrWindowClosed",
+  REGISTRATION_NOT_ACTIVE: "academyErrRegistrationNotActive",
+  REGISTRATION_NOT_FOUND: "academyErrRegistrationNotFound",
+  REGISTRATION_NOT_PENDING: "academyErrRegistrationNotActive",
+  NOT_AUTHENTICATED: "academyErrNotSignedIn",
+};
+
 export function academyErrorInfo(err: unknown): AcademyErrorInfo {
   const code = supabaseErrorCode(err);
   const message = field(err, "message");
   const details = field(err, "details");
+
+  const rpcKey = RPC_ERRORS[message.trim()];
+  if (rpcKey) return { key: rpcKey };
 
   // Named raises first: their SQLSTATE is a generic class.
   if (message.includes("CATEGORY_CHANGE_BLOCKED")) {
