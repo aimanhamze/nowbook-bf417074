@@ -301,6 +301,13 @@ const BookAppointment = () => {
     setPendingDraft(draft);
   }, [user, provider, isFitnessStudio, scheduleLoading, sessionsLoading, classSchedule, t]);
 
+  // An academy has no appointment wizard: its courses (and the Register
+  // button) live on the provider page. Checked before the sign-in and
+  // provider-role gates so a deep link to /book always lands there.
+  if (provider && isAcademyCategory(provider.category)) {
+    return <Navigate to={`/provider/${provider.id}`} replace />;
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center gap-4">
@@ -330,12 +337,6 @@ const BookAppointment = () => {
         <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin" />
       </div>
     );
-  }
-
-  // An academy has no appointment wizard: its courses (and the Register
-  // button) live on the provider page. A deep link to /book lands there.
-  if (provider && isAcademyCategory(provider.category)) {
-    return <Navigate to={`/provider/${provider.id}`} replace />;
   }
 
   if (!provider) {
