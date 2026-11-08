@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFavorites } from "@/hooks/useFavorites";
 import { getProviderStatus } from "@/lib/providerStatus";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
+import { isAcademyCategory } from "@/lib/academyCategory";
 import type { ProviderSchedule } from "@/hooks/useAllProviders";
 
 interface ProviderCardGridProps {
@@ -36,10 +37,13 @@ export function ProviderCardGrid({ provider, schedule, now }: ProviderCardGridPr
   const banner = provider.coverImage || provider.image || "";
   const [imgOk, setImgOk] = useState(!!banner);
 
+  // No open/closed pill for an academy: it runs on dated course sessions, and
+  // its weekly-hours rows (seeded at creation) say nothing about when it teaches.
+  const showsStatus = !isAcademyCategory(provider.category);
   const status = useMemo(() => {
-    if (!schedule || !now) return null;
+    if (!showsStatus || !schedule || !now) return null;
     return getProviderStatus(schedule.availability, schedule.blockedDates, now);
-  }, [schedule, now]);
+  }, [showsStatus, schedule, now]);
 
   const handleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();

@@ -297,7 +297,9 @@ export function BusinessProfileTab() {
                 <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {categories.map(c => (
+                    {/* Becoming an academy is an admin decision (it swaps the
+                        whole dashboard to courses), so it is not self-service. */}
+                    {categories.filter(c => !isAcademyCategory(c.id)).map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.icon} {categoryNames[c.id]?.[lang]}</SelectItem>
                     ))}
                   </SelectContent>

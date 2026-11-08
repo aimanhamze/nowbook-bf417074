@@ -63,11 +63,14 @@ export const categories = [
   { id: "fitness_studio", icon: "🤸" },
   { id: "counseling", icon: "💬" },
   { id: "piercing", icon: "💎" },
+  { id: "academy", icon: "🎓" },
 ] as const;
 
 export const beautyCategories = ["barber", "salon", "nails", "brows", "spa", "skincare", "makeup", "piercing"] as const;
 export const healthCategories = ["orthopedic", "dentist", "eye_doctor", "dermatologist", "aesthetic_medicine", "physiotherapy", "pediatrician"] as const;
 export const fitnessCategories = ["gym", "fitness_studio"] as const;
+/** Course-based providers: their own Home section and Explore group. */
+export const learningCategories = ["academy"] as const;
 
 export const categoryNames: Record<string, Record<Lang, string>> = {
   barber: { he: "ספר", ar: "حلاق", en: "Barber" },
@@ -88,4 +91,5 @@ export const categoryNames: Record<string, Record<Lang, string>> = {
   fitness_studio: { he: "סטודיו כושר", ar: "استوديو لياقة", en: "Fitness Studio" },
   counseling: { he: "ייעוץ והדרכות", ar: "استشارات وإرشاد", en: "Counseling & Guidance" },
   piercing: { he: "פירסינג", ar: "بيرسنغ", en: "Piercing" },
+  academy: { he: "אקדמיה וקורסים", ar: "أكاديمية ودورات", en: "Academy & Courses" },
 };

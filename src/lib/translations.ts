@@ -1118,6 +1118,7 @@ export const translations = {
     academyErrImageType: "יש לבחור קובץ תמונה",
     academyErrImageSize: "התמונה גדולה מ-5MB",
     academyErrImageUpload: "התמונה לא הועלתה, אבל שאר הפרטים נשמרו",
+    learningAndCourses: "קורסים ולמידה",
   },
   ar: {
     appName: "Ehjezly",
@@ -2232,6 +2233,7 @@ export const translations = {
     academyErrImageType: "اختر ملف صورة",
     academyErrImageSize: "حجم الصورة أكبر من 5MB",
     academyErrImageUpload: "لم يتم رفع الصورة، لكن تم حفظ باقي التفاصيل",
+    learningAndCourses: "دورات وتعلّم",
   },
   en: {
     appName: "Ehjezly",
@@ -3346,6 +3348,7 @@ export const translations = {
     academyErrImageType: "Choose an image file",
     academyErrImageSize: "The image is larger than 5MB",
     academyErrImageUpload: "The image didn't upload, but the other details were saved",
+    learningAndCourses: "Courses & Learning",
   },
 } as const;
 

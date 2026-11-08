@@ -10,8 +10,8 @@ describe("admin category list", () => {
     }
   });
 
-  it("offers academy to admins only (not yet in the customer list)", () => {
+  it("admin and customer lists are the same set (academy is customer-visible since Phase 3)", () => {
     expect(ADMIN_CATEGORY_IDS).toContain("academy");
-    expect((categories as readonly { id: string }[]).some((c) => c.id === "academy")).toBe(false);
+    expect([...ADMIN_CATEGORY_IDS].sort()).toEqual(categories.map((c) => c.id).sort());
   });
 });

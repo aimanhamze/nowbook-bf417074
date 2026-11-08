@@ -7,6 +7,7 @@ import {
   Eye,
   Flower2,
   Gem,
+  GraduationCap,
   Hand,
   HeartPulse,
   MessagesSquare,
@@ -41,4 +42,5 @@ export const categoryIcons: Record<string, LucideIcon> = {
   fitness_studio: HeartPulse,
   counseling: MessagesSquare,
   piercing: Gem,
+  academy: GraduationCap,
 };

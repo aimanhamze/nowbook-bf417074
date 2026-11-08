@@ -15,7 +15,7 @@ import { useAllProviders, useAllProviderSchedules } from "@/hooks/useAllProvider
 import type { ProviderSchedule } from "@/hooks/useAllProviders";
 import { getProviderStatus } from "@/lib/providerStatus";
 import { useFavorites } from "@/hooks/useFavorites";
-import { beautyCategories, healthCategories, fitnessCategories } from "@/lib/mock-data";
+import { beautyCategories, healthCategories, fitnessCategories, learningCategories } from "@/lib/mock-data";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate, useNavigate } from "react-router-dom";
@@ -334,6 +334,14 @@ const Index = () => {
       title: t("fitnessStudio"),
       providers: sortFavoritesFirst(
         providers.filter((p) => (fitnessCategories as readonly string[]).includes(p.category)),
+        favoriteIds
+      ),
+    },
+    {
+      key: "learning",
+      title: t("learningAndCourses"),
+      providers: sortFavoritesFirst(
+        providers.filter((p) => (learningCategories as readonly string[]).includes(p.category)),
         favoriteIds
       ),
     },
