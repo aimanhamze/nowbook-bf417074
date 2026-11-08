@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Briefcase, User, Clock, Bell, BellOff, Images, SlidersHorizontal, Ticket, BookOpen } from "lucide-react";
+import { Briefcase, User, Clock, Bell, BellOff, Images, SlidersHorizontal, Ticket, BookOpen, ClipboardList } from "lucide-react";
 import { BackOrHomeIcon } from "@/components/ui/directional-icon";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { motion } from "framer-motion";
@@ -16,6 +16,8 @@ import { AvailabilityTab } from "@/components/dashboard/AvailabilityTab";
 import { PhotosTab } from "@/components/dashboard/PhotosTab";
 import { PackagesTab } from "@/components/dashboard/PackagesTab";
 import { CoursesTab } from "@/components/academy/CoursesTab";
+import { RegistrationsTab } from "@/components/academy/registrations/RegistrationsTab";
+import { PendingRegistrationsBadge } from "@/components/academy/registrations/PendingRegistrationsBadge";
 import { isAcademyCategory } from "@/lib/academyCategory";
 import { visibleDashboardTabs } from "@/lib/dashboardTabs";
 import { Button } from "@/components/ui/button";
@@ -28,6 +30,7 @@ const tabs = [
   { id: "availability", icon: Clock },
   { id: "services", icon: Briefcase },
   { id: "courses", icon: BookOpen },
+  { id: "registrations", icon: ClipboardList },
   { id: "gallery", icon: Images },
   { id: "packages", icon: Ticket },
 ] as const;
@@ -37,6 +40,7 @@ type TabId = typeof tabs[number]["id"];
 const TAB_LABELS: Record<TabId, string> = {
   services: "manageServices",
   courses: "academyCoursesTab",
+  registrations: "academyRegistrationsTab",
   profile: "businessProfile",
   booking: "bookingSettingsTitle",
   availability: "availability",
@@ -197,6 +201,9 @@ export default function Dashboard() {
                       <Icon className="h-4 w-4" />
                     </motion.span>
                     <span className="hidden sm:inline">{label}</span>
+                    {/* Rendered only for the academy-only tab, so other
+                        providers never run the registrations query. */}
+                    {tab.id === "registrations" && <PendingRegistrationsBadge />}
                   </span>
                 </motion.button>
               );
@@ -219,6 +226,7 @@ export default function Dashboard() {
           {effectiveTab === "availability" && <AvailabilityTab />}
           {effectiveTab === "services" && <ServicesTab />}
           {effectiveTab === "courses" && isAcademy && <CoursesTab />}
+          {effectiveTab === "registrations" && isAcademy && <RegistrationsTab />}
           {effectiveTab === "gallery" && <PhotosTab />}
           {effectiveTab === "packages" && isFitnessStudio && <PackagesTab />}
         </motion.div>
