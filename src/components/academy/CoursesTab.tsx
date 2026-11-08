@@ -11,6 +11,9 @@ import type { AcademyCourseRow } from "@/integrations/supabase/academyTypes";
 import { dateFnsLocaleFor } from "@/lib/dateFnsLocale";
 import { CourseSheet } from "./CourseSheet";
 import { SessionsSheet } from "./SessionsSheet";
+import { CourseRegistrantsSheet } from "./registrations/CourseRegistrantsSheet";
+import { useAcademyRegistrations } from "@/hooks/useAcademyRegistrations";
+import { seatsTakenByCourse } from "@/lib/academyRegistrations";
 
 /**
  * Dashboard "Courses" tab for an academy branch: the course list, with a
@@ -28,9 +31,13 @@ export function CoursesTab() {
   const [editing, setEditing] = useState<AcademyCourseRow | null>(null);
   const [courseSheetOpen, setCourseSheetOpen] = useState(false);
   const [sessionsFor, setSessionsFor] = useState<string | null>(null);
+  const [registrantsFor, setRegistrantsFor] = useState<string | null>(null);
+  const { registrations } = useAcademyRegistrations();
+  const takenByCourse = useMemo(() => seatsTakenByCourse(registrations), [registrations]);
 
   const instructorName = useMemo(() => new Map(instructors.map((i) => [i.id, i.name])), [instructors]);
   const sessionsCourse = courses.find((c) => c.id === sessionsFor) ?? null;
+  const registrantsCourse = courses.find((c) => c.id === registrantsFor) ?? null;
 
   const openNew = () => {
     setEditing(null);
@@ -151,6 +158,20 @@ export function CoursesTab() {
                 </span>
                 <span>{t("academySessionsManage")}</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setRegistrantsFor(c.id)}
+                className="flex w-full items-center gap-2 border-t border-border/60 px-3 py-2.5 text-start text-xs font-medium text-accent hover:bg-secondary/40"
+              >
+                <Users className="h-4 w-4" />
+                <span className="flex-1">
+                  {t("academySeatsTaken")
+                    .replace("{taken}", String(takenByCourse.get(c.id) ?? 0))
+                    .replace("{max}", String(c.max_seats))}
+                </span>
+                <span>{t("academyRegistrants")}</span>
+              </button>
             </motion.article>
           );
         })
@@ -165,6 +186,13 @@ export function CoursesTab() {
           // A brand-new course has no sessions yet: go straight to adding them.
           if (isNew) setSessionsFor(id);
         }}
+      />
+      <CourseRegistrantsSheet
+        open={registrantsCourse !== null}
+        onOpenChange={(open) => {
+          if (!open) setRegistrantsFor(null);
+        }}
+        course={registrantsCourse}
       />
       <SessionsSheet
         open={sessionsFor !== null && sessionsCourse !== null}
