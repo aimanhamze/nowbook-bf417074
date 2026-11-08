@@ -22,6 +22,7 @@ import {
 import type { Provider } from "@/lib/mock-data";
 import { courseCancelState, courseSpan } from "@/lib/academyCustomer";
 import { academyErrorMessage } from "@/lib/academyErrors";
+import { deliverCoursePush } from "@/lib/academyPushDelivery";
 import { jerusalemNow } from "@/lib/academySessions";
 import { dateFnsLocaleFor } from "@/lib/dateFnsLocale";
 import { RegistrationStatusBadge } from "./RegistrationStatusBadge";
@@ -55,9 +56,18 @@ export function MyCoursesSection({ providers }: { providers: Provider[] }) {
 
   const onConfirmCancel = async () => {
     if (!confirmId) return;
+    const item = registrations.find((r) => r.registration.id === confirmId);
     try {
       await cancel.mutateAsync(confirmId);
       toast.success(t("academyCancelledToast"));
+      // The RPC wrote the provider's in-app row; this only delivers it.
+      if (item) {
+        deliverCoursePush("cancelled_by_customer", {
+          courseName: item.course?.name ?? "",
+          providerId: item.registration.provider_id,
+          customerUserId: item.registration.user_id,
+        });
+      }
     } catch (err) {
       toast.error(academyErrorMessage(err, t));
     } finally {

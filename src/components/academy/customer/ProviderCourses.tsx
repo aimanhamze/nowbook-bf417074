@@ -156,7 +156,7 @@ export function ProviderCourses({ providerId }: { providerId: string }) {
                     cta={ctaFor(item)}
                     signedIn={signedIn}
                     pending={pendingCourseId === course.id}
-                    onRegister={() => void register(course.id)}
+                    onRegister={() => void register(course)}
                   />
                 </div>
               </motion.article>
@@ -176,7 +176,7 @@ export function ProviderCourses({ providerId }: { providerId: string }) {
         signedIn={signedIn}
         pending={!!selected && pendingCourseId === selected.course.id}
         onRegister={() => {
-          if (selected) void register(selected.course.id);
+          if (selected) void register(selected.course);
         }}
       />
     </section>
