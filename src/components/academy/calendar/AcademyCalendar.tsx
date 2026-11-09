@@ -330,7 +330,15 @@ export function AcademyCalendar() {
         course={openCourse}
         scope={scope}
         subtitle={
-          open ? `${format(parseISO(open.date), "EEEE, d MMM", { locale })} · ${open.start}–${open.end}` : undefined
+          open ? (
+            <>
+              {format(parseISO(open.date), "EEEE, d MMM", { locale })} ·{" "}
+              {/* Isolated LTR run, or RTL text reorders it to "13:00–10:00". */}
+              <bdi dir="ltr">
+                {open.start}–{open.end}
+              </bdi>
+            </>
+          ) : undefined
         }
       />
     </div>

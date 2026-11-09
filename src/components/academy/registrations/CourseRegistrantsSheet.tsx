@@ -32,7 +32,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   course: AcademyCourseRow | null;
   /** Extra line under the title, e.g. the tapped session's date and time. */
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   /**
    * Which registrations query to read. Pass the SAME scope the caller already
    * uses (the calendar passes its range's course ids) so the sheet shares that
