@@ -1,14 +1,12 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   format, parseISO, startOfToday, startOfMonth, endOfMonth,
   addMonths, subMonths, isAfter, isBefore,
 } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Coffee, RotateCcw, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { RotateCcw, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Sheet,
@@ -16,10 +14,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { ForwardArrow } from "@/components/ui/directional-icon";
 import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderAvailability } from "@/hooks/useProviderAvailability";
+import { DayHoursEditor } from "@/components/dashboard/DayHoursEditor";
+import { DIVIDER, GROUP_HEADING, LIST, ROW } from "@/components/dashboard/settingsList";
+import { ltr } from "@/lib/dashboardSetup";
+import { formatRanges, validateDay, type DayDraft } from "@/lib/weeklyHours";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BranchSuffix } from "@/components/branch/BranchSuffix";
@@ -44,16 +47,17 @@ const dayKey = (d: Date) => format(d, "yyyy-MM-dd");
 const hhmm = (v: string | null | undefined, fallback: string) => (v ?? fallback).slice(0, 5);
 
 /**
- * Monthly calendar editor — shown in the Availability tab ONLY when the provider
- * is in monthly mode. Every un-overridden day inherits the flat default (Phase 2);
- * tapping a day writes/clears a provider_date_overrides row. Blocked dates are a
- * hard layer shown here but managed in the separate Block a Date card.
+ * Monthly calendar editor, shown in the opening-hours section ONLY when the
+ * provider is in monthly mode. Every un-overridden day inherits the flat
+ * default (edited in Settings). Tapping a day writes/clears a
+ * provider_date_overrides row, or closes it via provider_blocked_dates.
+ * Closed days are listed once, in the section's closed-days group.
  */
 export function MonthlyAvailabilityCalendar() {
   const { t, isRtl, lang } = useLang();
+  const navigate = useNavigate();
   const { profile } = useProviderProfile();
-  const { blockedDates, dateOverrides, deleteDateOverride, unblockDate } =
-    useProviderAvailability();
+  const { blockedDates, dateOverrides, deleteDateOverride } = useProviderAvailability();
 
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
 
@@ -99,209 +103,199 @@ export function MonthlyAvailabilityCalendar() {
 
   const editingKey = editingDate ? dayKey(editingDate) : null;
   const editingOverride = editingKey ? overrideMap.get(editingKey) : undefined;
-  // Closing a day now writes a provider_blocked_dates row, so the editor needs
+  // Closing a day writes a provider_blocked_dates row, so the editor needs
   // the block row's id (to reopen = unblock). Blocked wins in the resolver.
   const editingBlock = editingKey
     ? (blockedDates as BlockedRow[]).find(b => b.blocked_date.slice(0, 10) === editingKey)
     : undefined;
 
-  const defaultSummary = flatAvailable
-    ? t("monthlyDefaultSummaryOpen").replace("{start}", flatStart).replace("{end}", flatEnd)
-    : t("monthlyDefaultSummaryClosed");
+  // Custom-hours days (open overrides), date-sorted. Closed days are blocked
+  // dates and appear in the closed-days group below, so they're not repeated.
+  const customDays = (dateOverrides as OverrideRow[])
+    .filter(o => o.is_available && !blockedSet.has(o.override_date))
+    .sort((a, b) => a.override_date.localeCompare(b.override_date));
 
-  // Non-default days, merged and date-sorted: custom-hours (override, open) days
-  // AND closed days (now blocked rows). Both surface in the calendar's list so it
-  // is a complete view; each carries the correct "remove" (delete override /
-  // unblock) action.
-  const dayList = [
-    ...(dateOverrides as OverrideRow[])
-      .filter(o => o.is_available && !blockedSet.has(o.override_date))
-      .map(o => ({
-        key: o.id,
-        date: o.override_date,
-        closed: false,
-        label: `${hhmm(o.start_time, flatStart)}–${hhmm(o.end_time, flatEnd)}`,
-        remove: () => deleteDateOverride.mutateAsync(o.id),
-      })),
-    ...(blockedDates as BlockedRow[]).map(b => ({
-      key: b.id,
-      date: b.blocked_date.slice(0, 10),
-      closed: true,
-      label: t("dayClosedShort"),
-      remove: () => unblockDate.mutateAsync(b.id),
-    })),
-  ].sort((a, b) => a.date.localeCompare(b.date));
+  const resetDay = async (id: string) => {
+    try {
+      await deleteDateOverride.mutateAsync(id);
+      toast.success(t("bsSaved"));
+    } catch {
+      toast.error(t("bsSaveError"));
+    }
+  };
 
   const navBtn =
-    "inline-flex h-9 w-9 items-center justify-center rounded-xl bg-card text-foreground " +
+    "inline-flex h-11 w-11 items-center justify-center rounded-xl bg-card text-foreground " +
     "shadow-sm ring-1 ring-border transition-colors hover:bg-accent hover:text-accent-foreground " +
     "hover:ring-accent disabled:opacity-30 disabled:pointer-events-none disabled:hover:bg-card " +
     "disabled:hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
+  const defaultLine = flatAvailable
+    ? t("hrsMonthlyDefaultOpen").replace("{hours}", ltr(`${flatStart} – ${flatEnd}`))
+    : t("hrsMonthlyDefaultClosed");
+
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold text-foreground">{t("monthlyCalendarTitle")}</h3>
-          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{t("monthlyCalendarHelp")}</p>
-        </div>
-        {/* Flat-default baseline — the hours every un-overridden day inherits */}
-        <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent">
-          <Clock className="h-3.5 w-3.5" />
-          {defaultSummary}
-        </div>
-      </div>
-
-      {/* Calendar panel. dir is passed to react-day-picker so the weekday header
-          row and day grid flow RTL; the caption below is our own so the nav
-          buttons sit/disable on the correct sides in RTL. */}
-      <div className="rounded-2xl border border-border bg-secondary/40 p-3 sm:p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <button
-            type="button"
-            aria-label={t("prevMonthAria")}
-            disabled={!canGoPrev}
-            onClick={() => setMonth(subMonths(month, 1))}
-            className={navBtn}
-          >
-            {isRtl ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+    <div className="space-y-6">
+      {/* The flat default every un-overridden day inherits. Edited in Settings
+          (AvailabilityModeSection), so the row goes there. */}
+      <ul className={LIST}>
+        <li>
+          <button type="button" onClick={() => navigate("/settings")} className={ROW}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+              <Clock className="h-[18px] w-[18px]" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold leading-snug">{t("hrsMonthlyDefaultTitle")}</span>
+              <span className="mt-0.5 block text-xs leading-snug text-foreground/70">{defaultLine}</span>
+            </span>
+            <ForwardArrow className="h-4 w-4 shrink-0 text-foreground/40" />
           </button>
-          <span className="text-base font-bold text-foreground">
-            {format(month, "MMMM yyyy", { locale: dateFnsLocale })}
-          </span>
-          <button
-            type="button"
-            aria-label={t("nextMonthAria")}
-            disabled={!canGoNext}
-            onClick={() => setMonth(addMonths(month, 1))}
-            className={navBtn}
-          >
-            {isRtl ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-          </button>
-        </div>
+        </li>
+      </ul>
 
-        <Calendar
-          month={month}
-          onMonthChange={setMonth}
-          dir={isRtl ? "rtl" : "ltr"}
-          locale={dateFnsLocale}
-          weekStartsOn={0}
-          fromDate={today}
-          toDate={rangeEnd}
-          onDayClick={(day, mods) => {
-            if (mods.disabled) return;
-            setEditingDate(day);
-          }}
-          modifiers={{ ovOpen: overrideOpenDates, ovClosed: overrideClosedDates, blocked: blockedParsed }}
-          modifiersClassNames={{
-            ovOpen: "bg-accent/15 text-accent font-bold ring-1 ring-inset ring-accent/30 hover:bg-accent/20",
-            ovClosed: "bg-muted text-muted-foreground line-through hover:bg-muted",
-            blocked: "bg-destructive/10 text-destructive line-through hover:bg-destructive/10",
-          }}
-          classNames={{
-            caption: "hidden",
-            months: "w-full",
-            month: "w-full space-y-3",
-            table: "w-full border-collapse",
-            head_row: "flex w-full",
-            head_cell: "text-muted-foreground font-semibold text-[0.72rem] uppercase tracking-wide w-full py-2",
-            row: "flex w-full mt-1.5",
-            cell: "relative w-full p-0.5 text-center",
-            day: cn(
-              "h-11 w-full rounded-xl text-sm font-medium text-foreground",
-              "inline-flex items-center justify-center transition-colors",
-              "hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-            ),
-            day_today: "ring-1 ring-inset ring-accent/50 font-bold text-accent",
-            day_disabled: "text-muted-foreground/30 pointer-events-none hover:bg-transparent",
-            day_outside: "text-muted-foreground/25",
-            day_hidden: "invisible",
-          }}
-          className="p-0"
-        />
-      </div>
-
-      {/* Legend — two states: custom hours, and closed (a closed day is a blocked
-          date, rendered with the destructive tint). */}
-      <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-2">
-          <span className="h-4 w-4 rounded-md bg-accent/15 ring-1 ring-inset ring-accent/30" />
-          {t("legendCustom")}
-        </span>
-        <span className="inline-flex items-center gap-2">
-          <span className="h-4 w-4 rounded-md bg-destructive/10 ring-1 ring-inset ring-destructive/30" />
-          {t("legendClosedDay")}
-        </span>
-      </div>
-
-      {/* Custom-days summary list */}
-      <div className="space-y-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {t("customDaysTitle")}
-        </h4>
-        {dayList.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-            {t("noCustomDays")}
-          </p>
-        ) : (
-          dayList.map(entry => (
-            <div
-              key={entry.key}
-              className="flex items-center gap-3 rounded-xl bg-secondary px-3 py-2.5 text-sm transition-colors hover:bg-muted"
+      <section className="space-y-2">
+        <h3 className={GROUP_HEADING}>{t("monthlyCalendarTitle")}</h3>
+        <div className={cn(LIST, "p-3")}>
+          {/* Our own caption so the nav buttons sit/disable on the correct
+              sides in RTL; dir flips react-day-picker's header + grid. */}
+          <div className="mb-2 flex items-center justify-between">
+            <button
+              type="button"
+              aria-label={t("prevMonthAria")}
+              disabled={!canGoPrev}
+              onClick={() => setMonth(subMonths(month, 1))}
+              className={navBtn}
             >
-              <span
-                className={cn(
-                  "h-2.5 w-2.5 shrink-0 rounded-full",
-                  entry.closed ? "bg-destructive" : "bg-accent",
-                )}
-              />
-              <button
-                type="button"
-                className="flex flex-1 items-baseline gap-2 text-start"
-                onClick={() => setEditingDate(parseISO(entry.date))}
-              >
-                <span className="font-semibold text-foreground">
-                  {format(parseISO(entry.date), "EEE, d MMM", { locale: dateFnsLocale })}
-                </span>
-                <span className={cn(entry.closed ? "text-destructive/80" : "text-muted-foreground")}>
-                  {entry.label}
-                </span>
-              </button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={async () => {
-                  try {
-                    await entry.remove();
-                    toast.success(t("availabilitySaved"));
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : "Error");
-                  }
-                }}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))
-        )}
-      </div>
+              {isRtl ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+            </button>
+            <span className="text-base font-bold text-foreground">
+              {format(month, "MMMM yyyy", { locale: dateFnsLocale })}
+            </span>
+            <button
+              type="button"
+              aria-label={t("nextMonthAria")}
+              disabled={!canGoNext}
+              onClick={() => setMonth(addMonths(month, 1))}
+              className={navBtn}
+            >
+              {isRtl ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+            </button>
+          </div>
+
+          <Calendar
+            month={month}
+            onMonthChange={setMonth}
+            dir={isRtl ? "rtl" : "ltr"}
+            locale={dateFnsLocale}
+            weekStartsOn={0}
+            fromDate={today}
+            toDate={rangeEnd}
+            onDayClick={(day, mods) => {
+              if (mods.disabled) return;
+              setEditingDate(day);
+            }}
+            modifiers={{ ovOpen: overrideOpenDates, ovClosed: overrideClosedDates, blocked: blockedParsed }}
+            modifiersClassNames={{
+              ovOpen: "bg-accent/15 text-accent font-bold ring-1 ring-inset ring-accent/30 hover:bg-accent/20",
+              ovClosed: "bg-muted text-muted-foreground line-through hover:bg-muted",
+              blocked: "bg-destructive/10 text-destructive line-through hover:bg-destructive/10",
+            }}
+            classNames={{
+              caption: "hidden",
+              months: "w-full",
+              month: "w-full space-y-3",
+              table: "w-full border-collapse",
+              head_row: "flex w-full",
+              head_cell: "text-muted-foreground font-semibold text-[0.72rem] uppercase tracking-wide w-full py-2",
+              row: "flex w-full mt-1.5",
+              cell: "relative w-full p-0.5 text-center",
+              day: cn(
+                "h-11 w-full rounded-xl text-sm font-medium text-foreground",
+                "inline-flex items-center justify-center transition-colors",
+                "hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+              ),
+              day_today: "ring-1 ring-inset ring-accent/50 font-bold text-accent",
+              day_disabled: "text-muted-foreground/30 pointer-events-none hover:bg-transparent",
+              day_outside: "text-muted-foreground/25",
+              day_hidden: "invisible",
+            }}
+            className="p-0"
+          />
+
+          {/* Legend — custom hours, and closed (a closed day is a blocked date,
+              rendered with the destructive tint). */}
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 px-1 text-xs text-foreground/70">
+            <span className="inline-flex items-center gap-2">
+              <span className="h-4 w-4 rounded-md bg-accent/15 ring-1 ring-inset ring-accent/30" />
+              {t("legendCustom")}
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <span className="h-4 w-4 rounded-md bg-destructive/10 ring-1 ring-inset ring-destructive/30" />
+              {t("legendClosedDay")}
+            </span>
+          </div>
+        </div>
+        <p className="px-1 text-xs leading-relaxed text-foreground/70">{t("monthlyCalendarHelp")}</p>
+      </section>
+
+      {/* Custom-hours days */}
+      <section className="space-y-2">
+        <h3 className={GROUP_HEADING}>{t("customDaysTitle")}</h3>
+        <ul className={LIST}>
+          {customDays.length === 0 ? (
+            <li className="px-4 py-4 text-sm text-foreground/70">{t("noCustomDays")}</li>
+          ) : (
+            customDays.map((o, i) => (
+              <li key={o.id} className={cn("flex items-center", i > 0 && DIVIDER)}>
+                <button
+                  type="button"
+                  onClick={() => setEditingDate(parseISO(o.override_date))}
+                  className={cn(ROW, "flex-1")}
+                  aria-haspopup="dialog"
+                >
+                  <span className="w-28 shrink-0 text-sm font-semibold">
+                    {format(parseISO(o.override_date), "EEE, d MMM", { locale: dateFnsLocale })}
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm tabular-nums text-foreground/80">
+                    {ltr(formatRanges({
+                      open: true,
+                      start: hhmm(o.start_time, flatStart),
+                      end: hhmm(o.end_time, flatEnd),
+                      breakStart: o.break_start ? hhmm(o.break_start, "") : null,
+                      breakEnd: o.break_end ? hhmm(o.break_end, "") : null,
+                    }) ?? "")}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void resetDay(o.id)}
+                  aria-label={t("resetToDefault")}
+                  title={t("resetToDefault")}
+                  className="me-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-foreground/50 hover:text-foreground"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      </section>
 
       {/* Day editor sheet */}
       <Sheet open={!!editingDate} onOpenChange={(o) => !o && setEditingDate(null)}>
         <SheetContent
           side="bottom"
-          className={`flex max-h-[88vh] flex-col gap-0 rounded-t-3xl border-t p-0 ${providerDesktopSheet}`}
+          aria-describedby={undefined}
+          className={`max-h-[90vh] overflow-y-auto rounded-t-3xl pb-[max(1.5rem,env(safe-area-inset-bottom))] ${providerDesktopSheet}`}
         >
-          <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/20" />
-          <SheetHeader className="shrink-0 px-5 pb-1 pt-3 text-start">
+          <SheetHeader className="text-start">
             <SheetTitle>
               {editingDate && format(editingDate, "EEEE, d MMMM", { locale: dateFnsLocale })}
               <BranchSuffix />
             </SheetTitle>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto px-5 pb-6 pt-3">
-            {editingDate && (
+          {editingDate && (
+            <div className="mt-5">
               <DayOverrideEditor
                 key={editingKey ?? ""}
                 dateStr={editingKey!}
@@ -312,8 +306,8 @@ export function MonthlyAvailabilityCalendar() {
                 flatEnd={flatEnd}
                 onClose={() => setEditingDate(null)}
               />
-            )}
-          </div>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     </div>
@@ -343,32 +337,34 @@ function DayOverrideEditor({
 
   // A day is "closed" when it has a blocked-date row (blockId). Custom-hours days
   // have an is_available override. Otherwise the day follows the flat default.
-  const [open, setOpen] = useState(
-    blockId ? false : existing ? existing.is_available : flatAvailable,
-  );
-  const [start, setStart] = useState(hhmm(existing?.start_time, flatStart));
-  const [end, setEnd] = useState(hhmm(existing?.end_time, flatEnd));
-  const [hasBreak, setHasBreak] = useState(!!(existing?.break_start && existing?.break_end));
-  const [breakStart, setBreakStart] = useState(hhmm(existing?.break_start, "13:00"));
-  const [breakEnd, setBreakEnd] = useState(hhmm(existing?.break_end, "14:00"));
+  const hadBreak = !!(existing?.break_start && existing?.break_end);
+  const [draft, setDraft] = useState<DayDraft>(() => ({
+    open: blockId ? false : existing ? existing.is_available : flatAvailable,
+    start: hhmm(existing?.start_time, flatStart),
+    end: hhmm(existing?.end_time, flatEnd),
+    breakStart: hadBreak ? hhmm(existing!.break_start, "13:00") : null,
+    breakEnd: hadBreak ? hhmm(existing!.break_end, "14:00") : null,
+  }));
+  const error = validateDay(draft);
 
   const busy =
     upsertDateOverride.isPending || deleteDateOverride.isPending ||
     blockDate.isPending || unblockDate.isPending;
 
   const save = async () => {
+    if (error) return;
     try {
-      if (open) {
+      if (draft.open) {
         // OPEN with custom hours → write an override; if the day was closed
         // (blocked), unblock it first so the override actually takes effect.
         if (blockId) await unblockDate.mutateAsync(blockId);
         await upsertDateOverride.mutateAsync({
           override_date: dateStr,
           is_available: true,
-          start_time: start,
-          end_time: end,
-          break_start: hasBreak ? breakStart : null,
-          break_end: hasBreak ? breakEnd : null,
+          start_time: draft.start,
+          end_time: draft.end,
+          break_start: draft.breakStart,
+          break_end: draft.breakEnd,
         });
       } else {
         // CLOSE → block the date (this drives the status pill). Drop any stale
@@ -376,10 +372,10 @@ function DayOverrideEditor({
         if (existing) await deleteDateOverride.mutateAsync(existing.id);
         if (!blockId) await blockDate.mutateAsync({ blocked_date: dateStr });
       }
-      toast.success(t("availabilitySaved"));
+      toast.success(t("bsSaved"));
       onClose();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
+    } catch {
+      toast.error(t("bsSaveError"));
     }
   };
 
@@ -388,97 +384,23 @@ function DayOverrideEditor({
     try {
       if (existing) await deleteDateOverride.mutateAsync(existing.id);
       if (blockId) await unblockDate.mutateAsync(blockId);
-      toast.success(t("availabilitySaved"));
+      toast.success(t("bsSaved"));
       onClose();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
+    } catch {
+      toast.error(t("bsSaveError"));
     }
   };
 
   return (
-    <div className="space-y-4">
-      {/* Open / closed */}
-      <div className="flex items-center gap-3">
-        <Switch checked={open} onCheckedChange={setOpen} />
-        <Label className="text-sm font-medium">{t("editDayOpenLabel")}</Label>
-      </div>
+    <div className="space-y-6">
+      <DayHoursEditor value={draft} onChange={setDraft} error={error} closedHint={t("dayClosedHint")} />
 
-      {!open && (
-        <p className="rounded-xl bg-destructive/[0.06] px-3 py-2.5 text-xs text-destructive/80">
-          {t("dayClosedHint")}
-        </p>
-      )}
-
-      {open && (
-        <>
-          {/* Hours */}
-          <div>
-            <Label className="text-sm">{t("dayHoursLabel")}</Label>
-            <div className="mt-2 flex items-center gap-1.5">
-              <Input
-                type="time"
-                className="h-9 text-sm flex-1"
-                value={start}
-                onChange={e => setStart(e.target.value)}
-              />
-              <span className="text-xs text-muted-foreground">–</span>
-              <Input
-                type="time"
-                className="h-9 text-sm flex-1"
-                value={end}
-                onChange={e => setEnd(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Break */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Coffee className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span className="text-xs text-muted-foreground">{t("breakTime")}</span>
-              <Switch
-                checked={hasBreak}
-                onCheckedChange={setHasBreak}
-                className="scale-75 origin-left"
-              />
-            </div>
-            {hasBreak && (
-              <div className="flex items-center gap-1.5">
-                <Input
-                  type="time"
-                  className="h-8 text-xs flex-1"
-                  value={breakStart}
-                  onChange={e => setBreakStart(e.target.value)}
-                />
-                <span className="text-xs text-muted-foreground">–</span>
-                <Input
-                  type="time"
-                  className="h-8 text-xs flex-1"
-                  value={breakEnd}
-                  onChange={e => setBreakEnd(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 pt-2">
-        <Button
-          className="h-11 flex-1 text-base font-semibold"
-          onClick={save}
-          disabled={busy}
-        >
+      <div className="space-y-2">
+        <Button className="h-12 w-full rounded-2xl text-base font-semibold" onClick={save} disabled={busy || !!error}>
           {t("save")}
         </Button>
         {(existing || blockId) && (
-          <Button
-            variant="outline"
-            className="h-11 gap-1.5"
-            onClick={reset}
-            disabled={busy}
-          >
+          <Button variant="outline" className="h-11 w-full gap-1.5 rounded-2xl" onClick={reset} disabled={busy}>
             <RotateCcw className="h-4 w-4" />
             {t("resetToDefault")}
           </Button>

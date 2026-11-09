@@ -5,7 +5,7 @@ import {
   BadgeCheck, CalendarClock, CalendarRange, CalendarX2, Check, Clock3, Hourglass,
   ListPlus, NotebookPen, Tag, Wallet,
 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { SettingsSwitch } from "@/components/dashboard/SettingsSwitch";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   AlertDialog,
@@ -46,15 +46,6 @@ const LIST = "glass-card-md overflow-hidden rounded-3xl";
 const DIVIDER = "border-t border-foreground/[0.07]";
 const ROW =
   "flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-start transition-colors active:bg-foreground/[0.04]";
-
-// OFF must read as "tappable, currently off", not as disabled: an outlined
-// track (foreground/50 ≈ 3.3:1 on the card, meeting the 3:1 non-text minimum)
-// with a solid knob. ON keeps the accent track. Only `disabled` (the shared
-// Switch's opacity-50) looks pale. Scoped to this section via className —
-// the shared ui/switch.tsx is untouched.
-const SWITCH_OFF_VISIBLE =
-  "data-[state=unchecked]:border-foreground/50 data-[state=unchecked]:bg-white " +
-  "[&[data-state=unchecked]>span]:bg-foreground/60 [&[data-state=unchecked]>span]:shadow-none";
 
 // All controls save immediately and read straight from `profile.*` — no
 // react-hook-form, so the watch+setValue+reset combobox bug can't occur here.
@@ -405,7 +396,7 @@ function SwitchRow({
     <label htmlFor={id} className={`${ROW} cursor-pointer`}>
       <IconTile icon={icon} />
       <RowText title={title} description={description} />
-      <Switch id={id} checked={checked} onCheckedChange={onChange} className={SWITCH_OFF_VISIBLE} />
+      <SettingsSwitch id={id} checked={checked} onCheckedChange={onChange} />
     </label>
   );
 }
