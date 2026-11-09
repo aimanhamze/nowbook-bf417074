@@ -1179,6 +1179,15 @@ export const translations = {
     academyNoRegistrants: "אין עדיין נרשמים לקורס",
     academyUnknownCustomer: "לקוח",
     academyErrRegistrationNotPending: "הבקשה הזו כבר טופלה",
+    // ── Academy (calendar) ──────────────────────────────────────────────
+    academyCalendarEmpty: "אין מפגשים בתקופה הזו",
+    academyCalendarEmptyBody: "המפגשים של הקורסים שלך יופיעו כאן.",
+    academyCalendarEmptyCta: "הוספת מפגשים בלשונית קורסים",
+    academyAllInstructors: "כל המדריכים",
+    academyPendingPlus: "+{n} ממתינים",
+    academyPrev: "הקודם",
+    academyNext: "הבא",
+    academyToday: "היום",
   },
   ar: {
     appName: "Ehjezly",
@@ -2354,6 +2363,15 @@ export const translations = {
     academyNoRegistrants: "لا يوجد مسجّلون في الدورة بعد",
     academyUnknownCustomer: "عميل",
     academyErrRegistrationNotPending: "تمت معالجة هذا الطلب بالفعل",
+    // ── Academy (calendar) ──────────────────────────────────────────────
+    academyCalendarEmpty: "لا توجد لقاءات في هذه الفترة",
+    academyCalendarEmptyBody: "ستظهر هنا لقاءات دوراتك.",
+    academyCalendarEmptyCta: "أضف لقاءات من تبويب الدورات",
+    academyAllInstructors: "كل المدربين",
+    academyPendingPlus: "+{n} بالانتظار",
+    academyPrev: "السابق",
+    academyNext: "التالي",
+    academyToday: "اليوم",
   },
   en: {
     appName: "Ehjezly",
@@ -3529,6 +3547,15 @@ export const translations = {
     academyNoRegistrants: "No one has registered yet",
     academyUnknownCustomer: "Customer",
     academyErrRegistrationNotPending: "This request was already handled",
+    // ── Academy (calendar) ──────────────────────────────────────────────
+    academyCalendarEmpty: "No sessions in this period",
+    academyCalendarEmptyBody: "Your courses' sessions will appear here.",
+    academyCalendarEmptyCta: "Add sessions in the Courses tab",
+    academyAllInstructors: "All instructors",
+    academyPendingPlus: "+{n} pending",
+    academyPrev: "Previous",
+    academyNext: "Next",
+    academyToday: "Today",
   },
 } as const;
 
