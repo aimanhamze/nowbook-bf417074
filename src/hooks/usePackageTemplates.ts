@@ -20,7 +20,9 @@ export interface PackageTemplateInput {
  * off. The customer-facing side filters on is_active via RLS
  * ("Anyone can view active templates").
  */
-export function usePackageTemplates() {
+// `enabled` (default true — every existing caller is unchanged): see
+// useProviderClassSchedule; the setup hub fetches templates only for a studio.
+export function usePackageTemplates(enabled = true) {
   const { profile } = useProviderProfile();
   const queryClient = useQueryClient();
 
@@ -43,7 +45,7 @@ export function usePackageTemplates() {
       if (error) throw error;
       return (data ?? []) as unknown as PackageTemplateRow[];
     },
-    enabled: !!profile,
+    enabled: !!profile && enabled,
   });
 
   const upsertTemplate = useMutation({

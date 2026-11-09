@@ -27,9 +27,11 @@ export default function ProviderCalendar() {
   const showPendingTab = requiresApproval || pendingCount > 0;
   const isFitnessStudio = profile?.category === "fitness_studio";
 
-  // Accept location.state.tab === "pending" from the BusinessProfileTab guard dialog.
+  // Accept location.state.tab === "pending" from the BusinessProfileTab guard
+  // dialog, and "schedule" from the dashboard setup hub's class-schedule row.
+  const requestedTab = (location.state as { tab?: string } | null)?.tab;
   const initialTab: TabId =
-    (location.state as { tab?: string } | null)?.tab === "pending" ? "pending" : "calendar";
+    requestedTab === "pending" ? "pending" : requestedTab === "schedule" ? "schedule" : "calendar";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
   // If the Pending tab gets hidden while active, fall back to calendar.
@@ -38,6 +40,14 @@ export default function ProviderCalendar() {
       setActiveTab("calendar");
     }
   }, [activeTab, showPendingTab]);
+
+  // The schedule tab exists only for a fitness studio; anyone else who lands
+  // on it (once the profile has loaded) falls back to the calendar.
+  useEffect(() => {
+    if (activeTab === "schedule" && profile && !isFitnessStudio) {
+      setActiveTab("calendar");
+    }
+  }, [activeTab, profile, isFitnessStudio]);
 
   useEffect(() => {
     if (user && !isProvider) {
