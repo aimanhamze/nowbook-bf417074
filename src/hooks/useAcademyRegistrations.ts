@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProviderProfile } from "./useProviderProfile";
 import { academyFrom, academyRpc, type CourseRegistrationRow } from "@/integrations/supabase/academyTypes";
-import { fetchAllPages } from "@/lib/fetchAll";
+import { fetchAllPages, IN_BATCH } from "@/lib/fetchAll";
 import { fetchCustomerContacts } from "@/lib/customerContacts";
 import { registrationCounts } from "@/lib/academyRegistrations";
 import { deliverCoursePush } from "@/lib/academyPushDelivery";
@@ -28,26 +28,60 @@ export interface ProviderRegistration extends CourseRegistrationRow {
 
 type Snapshot = { previous: ProviderRegistration[] | undefined };
 
-export function useAcademyRegistrations(enabled = true) {
+export interface RegistrationsScope {
+  /** Default true. */
+  enabled?: boolean;
+  /**
+   * Only these courses (e.g. the courses with sessions in the calendar's
+   * visible range). Omitted = the whole branch (Registrations tab, badge).
+   */
+  courseIds?: readonly string[];
+  /** Only seat holders (pending + confirmed). */
+  activeOnly?: boolean;
+}
+
+/**
+ * The cache key for a scope. Every key starts with ACADEMY_REGISTRATIONS_KEY,
+ * so one prefix invalidation after an approve / reject / cancel refreshes the
+ * tab, the badge and the calendar together.
+ */
+export function registrationsQueryKey(providerId: string | undefined, scope: RegistrationsScope = {}) {
+  const courses = scope.courseIds ? [...scope.courseIds].sort().join(",") : "all";
+  return [ACADEMY_REGISTRATIONS_KEY, providerId, courses, scope.activeOnly ? "active" : "any"] as const;
+}
+
+type RowsPage = PromiseLike<{ data: CourseRegistrationRow[] | null; error: unknown }>;
+
+export function useAcademyRegistrations(scope: RegistrationsScope = {}) {
   const { profile } = useProviderProfile();
   const queryClient = useQueryClient();
   const providerId = profile?.id;
-  const key = [ACADEMY_REGISTRATIONS_KEY, providerId];
+  const key = registrationsQueryKey(providerId, scope);
+  const enabled = scope.enabled ?? true;
+  const courseIds = scope.courseIds;
+  const scopedToNothing = courseIds !== undefined && courseIds.length === 0;
 
   const query = useQuery({
     queryKey: key,
     staleTime: 30 * 1000,
-    enabled: !!providerId && enabled,
+    enabled: !!providerId && enabled && !scopedToNothing,
     queryFn: async (): Promise<ProviderRegistration[]> => {
       if (!providerId) return [];
-      const rows = await fetchAllPages<CourseRegistrationRow>((from, to) =>
-        academyFrom("course_registrations")
-          .select("*")
-          .eq("provider_id", providerId)
-          .order("created_at")
-          .order("id")
-          .range(from, to) as unknown as PromiseLike<{ data: CourseRegistrationRow[] | null; error: unknown }>,
-      );
+      const page = (ids: readonly string[] | null) => (from: number, to: number) => {
+        let q = academyFrom("course_registrations").select("*").eq("provider_id", providerId);
+        if (ids) q = q.in("course_id", ids as string[]);
+        if (scope.activeOnly) q = q.in("status", ["pending", "confirmed"]);
+        return q.order("created_at").order("id").range(from, to) as unknown as RowsPage;
+      };
+      let rows: CourseRegistrationRow[] = [];
+      if (courseIds) {
+        // Course ids go in the URL: batch them, page each batch.
+        for (let i = 0; i < courseIds.length; i += IN_BATCH) {
+          rows = rows.concat(await fetchAllPages<CourseRegistrationRow>(page(courseIds.slice(i, i + IN_BATCH))));
+        }
+      } else {
+        rows = await fetchAllPages<CourseRegistrationRow>(page(null));
+      }
       const contacts = await fetchCustomerContacts(rows.map((r) => r.user_id));
       return rows.map((r) => ({
         ...r,
@@ -57,7 +91,7 @@ export function useAcademyRegistrations(enabled = true) {
     },
   });
 
-  const registrations = useMemo(() => query.data ?? [], [query.data]);
+  const registrations = useMemo(() => (scopedToNothing ? [] : query.data ?? []), [query.data, scopedToNothing]);
   const counts = useMemo(() => registrationCounts(registrations), [registrations]);
 
   const patchLocal = (id: string, patch: Partial<ProviderRegistration>): Snapshot => {
@@ -119,5 +153,5 @@ export function useAcademyRegistrations(enabled = true) {
     onSettled: refresh,
   });
 
-  return { registrations, counts, isLoading: query.isLoading, decide, cancelAsProvider };
+  return { registrations, counts, isLoading: query.isLoading && !scopedToNothing, decide, cancelAsProvider };
 }

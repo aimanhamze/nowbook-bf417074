@@ -88,6 +88,19 @@ describe("academyCalendarSessionsKey", () => {
   });
 });
 
+describe("registrationsQueryKey (scoped registrations)", () => {
+  it("whole-branch and scoped queries never share an entry, but share the prefix", async () => {
+    const { registrationsQueryKey, ACADEMY_REGISTRATIONS_KEY } = await import("@/hooks/useAcademyRegistrations");
+    const all = registrationsQueryKey("p1");
+    const scoped = registrationsQueryKey("p1", { courseIds: ["b", "a"], activeOnly: true });
+    expect(all).toEqual([ACADEMY_REGISTRATIONS_KEY, "p1", "all", "any"]);
+    expect(scoped).toEqual([ACADEMY_REGISTRATIONS_KEY, "p1", "a,b", "active"]);
+    // Course order does not create a second cache entry.
+    expect(registrationsQueryKey("p1", { courseIds: ["a", "b"], activeOnly: true })).toEqual(scoped);
+    expect(all[0]).toBe(scoped[0]);
+  });
+});
+
 describe("seatSummaryByCourse (one grouped pass)", () => {
   it("counts confirmed and pending per course; ignores rejected / cancelled", () => {
     const m = seatSummaryByCourse([
