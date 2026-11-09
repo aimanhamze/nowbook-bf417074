@@ -4,11 +4,12 @@ import {
 } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { ForwardArrow } from "@/components/ui/directional-icon";
-import { translations, type Lang, type TranslationKey } from "@/lib/translations";
+import { type Lang, type TranslationKey } from "@/lib/translations";
+import { usePlural } from "@/hooks/usePlural";
 import { useDashboardSetup, type DashboardSetup, type Fact } from "@/hooks/useDashboardSetup";
 import {
-  joinList, ltr, plural, progressMessage, setupPercent, stepTarget,
-  type PluralForms, type SectionId, type SetupStepId, type StepTarget,
+  joinList, ltr, progressMessage, setupPercent, stepTarget,
+  type SectionId, type SetupStepId, type StepTarget,
 } from "@/lib/dashboardSetup";
 
 // The setup hub: what /dashboard shows before a section is opened. A progress
@@ -33,19 +34,6 @@ interface Row {
 // is only ~2.9:1 on white, too light for 12px text; this is ≥5:1 on the
 // card. The dot carries the bright accent.
 const MISSING_INK = "text-[hsl(24_80%_34%)]";
-
-/** Plural lookup across the CLDR-suffixed keys (setupX_one … setupX_other). */
-function usePlural() {
-  const { lang } = useLang();
-  const table = translations[lang] as unknown as Record<string, string>;
-  return (base: string, n: number) => {
-    const forms: PluralForms = { other: table[`${base}_other`] ?? "{n}" };
-    for (const c of ["zero", "one", "two", "few", "many"] as const) {
-      if (table[`${base}_${c}`]) forms[c] = table[`${base}_${c}`];
-    }
-    return plural(lang as Lang, n, forms);
-  };
-}
 
 const BOOKING_STEP_LINE: Partial<Record<SetupStepId, TranslationKey>> = {
   services: "setupBookingStepServices",
