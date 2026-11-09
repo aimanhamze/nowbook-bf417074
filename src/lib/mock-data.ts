@@ -66,6 +66,7 @@ export const categories = [
   { id: "fitness_studio", icon: "🤸" },
   { id: "counseling", icon: "💬" },
   { id: "piercing", icon: "💎" },
+  { id: "therapy", icon: "💗" },
 ] as const;
 
 export const beautyCategories = ["barber", "salon", "nails", "brows", "spa", "skincare", "makeup", "piercing"] as const;
@@ -91,4 +92,5 @@ export const categoryNames: Record<string, Record<Lang, string>> = {
   fitness_studio: { he: "סטודיו כושר", ar: "استوديو لياقة", en: "Fitness Studio" },
   counseling: { he: "ייעוץ והדרכות", ar: "استشارات وإرشاد", en: "Counseling & Guidance" },
   piercing: { he: "פירסינג", ar: "بيرسنغ", en: "Piercing" },
+  therapy: { he: "טיפול רגשי", ar: "علاج نفسي", en: "Therapy" },
 };

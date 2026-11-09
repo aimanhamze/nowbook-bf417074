@@ -8,6 +8,7 @@ import {
   Flower2,
   Gem,
   Hand,
+  HandHeart,
   HeartPulse,
   MessagesSquare,
   Palette,
@@ -41,4 +42,5 @@ export const categoryIcons: Record<string, LucideIcon> = {
   fitness_studio: HeartPulse,
   counseling: MessagesSquare,
   piercing: Gem,
+  therapy: HandHeart,
 };
