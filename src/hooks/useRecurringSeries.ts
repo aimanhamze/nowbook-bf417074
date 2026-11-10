@@ -7,6 +7,7 @@ import type { BusySlotRow, SlotOptions } from "@/hooks/useAllProviders";
 import type { DayWindow } from "@/lib/availabilityResolver";
 import {
   classifySeriesDate,
+  SERIES_MAX_COUNT,
   seriesDateKey,
   summarizeSeriesCreate,
   weeklySeriesDates,
@@ -123,8 +124,13 @@ export function useSeriesPreview(input: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [input.enabled, input.firstDate.getTime(), input.count],
   );
-  const fromStr = dates[0] ? seriesDateKey(dates[0]) : undefined;
-  const toStr = dates.length ? seriesDateKey(dates[dates.length - 1]) : undefined;
+  // The range is ALWAYS the longest series (12 weeks), not the current count:
+  // stepping the count then needs no refetch, and can never show a date judged
+  // against a range that does not cover it.
+  const fromStr = input.enabled ? seriesDateKey(input.firstDate) : undefined;
+  const toStr = input.enabled
+    ? seriesDateKey(weeklySeriesDates(input.firstDate, SERIES_MAX_COUNT)[SERIES_MAX_COUNT - 1])
+    : undefined;
 
   const range = useSeriesRangeData(input.providerId, input.staffId, fromStr, toStr, input.enabled);
 
