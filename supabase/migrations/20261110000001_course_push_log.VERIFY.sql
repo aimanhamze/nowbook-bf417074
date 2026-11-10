@@ -90,9 +90,9 @@ BEGIN
 
   RAISE NOTICE 'course_push_log VERIFY §B: all checks passed';
 END $$;
-SELECT 'course_push_log VERIFY §B: all checks passed' AS result,
-       (SELECT count(*) FROM public.course_push_log) AS leftover_in_txn;
 ROLLBACK;
+SELECT 'course_push_log VERIFY §B: all checks passed' AS result,
+       (SELECT count(*) FROM public.course_push_log) AS leftover;
 
 -- §R ROLLBACK (drops the claim log; the Edge Function then cannot claim and
 --     sends nothing).
