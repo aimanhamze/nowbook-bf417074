@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import type { Provider, Service } from "@/lib/mock-data";
 import type { Lang } from "@/lib/translations";
 import type { SocialLinks } from "@/lib/socialLinks";
@@ -340,6 +341,19 @@ export function useAllProviderSchedules() {
   };
 }
 
+/** One row of get_provider_busy_slots — what the slot pipeline overlaps against. */
+export type BusySlotRow = Database["public"]["Functions"]["get_provider_busy_slots"]["Returns"][number];
+
+/** Per-call options for getAvailableSlots. Every field omitted = today's behaviour. */
+export interface SlotOptions {
+  /** Pretend the day has no bookings (waiting list: "could this day offer anything?"). Wins over `bookings`. */
+  ignoreBookings?: boolean;
+  /** Overlap against these rows instead of the hook's own 60-day fetch (recurring series range). */
+  bookings?: readonly BusySlotRow[];
+  /** The selected member's days off, instead of the hook's own 60-day fetch. */
+  staffTimeOff?: ReadonlySet<string>;
+}
+
 /** Fetch real availability for a provider */
 // AVAILABILITY_WINDOW_DAYS and the [fromStr, toStr] derivation now live in
 // lib/availabilityWindow, because usePublicStaffTimeOff needs the SAME window to
@@ -567,6 +581,11 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
    * (new_start < b.end && b.start < new_start + new_duration), so the client
    * never offers a slot the trigger would reject, nor hides one it would allow.
    */
+  // `options.bookings` / `options.staffTimeOff` (recurring series): the same
+  // pipeline over data fetched for a range BEYOND the hook's 60-day window
+  // (a weekly series reaches 77 days). They REPLACE the hook's own bookings /
+  // the selected member's time off for this one call; omitted = untouched.
+  //
   // `options.ignoreBookings` (waiting list): run the SAME pipeline as if the day
   // had no bookings at all — same hours, staff narrowing, break, grid, duration
   // and latest_start_time. It answers "could this day offer anything?", which
@@ -578,7 +597,7 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     capacity = 1,
     primaryServiceId?: string,
     latestStartTime?: string | null,
-    options?: { ignoreBookings?: boolean },
+    options?: SlotOptions,
   ): string[] => {
     if (!providerId) return [];
 
@@ -603,7 +622,7 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     // capacity is pooled shop-wide and the trigger's group branch is staff-blind.
     const dayWindow = narrowToStaff(
       shopWindow,
-      staffDayWindow(date, selectedStaffDays, selectedStaffTimeOff),
+      staffDayWindow(date, selectedStaffDays, options?.staffTimeOff ?? selectedStaffTimeOff),
     );
     if (!dayWindow) return [];
 
@@ -621,7 +640,7 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     // booking's primary service id (service_ids[0], = the trigger's
     // service_ids[1]) so the same-service / cross-service rule can be applied.
     const bookedIntervals: { start: number; end: number; serviceId: string | undefined }[] = [];
-    (options?.ignoreBookings ? [] : bookingsQuery.data || [])
+    (options?.ignoreBookings ? [] : options?.bookings ?? bookingsQuery.data ?? [])
       .filter(b => b.booking_date === dateStr)
       // STAFF LANES (mirrors the trigger's `b.staff_id IS NOT DISTINCT FROM
       // NEW.staff_id` in clauses 5+7, added in the same PR — 20260724000002):
@@ -790,7 +809,12 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
    * provider-side equivalent and resolves only the signed-in provider.)
    * Read-only; nothing calls it unless the provider has the waiting list on.
    */
-  const resolveDayWindows = (date: Date): { shop: DayWindow | null; narrowed: DayWindow | null } => {
+  // `staffTimeOff` replaces the selected member's time off for this call (see
+  // SlotOptions); omitted = the hook's own 60-day window, as before.
+  const resolveDayWindows = (
+    date: Date,
+    staffTimeOff?: ReadonlySet<string>,
+  ): { shop: DayWindow | null; narrowed: DayWindow | null } => {
     const shop = resolveDayHours(
       date,
       monthlySettings,
@@ -800,7 +824,7 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     );
     return {
       shop,
-      narrowed: narrowToStaff(shop, staffDayWindow(date, selectedStaffDays, selectedStaffTimeOff)),
+      narrowed: narrowToStaff(shop, staffDayWindow(date, selectedStaffDays, staffTimeOff ?? selectedStaffTimeOff)),
     };
   };
 
