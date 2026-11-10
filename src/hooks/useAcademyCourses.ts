@@ -42,7 +42,8 @@ export interface SaveCourseResult {
   imageError?: unknown;
 }
 
-export function useAcademyCourses() {
+/** `enabled = false` (the setup hub for non-academy branches) fetches nothing. */
+export function useAcademyCourses(enabled = true) {
   const { user } = useAuth();
   const { profile } = useProviderProfile();
   const queryClient = useQueryClient();
@@ -56,7 +57,7 @@ export function useAcademyCourses() {
   const coursesQuery = useQuery({
     queryKey: [ACADEMY_COURSES_KEY, providerId],
     staleTime: 2 * 60 * 1000,
-    enabled: !!providerId,
+    enabled: !!providerId && enabled,
     queryFn: async (): Promise<AcademyCourseRow[]> => {
       if (!providerId) return [];
       const { data, error } = await academyFrom("academy_courses")
@@ -71,7 +72,7 @@ export function useAcademyCourses() {
   const sessionsQuery = useQuery({
     queryKey: [ACADEMY_SESSIONS_KEY, providerId],
     staleTime: 2 * 60 * 1000,
-    enabled: !!providerId,
+    enabled: !!providerId && enabled,
     queryFn: async (): Promise<AcademyCourseSessionRow[]> => {
       if (!providerId) return [];
       const { data, error } = await academyFrom("academy_course_sessions")

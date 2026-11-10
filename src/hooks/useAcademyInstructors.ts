@@ -17,7 +17,8 @@ import { deleteAcademyImage, uploadAcademyImage } from "@/lib/academyImage";
  */
 export const ACADEMY_INSTRUCTORS_KEY = "academy-instructors";
 
-export function useAcademyInstructors() {
+/** `enabled = false` (the setup hub for non-academy branches) fetches nothing. */
+export function useAcademyInstructors(enabled = true) {
   const { user } = useAuth();
   const { profile } = useProviderProfile();
   const queryClient = useQueryClient();
@@ -30,7 +31,7 @@ export function useAcademyInstructors() {
   const query = useQuery({
     queryKey: [ACADEMY_INSTRUCTORS_KEY, providerId],
     staleTime: 5 * 60 * 1000,
-    enabled: !!providerId,
+    enabled: !!providerId && enabled,
     queryFn: async (): Promise<AcademyInstructorRow[]> => {
       if (!providerId) return [];
       const { data, error } = await academyFrom("academy_instructors")

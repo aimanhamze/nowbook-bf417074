@@ -30,6 +30,7 @@ import { packageErrorKey } from "@/hooks/usePackageActions";
 import { MyPackageCard } from "@/components/packages/MyPackageCard";
 import { UpcomingAppointmentCard } from "@/components/provider-detail/UpcomingAppointmentCard";
 import { WaitlistRow } from "@/components/provider-detail/WaitlistRow";
+import { OtherBranches } from "@/components/provider-detail/OtherBranches";
 import { CollapsingHeader, HeaderIconButton } from "@/components/provider-detail/CollapsingHeader";
 
 interface SocialLinkEntry {
@@ -463,6 +464,10 @@ const ProviderDetail = () => {
             <MapPin className="h-3.5 w-3.5 shrink-0 text-accent" />
             {provider.address[lang]}
           </p>
+          {/* Branch switcher — renders nothing for a single-branch owner.
+              Under the location line so a visitor on the wrong city sees it
+              before booking. */}
+          <OtherBranches provider={provider} />
           <SocialLinksRow socialLinks={provider.socialLinks} />
         </div>
       </motion.div>
@@ -934,4 +939,12 @@ const ProviderDetail = () => {
   );
 };
 
-export default ProviderDetail;
+// Keyed by id: /provider/A -> /provider/B (the "Other branches" rows) stays on
+// this route, so without a remount A's local state (cover fallback, expanded
+// about, lightbox, collapsing header) would carry over to B.
+const ProviderDetailPage = () => {
+  const { id } = useParams();
+  return <ProviderDetail key={id} />;
+};
+
+export default ProviderDetailPage;

@@ -179,6 +179,12 @@ export function useProviderAvailability(enabled = true) {
     dateOverrides: dateOverridesQuery.data || [],
     isLoading: availabilityQuery.isLoading,
     error: availabilityQuery.error,
+    // Additive: the dashboard setup hub summarises blocked dates (fitness
+    // studios) and monthly overrides, so it needs their own load/error state.
+    blockedDatesLoading: blockedDatesQuery.isLoading,
+    blockedDatesError: blockedDatesQuery.error,
+    dateOverridesLoading: dateOverridesQuery.isLoading,
+    dateOverridesError: dateOverridesQuery.error,
     upsertAvailability,
     blockDate,
     unblockDate,

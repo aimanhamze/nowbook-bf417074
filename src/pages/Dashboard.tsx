@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import { Briefcase, User, Clock, Bell, BellOff, Images, SlidersHorizontal, Ticket, BookOpen, ClipboardList } from "lucide-react";
-import { BackOrHomeIcon } from "@/components/ui/directional-icon";
+import { useEffect } from "react";
+import { Bell, BellOff } from "lucide-react";
+import { BackArrow, BackOrHomeIcon } from "@/components/ui/directional-icon";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { motion } from "framer-motion";
-import { useLocation, useNavigate } from "react-router-dom";
+import { motion, useReducedMotion } from "framer-motion";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -17,85 +17,83 @@ import { PhotosTab } from "@/components/dashboard/PhotosTab";
 import { PackagesTab } from "@/components/dashboard/PackagesTab";
 import { CoursesTab } from "@/components/academy/CoursesTab";
 import { RegistrationsTab } from "@/components/academy/registrations/RegistrationsTab";
-import { PendingRegistrationsBadge } from "@/components/academy/registrations/PendingRegistrationsBadge";
 import { isAcademyCategory } from "@/lib/academyCategory";
-import { visibleDashboardTabs } from "@/lib/dashboardTabs";
+import { SetupHub } from "@/components/dashboard/SetupHub";
+import { isSectionVisible, toSectionId, type SectionId, type StepTarget } from "@/lib/dashboardSetup";
 import { Button } from "@/components/ui/button";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
-
-const tabs = [
-  { id: "profile", icon: User },
-  { id: "booking", icon: SlidersHorizontal },
-  { id: "availability", icon: Clock },
-  { id: "services", icon: Briefcase },
-  { id: "courses", icon: BookOpen },
-  { id: "registrations", icon: ClipboardList },
-  { id: "gallery", icon: Images },
-  { id: "packages", icon: Ticket },
-] as const;
-
-type TabId = typeof tabs[number]["id"];
-
-const TAB_LABELS: Record<TabId, string> = {
-  services: "manageServices",
-  courses: "academyCoursesTab",
-  registrations: "academyRegistrationsTab",
-  profile: "businessProfile",
-  booking: "bookingSettingsTitle",
-  availability: "availability",
-  gallery: "gallery",
-  packages: "packages",
-};
 
 export default function Dashboard() {
   const { t } = useLang();
   const { user, isProvider } = useAuth();
   const { profile, branches, isLoading } = useProviderProfile();
-  // Multi-branch: the stored active-branch id keys the tab content below. It is
-  // null — and never changes — for a single-branch owner, so their tab is never
-  // remounted; it changes only when a multi-branch owner switches.
+  // Multi-branch: the stored active-branch id keys the content below. It is
+  // null — and never changes — for a single-branch owner, so their section is
+  // never remounted; it changes only when a multi-branch owner switches.
   const activeBranchId = useActiveBranchId(user?.id);
   const navigate = useNavigate();
   const { isEntry, goBack } = useSmartBack();
   const location = useLocation();
-  // Allow deep-linking to a specific tab via navigation state, e.g.
-  // navigate("/dashboard", { state: { tab: "services" } }). Falls back to the
-  // default "profile" tab for a plain visit or an unrecognized id.
-  const requestedTab = (location.state as { tab?: string } | null)?.tab;
-  const initialTab: TabId = tabs.some(tab => tab.id === requestedTab)
-    ? (requestedTab as TabId)
-    : "profile";
-  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
-  // SCOPE: packages are a fitness_studio feature (group classes only), so the
-  // tab does not exist for any other provider type. Gated on the same exact
-  // string every other class-flow gate uses -- see BookAppointment.tsx:110.
+  const [searchParams] = useSearchParams();
+  const reduceMotion = useReducedMotion();
+
+  // SCOPE: packages are a fitness_studio feature (group classes only); a studio
+  // has no services section (its classes live in provider_class_schedule and
+  // are edited from /calendar). Same exact-string gate as BookAppointment.tsx.
+  // `hours` stays for a studio: AvailabilityTab hides its hours editors there
+  // but keeps the blocked-dates card, a studio's only way to close a day.
   const isFitnessStudio = profile?.category === "fitness_studio";
-
-  // A fitness studio runs on a fixed weekly class schedule, not per-service
-  // bookings, so the services tab is meaningless to it: classes live in
-  // provider_class_schedule, not provider_services (useProviderServices already
-  // forces service_type for them), and are edited from /calendar instead.
-  //
-  // availability stays visible: AvailabilityTab hides its hours editors for a
-  // studio (the class grid IS its availability) but keeps the blocked-dates
-  // card, the only place a studio can close a day. Hiding the whole tab
-  // (880e09f) took that away.
-  //
-  // An academy runs on courses (academy_courses + sessions), not on services,
-  // weekly hours or packages, so those tabs are replaced by "courses".
-  // The per-category rule lives in lib/dashboardTabs (unit-tested).
+  // An academy runs on courses: "courses" and "registrations" replace
+  // services, hours and packages (rule in lib/dashboardSetup, unit-tested).
   const isAcademy = isAcademyCategory(profile?.category);
-  const allowed = visibleDashboardTabs(profile?.category);
-  const visibleTabs = tabs.filter((tab) => allowed.includes(tab.id));
 
-  // A deep link (navigate("/dashboard", { state: { tab: "services" } })) can
-  // still name a tab this provider cannot see -- BookingSettingsTab links to
-  // the calendar that way. Fall back rather than render a hidden tab or an
-  // empty panel.
-  const effectiveTab: TabId = visibleTabs.some((tab) => tab.id === activeTab)
-    ? activeTab
-    : "profile";
+  // The hub lives at /dashboard; a section at /dashboard?section=<id>, so the
+  // device back gesture returns to the hub and a reload stays in the section.
+  // A section this provider type does not have (or an unknown id) is the hub.
+  const requested = toSectionId(searchParams.get("section"));
+  const section: SectionId | null =
+    requested && isSectionVisible(requested, isFitnessStudio, isAcademy) ? requested : null;
+
+  // Legacy deep link: navigate("/dashboard", { state: { tab: "services" } })
+  // (CalendarTab's "no services" card) is rewritten in place to ?section=, so
+  // the URL, the back control and a reload all agree.
+  const legacyTab = (location.state as { tab?: string } | null)?.tab;
+  useEffect(() => {
+    if (!legacyTab || searchParams.get("section")) return;
+    const target = toSectionId(legacyTab);
+    navigate(target ? `/dashboard?section=${target}` : "/dashboard", {
+      replace: true,
+      state: { ...(location.state as object), tab: undefined },
+    });
+  }, [legacyTab, searchParams, location.state, navigate]);
+
+  // Each screen starts at the top: a section opened from far down the hub, or
+  // the hub after a long section.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [section]);
+
+  const openTarget = (target: StepTarget) => {
+    if (target.kind === "classSchedule") {
+      navigate("/calendar", { state: { tab: "schedule" } });
+      return;
+    }
+    if (target.kind === "instructors") {
+      navigate("/instructors");
+      return;
+    }
+    navigate(`/dashboard?section=${target.section}`, { state: { fromHub: true } });
+  };
+
+  // Back from a section: step back if the hub opened it (keeps history tidy
+  // and restores the hub entry); a section reached any other way — a deep
+  // link, a reload — replaces itself with the hub rather than leaving the page.
+  const backToHub = () => {
+    if ((location.state as { fromHub?: boolean } | null)?.fromHub) navigate(-1);
+    else navigate("/dashboard", { replace: true });
+  };
+
   const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
 
   if (!user || !isProvider) {
@@ -134,101 +132,81 @@ export default function Dashboard() {
       />
 
       <div className={`relative ${providerDesktopColumn}`}>
-        <header className="px-5 pt-12 pb-3">
-          <div className="mb-5 flex items-center gap-3">
+        {section ? (
+          // Section header: one back control that names where it goes, plus the
+          // branch chip so a multi-branch owner always sees which branch they
+          // are editing. The section's own h2 (inside the tab) is the title.
+          <header className="px-5 pt-12">
             <button
-              onClick={goBack}
-              className="-ms-1.5 rounded-xl p-1.5 transition-colors hover:bg-secondary/60 active:scale-95"
-              aria-label={t(isEntry ? "home" : "back")}
+              type="button"
+              onClick={backToHub}
+              className="-ms-2 inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-semibold text-foreground/80 transition-colors hover:bg-secondary/60 active:scale-95"
             >
-              <BackOrHomeIcon home={isEntry} className="h-5 w-5" />
+              <BackArrow className="h-5 w-5" />
+              {t("dashboard")}
             </button>
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-2xl font-extrabold leading-tight">{t("providerDashboard")}</h1>
-              {branches.length > 1 ? (
+            {branches.length > 1 && (
+              <div className="mt-1">
                 <BranchChip />
-              ) : (
-                profile?.business_name && (
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile.business_name}</p>
-                )
+              </div>
+            )}
+          </header>
+        ) : (
+          <header className="px-5 pt-12 pb-1">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={goBack}
+                className="-ms-1.5 rounded-xl p-1.5 transition-colors hover:bg-secondary/60 active:scale-95"
+                aria-label={t(isEntry ? "home" : "back")}
+              >
+                <BackOrHomeIcon home={isEntry} className="h-5 w-5" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <h1 className="truncate text-2xl font-extrabold leading-tight">{t("providerDashboard")}</h1>
+                {branches.length > 1 ? (
+                  <BranchChip />
+                ) : (
+                  profile?.business_name && (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile.business_name}</p>
+                  )
+                )}
+              </div>
+              {isSupported && (
+                <button
+                  onClick={isSubscribed ? unsubscribe : subscribe}
+                  disabled={pushLoading}
+                  className={`shrink-0 rounded-xl p-2.5 transition-colors active:scale-95 ${
+                    isSubscribed ? "bg-accent/10 text-accent" : "bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={isSubscribed ? t("notificationsActive") : t("enableNotifications")}
+                  aria-label={isSubscribed ? t("notificationsActive") : t("enableNotifications")}
+                >
+                  {isSubscribed ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
+                </button>
               )}
             </div>
-            {isSupported && (
-              <button
-                onClick={isSubscribed ? unsubscribe : subscribe}
-                disabled={pushLoading}
-                className={`shrink-0 rounded-xl p-2.5 transition-colors active:scale-95 ${
-                  isSubscribed ? "bg-accent/10 text-accent" : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-                title={isSubscribed ? t("notificationsActive") : t("enableNotifications")}
-                aria-label={isSubscribed ? t("notificationsActive") : t("enableNotifications")}
-              >
-                {isSubscribed ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
-              </button>
-            )}
-          </div>
+          </header>
+        )}
 
-          {/* Tab bar — segmented control */}
-          <div className="flex gap-1 rounded-2xl border border-border/40 bg-secondary/80 p-1 backdrop-blur-sm">
-            {visibleTabs.map(tab => {
-              const Icon = tab.icon;
-              const isActive = effectiveTab === tab.id;
-              const label = t(TAB_LABELS[tab.id] as any);
-              return (
-                <motion.button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  whileTap={{ scale: 0.92 }}
-                  aria-label={label}
-                  aria-pressed={isActive}
-                  className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition-colors duration-200 ${
-                    isActive ? "text-accent" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="dashboardTabPill"
-                      className="absolute inset-0 rounded-xl bg-card shadow-[0_2px_8px_-2px_hsl(var(--accent)/0.25)] ring-1 ring-border/50"
-                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                    />
-                  )}
-                  <span className="relative flex items-center gap-1.5">
-                    <motion.span
-                      animate={{ scale: isActive ? 1.1 : 1 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                      className="inline-flex"
-                    >
-                      <Icon className="h-4 w-4" />
-                    </motion.span>
-                    <span className="hidden sm:inline">{label}</span>
-                    {/* Rendered only for the academy-only tab, so other
-                        providers never run the registrations query. */}
-                    {tab.id === "registrations" && <PendingRegistrationsBadge />}
-                  </span>
-                </motion.button>
-              );
-            })}
-          </div>
-        </header>
-
-        {/* Keyed on branch AND tab: switching branch remounts the open tab, which
-            closes its sheets and drops form state that belongs to the old
-            branch, while the selected tab itself (state above) is kept. */}
+        {/* Keyed on branch AND section: switching branch remounts the open
+            section (closing its sheets, dropping form state that belongs to the
+            old branch) or the hub, while the section itself (URL) is kept. */}
         <motion.div
-          key={`${activeBranchId ?? ""}:${effectiveTab}`}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
+          key={`${activeBranchId ?? ""}:${section ?? "hub"}`}
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
           transition={{ duration: 0.25 }}
-          className="px-5 pt-5"
+          className={section ? "px-5 pt-3" : "px-5 pt-5"}
         >
-          {effectiveTab === "profile" && <BusinessProfileTab />}
-          {effectiveTab === "booking" && <BookingSettingsTab />}
-          {effectiveTab === "availability" && <AvailabilityTab />}
-          {effectiveTab === "services" && <ServicesTab />}
-          {effectiveTab === "courses" && isAcademy && <CoursesTab />}
-          {effectiveTab === "registrations" && isAcademy && <RegistrationsTab />}
-          {effectiveTab === "gallery" && <PhotosTab />}
-          {effectiveTab === "packages" && isFitnessStudio && <PackagesTab />}
+          {section === null && <SetupHub onOpen={openTarget} />}
+          {section === "profile" && <BusinessProfileTab />}
+          {section === "booking" && <BookingSettingsTab />}
+          {section === "hours" && <AvailabilityTab />}
+          {section === "services" && <ServicesTab />}
+          {section === "photos" && <PhotosTab />}
+          {section === "packages" && <PackagesTab />}
+          {section === "courses" && <CoursesTab />}
+          {section === "registrations" && <RegistrationsTab />}
         </motion.div>
       </div>
     </div>

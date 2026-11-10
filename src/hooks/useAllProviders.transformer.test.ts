@@ -70,3 +70,9 @@ describe("dbProviderToProvider — service image_url", () => {
     });
   });
 });
+
+describe("dbProviderToProvider — ownerId", () => {
+  it("carries user_id through as ownerId (groups branches for 'Other branches')", () => {
+    expect(dbProviderToProvider(dbProvider, []).ownerId).toBe("u1");
+  });
+});

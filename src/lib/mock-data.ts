@@ -17,6 +17,9 @@ export interface Service {
 
 export interface Provider {
   id: string;
+  // Owner's auth user id (provider_profiles.user_id). Branches of one owner
+  // share it; the provider page uses it to list "Other branches".
+  ownerId: string;
   name: Record<Lang, string>;
   category: string;
   rating: number;
@@ -63,6 +66,7 @@ export const categories = [
   { id: "fitness_studio", icon: "🤸" },
   { id: "counseling", icon: "💬" },
   { id: "piercing", icon: "💎" },
+  { id: "therapy", icon: "💗" },
   { id: "academy", icon: "🎓" },
 ] as const;
 
@@ -91,5 +95,6 @@ export const categoryNames: Record<string, Record<Lang, string>> = {
   fitness_studio: { he: "סטודיו כושר", ar: "استوديو لياقة", en: "Fitness Studio" },
   counseling: { he: "ייעוץ והדרכות", ar: "استشارات وإرشاد", en: "Counseling & Guidance" },
   piercing: { he: "פירסינג", ar: "بيرسنغ", en: "Piercing" },
+  therapy: { he: "טיפול רגשי", ar: "علاج نفسي", en: "Therapy" },
   academy: { he: "אקדמיה וקורסים", ar: "أكاديمية ودورات", en: "Academy & Courses" },
 };

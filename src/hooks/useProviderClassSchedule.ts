@@ -28,7 +28,10 @@ export interface ClassScheduleInsert {
   color: string;
 }
 
-export function useProviderClassSchedule() {
+// `enabled` (default true — every existing caller is unchanged) lets the
+// dashboard setup hub mount this hook for every provider while only a fitness
+// studio actually fetches its class schedule.
+export function useProviderClassSchedule(enabled = true) {
   const { profile } = useProviderProfile();
   const queryClient = useQueryClient();
 
@@ -47,7 +50,7 @@ export function useProviderClassSchedule() {
       if (error) throw error;
       return (data || []) as ClassScheduleEntry[];
     },
-    enabled: !!profile,
+    enabled: !!profile && enabled,
   });
 
   const addClass = useMutation({
@@ -88,6 +91,7 @@ export function useProviderClassSchedule() {
   return {
     schedule: scheduleQuery.data || [],
     isLoading: scheduleQuery.isLoading,
+    error: scheduleQuery.error,
     addClass,
     updateClass,
     deleteClass,

@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useId, useState, type ComponentType, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  BadgeCheck, CalendarClock, CalendarRange, CalendarX2, Check, Clock3, Hourglass,
+  ListPlus, NotebookPen, Tag, Wallet,
+} from "lucide-react";
+import { SettingsSwitch } from "@/components/dashboard/SettingsSwitch";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,10 +17,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ForwardArrow } from "@/components/ui/directional-icon";
+import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { usePlural } from "@/hooks/usePlural";
 import { usePendingCount } from "@/components/dashboard/PendingTab";
 import { useProviderWaitlistCounts } from "@/hooks/useProviderWaitlist";
+import type { TranslationKey } from "@/lib/translations";
 import { toast } from "sonner";
 
 const LEAD_TIME_OPTIONS = [15, 30, 60, 120, 240, 1440] as const;
@@ -30,10 +37,23 @@ const CANCELLATION_NOTICE_OPTIONS = [0, 1, 2, 3, 5, 12, 24, 48, 72] as const;
 // 20260712000001 migrations.
 const SLOT_INTERVAL_OPTIONS = [5, 10, 15, 30, 45, 60] as const;
 
+type Icon = ComponentType<{ className?: string }>;
+type PickerId = "lead" | "window" | "cancel" | "spacing";
+
+// Visual language shared with the dashboard setup hub (SetupHub.tsx): grouped
+// glass lists, hairline dividers, a 40px accent icon tile, title + one line.
+const LIST = "glass-card-md overflow-hidden rounded-3xl";
+const DIVIDER = "border-t border-foreground/[0.07]";
+const ROW =
+  "flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-start transition-colors active:bg-foreground/[0.04]";
+
 // All controls save immediately and read straight from `profile.*` — no
 // react-hook-form, so the watch+setValue+reset combobox bug can't occur here.
+// Every mutation writes to the ACTIVE branch (useProviderProfile targets
+// profile.id), unchanged by this layout.
 export function BookingSettingsTab() {
-  const { t } = useLang();
+  const { t, isRtl } = useLang();
+  const pl = usePlural();
   const navigate = useNavigate();
   const {
     profile,
@@ -54,6 +74,7 @@ export function BookingSettingsTab() {
   const [waitlistOffCount, setWaitlistOffCount] = useState<number | null>(null);
   const pendingCount = usePendingCount();
   const [pendingGuardOpen, setPendingGuardOpen] = useState(false);
+  const [picker, setPicker] = useState<PickerId | null>(null);
 
   const requiresApproval = profile?.requires_booking_approval ?? false;
   const treatmentNotesEnabled = profile?.treatment_notes_enabled ?? false;
@@ -76,28 +97,29 @@ export function BookingSettingsTab() {
   // Cast: column added by 20260630000001 migration; types.ts regenerated after apply.
   const slotInterval =
     (profile as { slot_interval_minutes?: number } | null)?.slot_interval_minutes ?? 15;
-
-  const cancellationOptionLabel = (h: number) =>
-    h === 0
-      ? t("cancellationNoticeAlways")
-      : t("cancellationNoticeHoursValue").replace("{n}", String(h));
-
   // Cast: column added by 20261017000001 migration; types.ts regenerated after apply.
   const waitlistEnabled =
     (profile as { waitlist_enabled?: boolean } | null)?.waitlist_enabled ?? false;
-  const saveWaitlistEnabled = async (next: boolean) => {
+
+  // One save path for every control: translated toast either way, never the
+  // raw error text. Controls are driven by the cached profile, which only
+  // changes on success, so a failed save leaves them where they were.
+  const save = async (run: () => Promise<unknown>) => {
     try {
-      await updateWaitlistEnabled.mutateAsync(next);
-      toast.success(t("profileSaved"));
+      await run();
+      toast.success(t("bsSaved"));
+      return true;
     } catch {
-      // Never raw error text: the switch stays where it was (it is driven by
-      // the cached profile, which only changes on success).
-      toast.error(t("waitlistSaveError"));
+      toast.error(t("bsSaveError"));
+      return false;
     }
   };
+
+  const saveWaitlistEnabled = (next: boolean) => save(() => updateWaitlistEnabled.mutateAsync(next));
   // Turning OFF with people waiting removes them (silently, by the DB
   // trigger) — confirm first. With nobody waiting, or turning ON, save now.
   const handleWaitlistToggle = async (next: boolean) => {
+    if (updateWaitlistEnabled.isPending || waitlistChecking) return;
     if (!next) {
       let waiting: number;
       setWaitlistChecking(true);
@@ -105,7 +127,7 @@ export function BookingSettingsTab() {
         waiting = await fetchWaitlistTotal();
       } catch {
         // Can't tell whether anyone would be removed: don't guess, don't save.
-        toast.error(t("waitlistSaveError"));
+        toast.error(t("bsSaveError"));
         return;
       } finally {
         setWaitlistChecking(false);
@@ -119,242 +141,168 @@ export function BookingSettingsTab() {
   };
 
   const handleApprovalToggle = async (next: boolean) => {
+    if (updateBookingApproval.isPending) return;
     if (!next && pendingCount > 0) {
       // Block turn-off until the provider resolves pending bookings.
       setPendingGuardOpen(true);
       return;
     }
-    try {
-      await updateBookingApproval.mutateAsync(next);
-      toast.success(t("profileSaved"));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
+    await save(() => updateBookingApproval.mutateAsync(next));
+  };
+
+  // A plain switch: ignore taps while its own save is in flight (instead of
+  // greying it out — a pale switch reads as unavailable).
+  const toggle = (m: { isPending: boolean; mutateAsync: (v: boolean) => Promise<unknown> }) =>
+    (next: boolean) => {
+      if (m.isPending) return;
+      void save(() => m.mutateAsync(next));
+    };
+
+  // ── Value rows: current value text + the options their sheet offers ────────
+  const leadLabel = (m: number) => t(`leadTime${m}` as TranslationKey);
+  const windowShort = (d: number) => pl("bsDays", d);
+  const windowOption = (d: number) => t(`bookingWindow${d}` as TranslationKey);
+  const cancelShort = (h: number) => (h === 0 ? t("bsCancelAlwaysShort") : pl("bsHours", h));
+  const cancelOption = (h: number) => (h === 0 ? t("cancellationNoticeAlways") : pl("bsHours", h));
+  const minutes = (m: number) => pl("bsMinutes", m);
+
+  const pickers: Record<PickerId, {
+    title: string;
+    value: number;
+    options: readonly number[];
+    label: (v: number) => string;
+    mutation: { isPending: boolean; mutateAsync: (v: number) => Promise<unknown> };
+  }> = {
+    lead: { title: t("bsLeadTitle"), value: minLeadTime, options: LEAD_TIME_OPTIONS, label: leadLabel, mutation: updateMinLeadTime },
+    window: { title: t("bsWindowTitle"), value: bookingWindow, options: BOOKING_WINDOW_OPTIONS, label: windowOption, mutation: updateBookingWindow },
+    cancel: { title: t("bsCancelTitle"), value: cancellationNoticeHours, options: CANCELLATION_NOTICE_OPTIONS, label: cancelOption, mutation: updateCancellationNoticeHours },
+    spacing: { title: t("bsSpacingTitle"), value: slotInterval, options: SLOT_INTERVAL_OPTIONS, label: minutes, mutation: updateSlotInterval },
+  };
+  const open = picker ? pickers[picker] : null;
+
+  const choose = async (v: number) => {
+    if (!open || open.mutation.isPending) return;
+    if (v === open.value) {
+      setPicker(null);
+      return;
     }
+    if (await save(() => open.mutation.mutateAsync(v))) setPicker(null);
   };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
+      className="space-y-6"
     >
       <h2 className="text-lg font-semibold">{t("bookingSettingsTitle")}</h2>
 
-      {/* Approval + treatment notes toggles */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-        <div className="flex items-start gap-3">
-          <Switch
-            checked={requiresApproval}
-            onCheckedChange={handleApprovalToggle}
-            disabled={updateBookingApproval.isPending}
-          />
-          <div className="flex-1">
-            <Label className="text-sm font-medium">{t("requireApprovalLabel")}</Label>
-            <p className="text-xs text-muted-foreground mt-1">{t("requireApprovalHelp")}</p>
-          </div>
-        </div>
-        <div className="flex items-start gap-3 pt-3 border-t border-border">
-          <Switch
-            checked={treatmentNotesEnabled}
-            onCheckedChange={async (next) => {
-              try {
-                await updateTreatmentNotesEnabled.mutateAsync(next);
-                toast.success(t("profileSaved"));
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Error");
-              }
-            }}
-            disabled={updateTreatmentNotesEnabled.isPending}
-          />
-          <div className="flex-1">
-            <Label className="text-sm font-medium">{t("treatmentNotesEnabled")}</Label>
-            <p className="text-xs text-muted-foreground mt-1">{t("treatmentNotes")}</p>
-          </div>
-        </div>
-        <div className="flex items-start gap-3 pt-3 border-t border-border">
-          <Switch
-            checked={showPrices}
-            onCheckedChange={async (next) => {
-              try {
-                await updateShowPrices.mutateAsync(next);
-                toast.success(t("profileSaved"));
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Error");
-              }
-            }}
-            disabled={updateShowPrices.isPending}
-          />
-          <div className="flex-1">
-            <Label className="text-sm font-medium">{t("showPricesLabel")}</Label>
-            <p className="text-xs text-muted-foreground mt-1">{t("showPricesHelp")}</p>
-          </div>
-        </div>
+      <Group title={t("bsGroupBookings")}>
+        <SwitchRow
+          icon={BadgeCheck}
+          title={t("bsApprovalTitle")}
+          description={t(requiresApproval ? "bsApprovalOn" : "bsApprovalOff")}
+          checked={requiresApproval}
+          onChange={handleApprovalToggle}
+        />
+        <ValueRow icon={Hourglass} title={t("bsLeadTitle")} description={t("bsLeadDesc")}
+          value={leadLabel(minLeadTime)} onOpen={() => setPicker("lead")} />
+        <ValueRow icon={CalendarRange} title={t("bsWindowTitle")} description={t("bsWindowDesc")}
+          value={windowShort(bookingWindow)} onOpen={() => setPicker("window")} />
+        <ValueRow icon={CalendarX2} title={t("bsCancelTitle")} description={t("bsCancelDesc")}
+          value={cancelShort(cancellationNoticeHours)} onOpen={() => setPicker("cancel")} />
+        <ValueRow icon={Clock3} title={t("bsSpacingTitle")} description={t("bsSpacingDesc")}
+          value={minutes(slotInterval)} onOpen={() => setPicker("spacing")} />
+      </Group>
+
+      <Group title={t("bsGroupCustomers")}>
         {!isFitnessStudio && (
-          <div className="flex items-start gap-3 pt-3 border-t border-border">
-            <Switch
-              checked={allowCustomerReschedule}
-              onCheckedChange={async (next) => {
-                try {
-                  await updateAllowCustomerReschedule.mutateAsync(next);
-                  toast.success(t("profileSaved"));
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Error");
-                }
-              }}
-              disabled={updateAllowCustomerReschedule.isPending}
-            />
-            <div className="flex-1">
-              <Label className="text-sm font-medium">{t("allowCustomerReschedule")}</Label>
-              <p className="text-xs text-muted-foreground mt-1">{t("allowCustomerRescheduleHelper")}</p>
-            </div>
-          </div>
-        )}
-        <div className="flex items-start gap-3 pt-3 border-t border-border">
-          <Switch
-            checked={depositRequestEnabled}
-            onCheckedChange={async (next) => {
-              try {
-                await updateDepositRequestEnabled.mutateAsync(next);
-                toast.success(t("profileSaved"));
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Error");
-              }
-            }}
-            disabled={updateDepositRequestEnabled.isPending}
+          <SwitchRow
+            icon={CalendarClock}
+            title={t("bsRescheduleTitle")}
+            description={t(allowCustomerReschedule ? "bsRescheduleOn" : "bsRescheduleOff")}
+            checked={allowCustomerReschedule}
+            onChange={toggle(updateAllowCustomerReschedule)}
           />
-          <div className="flex-1">
-            <Label className="text-sm font-medium">{t("depositRequestLabel")}</Label>
-            <p className="text-xs text-muted-foreground mt-1">{t("depositRequestHelp")}</p>
-          </div>
-        </div>
-      </div>
+        )}
+        <SwitchRow
+          icon={Tag}
+          title={t("bsPricesTitle")}
+          description={t(showPrices ? "bsPricesOn" : "bsPricesOff")}
+          checked={showPrices}
+          onChange={toggle(updateShowPrices)}
+        />
+        {/* Waiting list — private services only, so never for a fitness
+            studio (its customers book classes, which have no waiting list). */}
+        {!isFitnessStudio && (
+          <SwitchRow
+            icon={ListPlus}
+            title={t("bsWaitlistTitle")}
+            description={t(waitlistEnabled ? "bsWaitlistOn" : "bsWaitlistOff")}
+            checked={waitlistEnabled}
+            onChange={handleWaitlistToggle}
+          />
+        )}
+      </Group>
 
-      {/* Waiting list — private services only, so never for a fitness studio
-          (its customers book classes, which have no waiting list). */}
-      {!isFitnessStudio && (
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <div className="flex items-start gap-3">
-            <Switch
-              id="waitlist-enabled"
-              checked={waitlistEnabled}
-              onCheckedChange={handleWaitlistToggle}
-              disabled={updateWaitlistEnabled.isPending || waitlistChecking}
-            />
-            <div className="flex-1">
-              <Label htmlFor="waitlist-enabled" className="text-sm font-medium">{t("waitlistProviderLabel")}</Label>
-              <p className="text-xs text-muted-foreground mt-1">{t("waitlistProviderHelp")}</p>
-            </div>
-          </div>
-        </div>
-      )}
+      <Group title={t("bsGroupTools")}>
+        <SwitchRow
+          icon={NotebookPen}
+          title={t("bsNotesTitle")}
+          description={t("bsNotesDesc")}
+          checked={treatmentNotesEnabled}
+          onChange={toggle(updateTreatmentNotesEnabled)}
+        />
+        <SwitchRow
+          icon={Wallet}
+          title={t("bsDepositTitle")}
+          description={t("bsDepositDesc")}
+          checked={depositRequestEnabled}
+          onChange={toggle(updateDepositRequestEnabled)}
+        />
+      </Group>
 
-      {/* Scheduling policy selects */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
-        <div>
-          <Label>{t("minLeadTimeLabel")}</Label>
-          <Select
-            value={String(minLeadTime)}
-            onValueChange={async (v) => {
-              try {
-                await updateMinLeadTime.mutateAsync(Number(v));
-                toast.success(t("profileSaved"));
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Error");
-              }
-            }}
-            disabled={updateMinLeadTime.isPending}
-          >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {LEAD_TIME_OPTIONS.map((minutes) => (
-                <SelectItem key={minutes} value={String(minutes)}>
-                  {t(`leadTime${minutes}` as Parameters<typeof t>[0])}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <Label>{t("bookingWindowLabel")}</Label>
-          <Select
-            value={String(bookingWindow)}
-            onValueChange={async (v) => {
-              try {
-                await updateBookingWindow.mutateAsync(Number(v));
-                toast.success(t("profileSaved"));
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Error");
-              }
-            }}
-            disabled={updateBookingWindow.isPending}
-          >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {BOOKING_WINDOW_OPTIONS.map((days) => (
-                <SelectItem key={days} value={String(days)}>
-                  {t(`bookingWindow${days}` as Parameters<typeof t>[0])}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <Label>{t("cancellationNoticeLabel")}</Label>
-          <p className="text-xs text-muted-foreground mt-1 mb-2">{t("cancellationNoticeHelp")}</p>
-          <Select
-            value={String(cancellationNoticeHours)}
-            onValueChange={async (v) => {
-              try {
-                await updateCancellationNoticeHours.mutateAsync(Number(v));
-                toast.success(t("profileSaved"));
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Error");
-              }
-            }}
-            disabled={updateCancellationNoticeHours.isPending}
-          >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {CANCELLATION_NOTICE_OPTIONS.map((h) => (
-                <SelectItem key={h} value={String(h)}>
-                  {cancellationOptionLabel(h)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <Label>{t("slotIntervalLabel")}</Label>
-          <p className="text-xs text-muted-foreground mt-1 mb-2">{t("slotIntervalHelp")}</p>
-          <Select
-            value={String(slotInterval)}
-            onValueChange={async (v) => {
-              try {
-                await updateSlotInterval.mutateAsync(Number(v));
-                toast.success(t("profileSaved"));
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Error");
-              }
-            }}
-            disabled={updateSlotInterval.isPending}
-          >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {SLOT_INTERVAL_OPTIONS.map((m) => (
-                <SelectItem key={m} value={String(m)}>
-                  {t("slotIntervalValue").replace("{n}", String(m))}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      {/* Value picker — same options as the old dropdowns; choosing saves. */}
+      <Sheet open={picker !== null} onOpenChange={(o) => !o && setPicker(null)}>
+        <SheetContent
+          side="bottom"
+          dir={isRtl ? "rtl" : "ltr"}
+          aria-describedby={undefined}
+          className={`rounded-t-3xl pb-[max(1.5rem,env(safe-area-inset-bottom))] ${providerDesktopSheet}`}
+        >
+          {open && (
+            <>
+              <SheetHeader className="text-start">
+                <SheetTitle>{open.title}</SheetTitle>
+              </SheetHeader>
+              <ul className="mt-4 space-y-1" role="radiogroup" aria-label={open.title}>
+                {open.options.map((v) => {
+                  const selected = v === open.value;
+                  return (
+                    <li key={v}>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => void choose(v)}
+                        className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl px-4 text-start text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                          selected ? "bg-accent/10 font-semibold text-foreground" : "active:bg-foreground/[0.04]"
+                        }`}
+                      >
+                        <span>{open.label(v)}</span>
+                        {selected && <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={3} />}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* Waiting-list turn-off confirmation — only when someone is waiting */}
-      <AlertDialog open={waitlistOffCount !== null} onOpenChange={(open) => !open && setWaitlistOffCount(null)}>
+      <AlertDialog open={waitlistOffCount !== null} onOpenChange={(o) => !o && setWaitlistOffCount(null)}>
         <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-3xl">
           <AlertDialogHeader>
             <AlertDialogTitle>{t("waitlistOffConfirmTitle")}</AlertDialogTitle>
@@ -398,5 +346,81 @@ export function BookingSettingsTab() {
         </AlertDialogContent>
       </AlertDialog>
     </motion.div>
+  );
+}
+
+/** A titled glass list. Children are rows; the first gets no divider. */
+function Group({ title, children }: { title: string; children: ReactNode }) {
+  const rows = (Array.isArray(children) ? children : [children]).filter(Boolean);
+  return (
+    <section className="space-y-2">
+      <h3 className="px-1 text-xs font-semibold text-foreground/60">{title}</h3>
+      <ul className={LIST}>
+        {rows.map((row, i) => (
+          <li key={i} className={i > 0 ? DIVIDER : undefined}>{row}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function RowText({ title, description }: { title: string; description: string }) {
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="block text-sm font-semibold leading-snug">{title}</span>
+      <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-foreground/70">{description}</span>
+    </span>
+  );
+}
+
+function IconTile({ icon: Icon }: { icon: Icon }) {
+  return (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+      <Icon className="h-[18px] w-[18px]" />
+    </span>
+  );
+}
+
+/** The whole row is the switch's label, so the 64px row is the tap target. */
+function SwitchRow({
+  icon, title, description, checked, onChange,
+}: {
+  icon: Icon;
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  const id = useId();
+  return (
+    <label htmlFor={id} className={`${ROW} cursor-pointer`}>
+      <IconTile icon={icon} />
+      <RowText title={title} description={description} />
+      <SettingsSwitch id={id} checked={checked} onCheckedChange={onChange} />
+    </label>
+  );
+}
+
+function ValueRow({
+  icon, title, description, value, onOpen,
+}: {
+  icon: Icon;
+  title: string;
+  description: string;
+  value: string;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-haspopup="dialog"
+      className={`${ROW} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent`}
+    >
+      <IconTile icon={icon} />
+      <RowText title={title} description={description} />
+      <span className="shrink-0 text-sm font-medium text-foreground/70">{value}</span>
+      <ForwardArrow className="h-4 w-4 shrink-0 text-foreground/40" />
+    </button>
   );
 }

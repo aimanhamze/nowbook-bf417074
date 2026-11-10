@@ -25,6 +25,7 @@ export const categoryLabels: Record<string, string> = {
   fitness_studio: "🤸 סטודיו כושר",
   counseling: "💬 ייעוץ והדרכות",
   piercing: "💎 פירסינג",
+  therapy: "💗 טיפול רגשי",
   academy: "🎓 אקדמיה וקורסים",
 };
 

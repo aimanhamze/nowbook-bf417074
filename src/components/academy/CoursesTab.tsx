@@ -62,6 +62,8 @@ export function CoursesTab() {
 
   return (
     <div className="flex flex-col gap-3 pb-6">
+      {/* The dashboard's section header is only a back control; each section names itself. */}
+      <h2 className="text-lg font-semibold">{t("academyCoursesTab")}</h2>
       {canCreate ? (
         <Button onClick={openNew} className="h-11 w-full gap-1.5">
           <Plus className="h-4 w-4" />

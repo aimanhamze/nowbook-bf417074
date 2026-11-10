@@ -73,6 +73,8 @@ export function RegistrationsTab() {
 
   return (
     <div className="flex flex-col gap-3 pb-6">
+      {/* The dashboard's section header is only a back control; each section names itself. */}
+      <h2 className="text-lg font-semibold">{t("academyRegistrationsTab")}</h2>
       <div className="flex gap-1 rounded-2xl border border-border/40 bg-secondary/80 p-1" role="tablist">
         {FILTERS.map((f) => {
           const on = filter === f.id;

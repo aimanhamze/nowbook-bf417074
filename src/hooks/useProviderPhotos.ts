@@ -105,6 +105,7 @@ export function useProviderPhotos() {
   return {
     photos: photosQuery.data ?? [],
     isLoading: photosQuery.isLoading,
+    error: photosQuery.error,
     uploadPhoto,
     deletePhoto,
     reorderPhotos,
