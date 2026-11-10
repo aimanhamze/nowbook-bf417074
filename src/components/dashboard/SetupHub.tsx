@@ -45,7 +45,8 @@ const BOOKING_STEP_LINE: Partial<Record<SetupStepId, TranslationKey>> = {
 
 const capitalize =(s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
-function buildRows(
+/** Exported for tests (SetupHub.rows.test.ts); pure apart from the passed-in `t`/`pl`. */
+export function buildRows(
   s: DashboardSetup,
   t: (k: TranslationKey) => string,
   pl: (base: string, n: number) => string,
@@ -133,8 +134,9 @@ function buildRows(
       { key: "profile", icon: Store, label: "setupRowProfile", target: section("profile"), ...profile },
       { key: "photos", icon: Images, label: "setupRowPhotos", target: section("photos"),
         ...count(s.photos, "setupPhotos", "setupPhotosNone", false) },
-      { key: "booking", icon: SlidersHorizontal, label: "setupRowBooking", target: section("booking"),
-        status: booking, mark: "none" },
+      // No "booking" row: its status line (instant/manual confirmation, a
+      // booking window) does not describe courses — every registration starts
+      // pending and there is no window.
     ];
   }
 
