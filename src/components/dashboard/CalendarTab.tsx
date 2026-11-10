@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, createContext, useContext, type CSSProperties, type ReactNode } from "react";
 import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote, UserRound, MoonStar, Timer } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Phone, Banknote, XCircle, Trash2, Users, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Sparkles, Lock, CalendarClock, StickyNote, UserRound, MoonStar, Timer, Repeat } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { assignOverlapColumns } from "@/lib/weeklyOverlap";
 import { bookingDuration } from "@/lib/bookingDuration";
+import { seriesPositions, type SeriesMember } from "@/lib/recurringSeries";
 import { supabaseErrorMessage, supabaseErrorCode } from "@/lib/supabaseError";
 import { DEFAULT_SERVICE_COLOR, normalizeColor, withAlpha, darken } from "@/lib/serviceColors";
 import {
@@ -300,6 +301,27 @@ function DurationOverrideBox({ booking }: { booking: EnrichedBooking }) {
   );
 }
 
+// bookings.series_id arrives with select("*") but is not in the generated
+// types until they are regenerated after the migration.
+function seriesIdOf(b: EnrichedBooking): string | null {
+  return (b as EnrichedBooking & { series_id?: string | null }).series_id ?? null;
+}
+
+/**
+ * "תור קבוע · 3 מתוך 5" for a series booking, null otherwise. Positions come
+ * from the provider's full booking list (the same cached query every card
+ * already shares), computed once per fetch — see seriesPositions.
+ */
+function useSeriesLabel(booking: EnrichedBooking): string | null {
+  const { t } = useLang();
+  const { data: all } = useProviderBookings();
+  if (!seriesIdOf(booking)) return null;
+  const pos = all ? seriesPositions(all as unknown as SeriesMember[]).get(booking.id) : undefined;
+  return pos
+    ? `${t("seriesBadge")} · ${t("seriesPosition").replace("{i}", String(pos.index)).replace("{n}", String(pos.total))}`
+    : t("seriesBadge");
+}
+
 function BookingCard({ booking, index, color = null, showDurationEditor = false }: { booking: EnrichedBooking; index: number; color?: string | null; showDurationEditor?: boolean }) {
   const { t } = useLang();
   const cancelBooking = useCancelBooking();
@@ -309,6 +331,7 @@ function BookingCard({ booking, index, color = null, showDurationEditor = false 
   const { profile } = useProviderProfile();
   const reminderTemplate = profile?.reminder_message_template || DEFAULT_REMINDER_TEMPLATE;
   const outOfHours = useOutOfHours()(booking.booking_date, booking.booking_time);
+  const seriesLabel = useSeriesLabel(booking);
 
   const initials = booking.customer_name
     ? booking.customer_name.split(" ").map((w) => w[0]).join("").slice(0, 2)
@@ -373,6 +396,14 @@ function BookingCard({ booking, index, color = null, showDurationEditor = false 
         <span className="flex items-center gap-1"><Banknote className="h-3.5 w-3.5" />₪{booking.total_price}</span>
         {/* Derived, never stored — see OutOfHoursContext. */}
         {outOfHours && <OutOfHoursBadge />}
+        {/* Recurring series: "תור קבוע · 3 מתוך 5". Absent on every
+            booking without a series — those cards render as before. */}
+        {seriesLabel && (
+          <span className="flex items-center gap-1 font-medium text-accent">
+            <Repeat className="h-3.5 w-3.5" />
+            {seriesLabel}
+          </span>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-1.5">
@@ -1258,13 +1289,16 @@ function WeeklyView({ selectedDate, bookings, schedule, isFitnessStudio, reminde
                                 }
                               : {}),
                           }}
-                          title={`${info.time} ${info.name}${isOutOfHours ? ` · ${t("outOfHoursBadge")}` : ""}`}
+                          title={`${info.time} ${info.name}${isOutOfHours ? ` · ${t("outOfHoursBadge")}` : ""}${it.type === 'private' && seriesIdOf(it.booking) ? ` · ${t("seriesBadge")}` : ""}`}
                         >
                           <p className="flex items-center gap-0.5 text-[9px] font-semibold leading-tight">
                             {/* The block is ~9px tall of text — an icon is all
                                 that fits; the full label rides in the tooltip
                                 and on the card in the tap-through dialog. */}
                             {isOutOfHours && <MoonStar className="h-2.5 w-2.5 shrink-0" />}
+                            {it.type === 'private' && seriesIdOf(it.booking) && (
+                              <Repeat className="h-2.5 w-2.5 shrink-0" aria-label={t("seriesBadge")} />
+                            )}
                             {/* min-w-0 so the flex item may shrink below its
                                 content width — without it `truncate` never
                                 ellipsises inside a flex row. */}
