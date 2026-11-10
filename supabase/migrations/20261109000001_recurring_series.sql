@@ -15,8 +15,9 @@
 --   2. public.bookings.series_id              — nullable, FK ON DELETE SET NULL
 --   3. public.recurring_series_cancellations  — one row per "cancel series" action
 --   4. trg_guard_booking_series_id            — who may set / change series_id
---   5. public.create_recurring_series(...)    — SECURITY INVOKER
---   6. public.cancel_recurring_series(...)    — SECURITY DEFINER
+--   5. public.recurring_series_service_eligible(...) — SECURITY DEFINER
+--   6. public.create_recurring_series(...)    — SECURITY INVOKER
+--   7. public.cancel_recurring_series(...)    — SECURITY DEFINER
 --
 -- DELIBERATELY NOT TOUCHED: prevent_booking_conflicts and every other existing
 -- function, trigger, policy and grant. VERIFY §0.2 / §A5 fingerprint them.
@@ -25,7 +26,9 @@
 -- SECURITY INVOKER on purpose: each booking is inserted AS THE PROVIDER, under
 -- the same RLS policy ("Providers can create bookings for their business") and
 -- the same triggers as today's one-off walk-in insert in NewBookingSheet. The
--- only difference is series_id.
+-- only difference is series_id. The one check that must NOT depend on the
+-- caller's RLS — "is this a private service?", whose session test fails OPEN
+-- when rows are hidden — is delegated to the DEFINER helper in §5.
 --
 -- p_dates are the dates the client preview found AVAILABLE (the client owns
 -- opening hours, blocked days and staff time off, exactly as for a walk-in;
@@ -245,7 +248,58 @@ CREATE TRIGGER trg_guard_booking_series_id
   EXECUTE FUNCTION public.guard_booking_series_id();
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- §5. create_recurring_series
+-- §5. recurring_series_service_eligible — the private-service rule
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SECURITY DEFINER with a pinned search_path so the answer never depends on
+-- the caller's RLS. Found the hard way: DEV's provider_sessions has RLS on
+-- and ZERO policies, so under INVOKER the provider saw no sessions and a
+-- session service passed. PROD's policies happen to let the owner see them,
+-- but a future RLS change there must not silently re-open that hole.
+--
+-- Private = this provider's, active, not a group service, no scheduled
+-- sessions from p_today on, and the provider is not a fitness_studio (ruled
+-- out entirely). Same "private" core as waitlist_is_private_service, written
+-- here so this file does not depend on the waiting-list functions.
+--
+-- Reveals only a yes/no about a service whose type, status and sessions are
+-- already readable by any signed-in user on PROD. EXECUTE: authenticated —
+-- create_recurring_series runs as the caller, so the caller must hold it.
+CREATE FUNCTION public.recurring_series_service_eligible(
+  p_provider_id uuid,
+  p_service_id  uuid,
+  p_today       date
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $fn$
+  SELECT EXISTS (
+           SELECT 1
+             FROM public.provider_services ps
+             JOIN public.provider_profiles pp ON pp.id = ps.provider_id
+            WHERE ps.id = p_service_id
+              AND ps.provider_id = p_provider_id
+              AND COALESCE(ps.is_active, true)
+              AND ps.service_type IS DISTINCT FROM 'group'
+              AND pp.category IS DISTINCT FROM 'fitness_studio'
+         )
+     AND NOT EXISTS (
+           SELECT 1 FROM public.provider_sessions s
+            WHERE s.service_id = p_service_id
+              AND s.session_date >= p_today
+         );
+$fn$;
+
+COMMENT ON FUNCTION public.recurring_series_service_eligible(uuid, uuid, date) IS
+  'True when a service may be booked as a recurring series (private, active, no upcoming sessions, provider not a fitness_studio). DEFINER: independent of the caller''s RLS.';
+
+REVOKE ALL ON FUNCTION public.recurring_series_service_eligible(uuid, uuid, date) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.recurring_series_service_eligible(uuid, uuid, date) TO authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- §6. create_recurring_series
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE FUNCTION public.create_recurring_series(
   p_provider_id      uuid,
@@ -288,20 +342,18 @@ BEGIN
     RETURN QUERY SELECT 'NOT_OWNER'::text, NULL::uuid, NULL::date, NULL::uuid, NULL::text; RETURN;
   END IF;
 
-  -- Private services only: not group, no upcoming scheduled sessions, and
-  -- never a fitness_studio provider (ruled out entirely). Same "private"
-  -- definition as waitlist_is_private_service, written inline so this file
-  -- does not depend on the waiting-list functions.
+  -- Private services only. Decided by the SECURITY DEFINER helper (§5), not
+  -- under the caller's RLS: the session test is a NOT EXISTS, and a NOT EXISTS
+  -- over rows the caller cannot see passes — it fails OPEN.
+  IF NOT public.recurring_series_service_eligible(p_provider_id, p_service_id, v_today) THEN
+    RETURN QUERY SELECT 'SERVICE_INVALID'::text, NULL::uuid, NULL::date, NULL::uuid, NULL::text; RETURN;
+  END IF;
+
+  -- The price, under the caller's RLS. Hidden here = not found = refused, so
+  -- this read can only fail CLOSED.
   SELECT ps.price INTO v_price
     FROM public.provider_services ps
-    JOIN public.provider_profiles pp ON pp.id = ps.provider_id
-   WHERE ps.id = p_service_id
-     AND ps.provider_id = p_provider_id
-     AND COALESCE(ps.is_active, true)
-     AND ps.service_type IS DISTINCT FROM 'group'
-     AND pp.category IS DISTINCT FROM 'fitness_studio'
-     AND NOT EXISTS (SELECT 1 FROM public.provider_sessions s
-                      WHERE s.service_id = ps.id AND s.session_date >= v_today);
+   WHERE ps.id = p_service_id AND ps.provider_id = p_provider_id;
   IF NOT FOUND THEN
     RETURN QUERY SELECT 'SERVICE_INVALID'::text, NULL::uuid, NULL::date, NULL::uuid, NULL::text; RETURN;
   END IF;
@@ -391,7 +443,7 @@ GRANT EXECUTE ON FUNCTION public.create_recurring_series(uuid, uuid, uuid, text,
   TO authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- §6. cancel_recurring_series
+-- §7. cancel_recurring_series
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE FUNCTION public.cancel_recurring_series(
   p_booking_id uuid,

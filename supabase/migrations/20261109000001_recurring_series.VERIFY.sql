@@ -4,14 +4,30 @@
 --   §A  after the migration, read-only. DEV and PROD.
 --   §B  after the migration, DEV ONLY. Behaviour tests, all rolled back.
 --   §E  rollback (commented out).
+--
+-- ── DEV RE-APPLY (one time, 2026-11-10) ──────────────────────────────────────
+-- DEV has the FIRST version of the migration (before the DEFINER session
+-- helper). The file uses CREATE, not CREATE OR REPLACE, so it cannot simply be
+-- re-run. Nothing real lives in the new objects (§B rolls back, no app code
+-- uses them), so on DEV only:
+--   1. §E below, uncommented — drops everything the first version created
+--      (DROP … IF EXISTS, so the helper's absence is fine).
+--   2. §0.1 → one row, all NULL / false.  §0.2 → must equal the DEV row you
+--      saved before the first apply (proves the rollback left bookings as it
+--      found it).
+--   3. The migration file → §A (A5 = §0.2 again).
+--   4. supabase/scripts/dev_only_parity_provider_sessions_policies.sql
+--   5. §B.
+-- PROD never had the first version: plain §0 → migration → §A.
 
 
 -- ═════════════════════════════════════════════════════════════════════════════
 -- §0. PRE-APPLY — REQUIRED, READ-ONLY
 -- ═════════════════════════════════════════════════════════════════════════════
 
--- 0.1 Every new name is free. Expect one row, all seven columns NULL / false.
+-- 0.1 Every new name is free. Expect one row, all eight columns NULL / false.
 SELECT to_regclass('public.recurring_series')               AS series_tbl,
+       to_regprocedure('public.recurring_series_service_eligible(uuid, uuid, date)') AS eligible_fn,
        to_regclass('public.recurring_series_cancellations') AS cancels_tbl,
        to_regprocedure('public.guard_booking_series_id()')  AS guard_fn,
        to_regprocedure('public.create_recurring_series(uuid, uuid, uuid, text, date[], integer, text, text, text, boolean)') AS create_fn,
@@ -99,16 +115,18 @@ FROM (VALUES ('public.recurring_series'), ('public.recurring_series_cancellation
 CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(role)
 ORDER BY 1, 2;
 
--- A3. Functions. Expect 3 rows:
---   cancel_recurring_series  prosecdef t  anon f  authenticated t
---   create_recurring_series  prosecdef f  anon f  authenticated t
---   guard_booking_series_id  prosecdef t  anon f  authenticated f
+-- A3. Functions. Expect 4 rows:
+--   cancel_recurring_series            prosecdef t  anon f  authenticated t
+--   create_recurring_series            prosecdef f  anon f  authenticated t
+--   guard_booking_series_id            prosecdef t  anon f  authenticated f
+--   recurring_series_service_eligible  prosecdef t  anon f  authenticated t
 --   all with proconfig {"search_path=public, pg_temp"}
 SELECT p.proname, p.prosecdef, p.proconfig,
        has_function_privilege('anon', p.oid, 'EXECUTE')          AS anon,
        has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated
 FROM pg_proc p
 WHERE p.oid IN (to_regprocedure('public.guard_booking_series_id()'),
+                to_regprocedure('public.recurring_series_service_eligible(uuid, uuid, date)'),
                 to_regprocedure('public.create_recurring_series(uuid, uuid, uuid, text, date[], integer, text, text, text, boolean)'),
                 to_regprocedure('public.cancel_recurring_series(uuid, text)'))
 ORDER BY 1;
@@ -279,6 +297,20 @@ BEGIN
   PERFORM pg_temp.expect('NOT_OWNER customer', pg_temp.code(pg_temp.rs_create(v_cust, v_provider, s, NULL, '14:00', d[1:2], 2, 'N', '050', NULL, false)), 'NOT_OWNER');
   PERFORM pg_temp.expect('NOT_OWNER signed out', pg_temp.code(pg_temp.rs_create(NULL, v_provider, s, NULL, '14:00', d[1:2], 2, 'N', '050', NULL, false)), 'NOT_OWNER');
   PERFORM pg_temp.expect('NOT_OWNER unknown provider', pg_temp.code(pg_temp.rs_create(v_owner, gen_random_uuid(), s, NULL, '14:00', d[1:2], 2, 'N', '050', NULL, false)), 'NOT_OWNER');
+
+  -- FIRST service check, on purpose: a session service is refused even when
+  -- the caller can see NO session rows at all (DEV's drifted state: RLS on,
+  -- zero policies). A restrictive policy hides every row for this check only
+  -- and rolls back with the block. It must run before any other call reaches
+  -- the eligibility helper: a SQL function's plan is cached for the rest of
+  -- the transaction, so a call made before the policy existed would hide the
+  -- policy from this one and the check would prove nothing.
+  CREATE POLICY rs_verify_hide_all ON public.provider_sessions AS RESTRICTIVE FOR SELECT TO authenticated USING (false);
+  IF pg_temp.rs_try(v_owner, format('DO $x$ BEGIN IF EXISTS (SELECT 1 FROM public.provider_sessions WHERE service_id = %L) THEN RAISE EXCEPTION ''VISIBLE''; END IF; END $x$', ss)) <> 'OK' THEN
+    RAISE EXCEPTION 'SETUP: the hiding policy did not hide the session row';
+  END IF;
+  PERFORM pg_temp.expect('SERVICE sessions, rows hidden by RLS', pg_temp.code(pg_temp.rs_create(v_owner, v_provider, ss, NULL, '14:00', d[1:2], 2, 'N', '050', NULL, false)), 'SERVICE_INVALID');
+  DROP POLICY rs_verify_hide_all ON public.provider_sessions;
 
   PERFORM pg_temp.expect('SERVICE group',    pg_temp.code(pg_temp.rs_create(v_owner, v_provider, sg, NULL, '14:00', d[1:2], 2, 'N', '050', NULL, false)), 'SERVICE_INVALID');
   PERFORM pg_temp.expect('SERVICE inactive', pg_temp.code(pg_temp.rs_create(v_owner, v_provider, si, NULL, '14:00', d[1:2], 2, 'N', '050', NULL, false)), 'SERVICE_INVALID');
@@ -451,6 +483,7 @@ $verify$;
 -- BEGIN;
 -- DROP FUNCTION IF EXISTS public.cancel_recurring_series(uuid, text);
 -- DROP FUNCTION IF EXISTS public.create_recurring_series(uuid, uuid, uuid, text, date[], integer, text, text, text, boolean);
+-- DROP FUNCTION IF EXISTS public.recurring_series_service_eligible(uuid, uuid, date);
 -- DROP TRIGGER  IF EXISTS trg_guard_booking_series_id ON public.bookings;
 -- DROP FUNCTION IF EXISTS public.guard_booking_series_id();
 -- DROP TABLE    IF EXISTS public.recurring_series_cancellations;
