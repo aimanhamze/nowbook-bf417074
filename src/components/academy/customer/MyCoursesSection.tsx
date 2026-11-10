@@ -56,18 +56,11 @@ export function MyCoursesSection({ providers }: { providers: Provider[] }) {
 
   const onConfirmCancel = async () => {
     if (!confirmId) return;
-    const item = registrations.find((r) => r.registration.id === confirmId);
     try {
       await cancel.mutateAsync(confirmId);
       toast.success(t("academyCancelledToast"));
       // The RPC wrote the provider's in-app row; this only delivers it.
-      if (item) {
-        deliverCoursePush("cancelled_by_customer", {
-          courseName: item.course?.name ?? "",
-          providerId: item.registration.provider_id,
-          customerUserId: item.registration.user_id,
-        });
-      }
+      deliverCoursePush("cancelled_by_customer", confirmId);
     } catch (err) {
       toast.error(academyErrorMessage(err, t));
     } finally {

@@ -184,12 +184,14 @@ export async function handleNotify(
   const callerId = await deps.getUserId(auth.slice("Bearer ".length));
   if (!callerId) return fail(401, "UNAUTHORIZED");
 
+  // `=== false` (not `!x.ok`) so the union narrows under the app's
+  // non-strict tsconfig too, not only under Deno.
   const req = parseRequest(input.body);
-  if (!req.ok) return fail(400, req.error);
+  if (req.ok === false) return fail(400, req.error);
 
   const reg = await deps.loadRegistration(req.registrationId);
   const verdict = decide(reg, callerId, req.event, deps.now());
-  if (!verdict.ok) return fail(verdict.status, verdict.error);
+  if (verdict.ok === false) return fail(verdict.status, verdict.error);
 
   const row = await deps.findNotification(verdict.recipientId, verdict.type, verdict.anchor);
   if (!row) return fail(409, "NOTIFICATION_NOT_FOUND");

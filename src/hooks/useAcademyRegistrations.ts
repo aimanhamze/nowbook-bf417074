@@ -124,11 +124,7 @@ export function useAcademyRegistrations(scope: RegistrationsScope = {}) {
     },
     onError: (_err, _v, snap) => rollback(snap),
     onSuccess: (_d, v) => {
-      deliverCoursePush(v.decision === "confirmed" ? "confirmed" : "rejected", {
-        courseName: v.courseName,
-        providerId: v.registration.provider_id,
-        customerUserId: v.registration.user_id,
-      });
+      deliverCoursePush(v.decision === "confirmed" ? "confirmed" : "rejected", v.registration.id);
     },
     onSettled: refresh,
   });
@@ -144,11 +140,7 @@ export function useAcademyRegistrations(scope: RegistrationsScope = {}) {
     },
     onError: (_err, _v, snap) => rollback(snap),
     onSuccess: (_d, v) => {
-      deliverCoursePush("cancelled_by_provider", {
-        courseName: v.courseName,
-        providerId: v.registration.provider_id,
-        customerUserId: v.registration.user_id,
-      });
+      deliverCoursePush("cancelled_by_provider", v.registration.id);
     },
     onSettled: refresh,
   });

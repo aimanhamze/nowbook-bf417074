@@ -32,9 +32,9 @@ export function useCourseRegisterAction(providerId: string) {
       return false;
     }
     try {
-      await register.mutateAsync(course.id);
+      const registrationId = await register.mutateAsync(course.id);
       toast.success(t("academyRegisteredToast"));
-      deliverCoursePush("new", { courseName: course.name, providerId, customerUserId: user.id });
+      deliverCoursePush("new", registrationId);
       return true;
     } catch (err) {
       toast.error(academyErrorMessage(err, t));
