@@ -99,7 +99,7 @@ export function WaitlistJoinSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex max-h-[92vh] flex-col gap-0 rounded-t-3xl border-t p-0">
+      <SheetContent side="bottom" className="flex max-h-[calc(var(--vvh,100dvh)*0.92)] flex-col gap-0 rounded-t-3xl border-t p-0">
         <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/20" />
         <div className="overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-3">
           <SheetHeader className="space-y-1 text-start">

@@ -7,9 +7,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { usePendingCount } from "@/hooks/useProviderBookings";
+import { useKeyboardOpen } from "@/hooks/useKeyboardOpen";
 
 export function BottomNav() {
   const location = useLocation();
+  // Android resizes the page for the keyboard (interactive-widget=
+  // resizes-content), which would lift this fixed bar on top of the keyboard
+  // and over whatever is being typed. Step aside while typing.
+  const keyboardOpen = useKeyboardOpen();
   const navigate = useNavigate();
   const { t } = useLang();
   const { isProvider, isAdmin, user } = useAuth();
@@ -69,6 +74,7 @@ export function BottomNav() {
     <nav
       className={cn(
         "fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/80 backdrop-blur-xl",
+        keyboardOpen && "hidden",
         // Provider desktop frame: align the bar with the centered provider
         // column (see providerDesktop.ts) instead of stretching full width.
         // lg:-only, so mobile — and every customer/admin viewport — is untouched.

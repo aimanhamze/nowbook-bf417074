@@ -206,7 +206,7 @@ export function CustomerRescheduleSheet({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
 
-      <SheetContent side="bottom" className="flex max-h-[92vh] flex-col gap-0 rounded-t-3xl border-t p-0">
+      <SheetContent side="bottom" className="flex max-h-[calc(var(--vvh,100dvh)*0.92)] flex-col gap-0 rounded-t-3xl border-t p-0">
         <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/20" />
 
         <div className="shrink-0 px-5 pt-3">

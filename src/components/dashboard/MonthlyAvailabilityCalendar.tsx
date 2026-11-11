@@ -286,7 +286,7 @@ export function MonthlyAvailabilityCalendar() {
         <SheetContent
           side="bottom"
           aria-describedby={undefined}
-          className={`max-h-[90vh] overflow-y-auto rounded-t-3xl pb-[max(1.5rem,env(safe-area-inset-bottom))] ${providerDesktopSheet}`}
+          className={`max-h-[calc(var(--vvh,100dvh)*0.90)] overflow-y-auto rounded-t-3xl pb-[max(1.5rem,env(safe-area-inset-bottom))] ${providerDesktopSheet}`}
         >
           <SheetHeader className="text-start">
             <SheetTitle>

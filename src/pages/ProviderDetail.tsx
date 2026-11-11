@@ -30,6 +30,7 @@ import { UpcomingAppointmentCard } from "@/components/provider-detail/UpcomingAp
 import { WaitlistRow } from "@/components/provider-detail/WaitlistRow";
 import { OtherBranches } from "@/components/provider-detail/OtherBranches";
 import { CollapsingHeader, HeaderIconButton } from "@/components/provider-detail/CollapsingHeader";
+import { useKeyboardOpen } from "@/hooks/useKeyboardOpen";
 
 interface SocialLinkEntry {
   href: string;
@@ -128,6 +129,9 @@ function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | und
 const ProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  // The pinned Book bar would ride up over the keyboard on Android (see
+  // useKeyboardOpen) and cover the review box; hide it while typing.
+  const keyboardOpen = useKeyboardOpen();
   const { isEntry, goBack } = useSmartBack();
   const [coverImgSrc, setCoverImgSrc] = useState("");
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -913,7 +917,7 @@ const ProviderDetail = () => {
           database refuses the insert anyway (NO_ACTIVE_PACKAGE), so offering
           the CTA promises something that cannot happen. The packages section
           above is their path instead. */}
-      {canBook && (
+      {canBook && !keyboardOpen && (
       <div className="fixed inset-x-0 bottom-0 z-50">
         <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[hsl(40_30%_96%)] to-transparent" />
         <div className="border-t border-white/40 bg-white/70 p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] backdrop-blur-xl">
