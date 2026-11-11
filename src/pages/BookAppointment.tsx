@@ -1995,7 +1995,6 @@ const BookAppointment = () => {
               </div>
               <div className="rounded-3xl border border-white/60 bg-white/70 p-4 shadow-[0_6px_16px_-10px_rgba(120,70,30,0.15)] backdrop-blur-md">
                 <textarea
-                  autoFocus
                   value={customerNotes}
                   onChange={(e) => setCustomerNotes(e.target.value)}
                   placeholder={notesPlaceholder}
