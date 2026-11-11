@@ -80,7 +80,7 @@ export function BranchChip() {
           aria-describedby={undefined}
           className={`rounded-t-3xl pb-[max(1.5rem,env(safe-area-inset-bottom))] ${providerDesktopSheet}`}
         >
-          <SheetHeader>
+          <SheetHeader className="text-start">
             <SheetTitle>{t("yourBranches")}</SheetTitle>
           </SheetHeader>
 

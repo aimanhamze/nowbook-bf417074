@@ -179,9 +179,7 @@ function AppointmentRow({ booking, provider }: { booking: UpcomingBooking; provi
       <SheetContent side="bottom" className="flex max-h-[92vh] flex-col gap-0 rounded-t-3xl border-t p-0">
         <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/20" />
         <div className="overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-3">
-          {/* pr-8 is physical on purpose: the shared sheet's close button sits
-              at the physical right in every direction. */}
-          <SheetHeader className="space-y-1 pr-8 text-start">
+          <SheetHeader className="space-y-1 text-start">
             <SheetTitle className="text-lg leading-snug">{serviceNames}</SheetTitle>
             <SheetDescription className="text-xs">{provider.name[lang]}</SheetDescription>
           </SheetHeader>

@@ -109,9 +109,9 @@ export function SeriesCancelDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <DialogContent className="w-[calc(100%-2rem)] max-w-sm gap-5 rounded-2xl p-5">
-        {/* pr-8 is physical on purpose: the primitive's close button sits at
-            physical right in both directions. */}
-        <DialogHeader className="pr-8 text-start sm:text-start">
+        {/* Start-aligned on phones too, so no start padding; the end keeps the
+            close button's room from DialogHeader. */}
+        <DialogHeader className="ps-0 text-start">
           <DialogTitle className="text-base leading-snug">{t("seriesCancelTitle")}</DialogTitle>
           <DialogDescription>{t("seriesCancelDesc")}</DialogDescription>
         </DialogHeader>
