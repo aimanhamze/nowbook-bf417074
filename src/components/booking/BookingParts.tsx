@@ -68,17 +68,20 @@ export function CallToCancelNotice({
   cancellationNoticeHours,
   providerPhone,
   actionHeight = "h-9",
+  message,
 }: {
   cancellationNoticeHours: number;
   providerPhone: string | null;
   actionHeight?: string;
+  /** Replaces the booking wording (course registrations explain their own window). */
+  message?: string;
 }) {
   const { t } = useLang();
   return (
     <div className="mt-3 space-y-2.5 border-t border-border/40 pt-3">
       <div className="flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-100/80 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
         <Clock className="mt-px h-4 w-4 shrink-0 text-amber-600" />
-        <span>{t("cancellationBlocked").replace("{hours}", String(cancellationNoticeHours))}</span>
+        <span>{message ?? t("cancellationBlocked").replace("{hours}", String(cancellationNoticeHours))}</span>
       </div>
       {providerPhone && (
         <div className="flex items-stretch gap-2">

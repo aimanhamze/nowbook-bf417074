@@ -14,6 +14,7 @@ import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { useMyPackages } from "@/hooks/usePublicPackages";
 import { MyPackageCard } from "@/components/packages/MyPackageCard";
 import { WaitlistEntryCard } from "@/components/booking/WaitlistEntryCard";
+import { MyCoursesSection } from "@/components/academy/customer/MyCoursesSection";
 import { useMyWaitlist } from "@/hooks/useWaitlist";
 import type { Tables } from "@/integrations/supabase/types";
 import type { Provider } from "@/lib/mock-data";
@@ -178,6 +179,10 @@ const Bookings = () => {
                 </div>
               </section>
             )}
+
+            {/* Course registrations — only when the customer has any. Above
+                the tabs, like packages: they are not appointments. */}
+            <MyCoursesSection providers={allProviders} />
 
             {/* Waiting list — only when the customer is on one. Above the tabs:
                 these are days still being watched, not bookings. */}

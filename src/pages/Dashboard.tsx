@@ -15,6 +15,9 @@ import { BookingSettingsTab } from "@/components/dashboard/BookingSettingsTab";
 import { AvailabilityTab } from "@/components/dashboard/AvailabilityTab";
 import { PhotosTab } from "@/components/dashboard/PhotosTab";
 import { PackagesTab } from "@/components/dashboard/PackagesTab";
+import { CoursesTab } from "@/components/academy/CoursesTab";
+import { RegistrationsTab } from "@/components/academy/registrations/RegistrationsTab";
+import { isAcademyCategory } from "@/lib/academyCategory";
 import { SetupHub } from "@/components/dashboard/SetupHub";
 import { isSectionVisible, toSectionId, type SectionId, type StepTarget } from "@/lib/dashboardSetup";
 import { Button } from "@/components/ui/button";
@@ -41,13 +44,16 @@ export default function Dashboard() {
   // `hours` stays for a studio: AvailabilityTab hides its hours editors there
   // but keeps the blocked-dates card, a studio's only way to close a day.
   const isFitnessStudio = profile?.category === "fitness_studio";
+  // An academy runs on courses: "courses" and "registrations" replace
+  // services, hours and packages (rule in lib/dashboardSetup, unit-tested).
+  const isAcademy = isAcademyCategory(profile?.category);
 
   // The hub lives at /dashboard; a section at /dashboard?section=<id>, so the
   // device back gesture returns to the hub and a reload stays in the section.
   // A section this provider type does not have (or an unknown id) is the hub.
   const requested = toSectionId(searchParams.get("section"));
   const section: SectionId | null =
-    requested && isSectionVisible(requested, isFitnessStudio) ? requested : null;
+    requested && isSectionVisible(requested, isFitnessStudio, isAcademy) ? requested : null;
 
   // Legacy deep link: navigate("/dashboard", { state: { tab: "services" } })
   // (CalendarTab's "no services" card) is rewritten in place to ?section=, so
@@ -71,6 +77,10 @@ export default function Dashboard() {
   const openTarget = (target: StepTarget) => {
     if (target.kind === "classSchedule") {
       navigate("/calendar", { state: { tab: "schedule" } });
+      return;
+    }
+    if (target.kind === "instructors") {
+      navigate("/instructors");
       return;
     }
     navigate(`/dashboard?section=${target.section}`, { state: { fromHub: true } });
@@ -195,6 +205,8 @@ export default function Dashboard() {
           {section === "services" && <ServicesTab />}
           {section === "photos" && <PhotosTab />}
           {section === "packages" && <PackagesTab />}
+          {section === "courses" && <CoursesTab />}
+          {section === "registrations" && <RegistrationsTab />}
         </motion.div>
       </div>
     </div>

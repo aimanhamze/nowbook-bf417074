@@ -19,9 +19,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { categories } from "@/lib/mock-data";
 import type { Tables } from "@/integrations/supabase/types";
-import { categoryLabels } from "./categoryLabels";
+import { ADMIN_CATEGORY_IDS, categoryLabels } from "./categoryLabels";
+import { academyErrorMessage } from "@/lib/academyErrors";
+import { translations } from "@/lib/translations";
 
 interface EditProviderDialogProps {
   provider: Tables<"provider_profiles"> | null;
@@ -69,6 +70,12 @@ export function EditProviderDialog({ provider, open, onOpenChange }: EditProvide
       onOpenChange(false);
     },
     onError: (err: any) => {
+      // Leaving 'academy' while course registrations are live is refused by
+      // the DB guard; say why (admin UI is Hebrew-only) instead of the raw code.
+      if (typeof err?.message === "string" && err.message.includes("CATEGORY_CHANGE_BLOCKED")) {
+        toast.error(academyErrorMessage(err, (key) => translations.he[key]));
+        return;
+      }
       toast.error(err.message || "שגיאה בעדכון הספק");
     },
   });
@@ -93,9 +100,9 @@ export function EditProviderDialog({ provider, open, onOpenChange }: EditProvide
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {categoryLabels[c.id] || c.id}
+                {ADMIN_CATEGORY_IDS.map((id) => (
+                  <SelectItem key={id} value={id}>
+                    {categoryLabels[id]}
                   </SelectItem>
                 ))}
               </SelectContent>
