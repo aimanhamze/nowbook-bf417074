@@ -1,21 +1,23 @@
-import { useEffect, useState, type ChangeEvent } from "react";
-import { MapPin, Loader2, RotateCcw } from "lucide-react";
-import { useUserLocation } from "@/hooks/useUserLocation";
-import { useForm, useWatch, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  AlignLeft, BellRing, Camera, Check, ImageIcon, Loader2, LocateFixed, MapPin, Phone, RotateCcw,
+  Share2, Store, Tag, Wallet,
+} from "lucide-react";
 import { z } from "zod";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { useUserLocation } from "@/hooks/useUserLocation";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
+import { usePlural } from "@/hooks/usePlural";
 import { categories, categoryNames } from "@/lib/mock-data";
-import { buildSocialLinks } from "@/lib/socialLinks";
+import { buildSocialLinks, type SocialLinks } from "@/lib/socialLinks";
+import type { TranslationKey } from "@/lib/translations";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { EditSheet, Field, NavRow, SettingsGroup } from "./SettingsRows";
 
 export const DEFAULT_DEPOSIT_TEMPLATE = `שלום {customer_name} 😊
 קיבלנו את בקשת התור שלך ל{service_name} בתאריך {date} בשעה {time}.
@@ -28,18 +30,25 @@ export const DEFAULT_REMINDER_TEMPLATE = `שלום {customer_name} 😊
 💇 שירות: {service_name}
 מצפים לראותך! 🙏`;
 
+const DEPOSIT_PLACEHOLDERS = ["{customer_name}", "{service_name}", "{date}", "{time}", "{price}"];
+const REMINDER_PLACEHOLDERS = ["{customer_name}", "{service_name}", "{date}", "{time}"];
+
 function roundCoord(v: number): number {
   return Math.round(v * 1e6) / 1e6;
 }
 
-const SOCIAL_FIELDS = ["social_whatsapp", "social_instagram", "social_tiktok", "social_facebook", "social_waze", "social_website"] as const;
+const SOCIAL_FIELDS = [
+  "social_whatsapp", "social_instagram", "social_tiktok", "social_facebook", "social_waze", "social_website",
+] as const;
 
+// Same schema, bounds and defaults as the single form this replaced; only the
+// messages are now translation keys (resolved with t() where shown).
 const profileSchema = z.object({
-  business_name: z.string().min(2, "שם העסק חייב להכיל לפחות 2 תווים").max(100),
+  business_name: z.string().min(2, "pfErrNameShort").max(100, "pfErrTooLong"),
   category: z.string().min(1),
-  address: z.string().max(200).optional().default(""),
-  about: z.string().max(1000).optional().default(""),
-  phone: z.string().regex(/^[+\d\s\-()]*$/, "מספר טלפון לא תקין").max(20).optional().default(""),
+  address: z.string().max(200, "pfErrTooLong").optional().default(""),
+  about: z.string().max(1000, "pfErrTooLong").optional().default(""),
+  phone: z.string().regex(/^[+\d\s\-()]*$/, "pfErrPhone").max(20, "pfErrPhone").optional().default(""),
   social_whatsapp: z.string().optional().default(""),
   social_instagram: z.string().optional().default(""),
   social_tiktok: z.string().optional().default(""),
@@ -51,15 +60,85 @@ const profileSchema = z.object({
 });
 
 type FormValues = z.infer<typeof profileSchema>;
+type FieldName = keyof FormValues;
+type FieldErrors = Partial<Record<FieldName, string>>;
 
+type ProfileRow = NonNullable<ReturnType<typeof useProviderProfile>["profile"]>;
+
+/** The stored profile as form values — exactly the reset() the old form ran,
+ *  including WhatsApp falling back to the business phone. */
+function storedValues(profile: ProfileRow): FormValues {
+  const sl = profile.social_links as SocialLinks | null;
+  return {
+    business_name: profile.business_name || "",
+    category: profile.category || "barber",
+    address: profile.address || "",
+    about: profile.about || "",
+    phone: profile.phone || "",
+    social_whatsapp: sl?.whatsapp || profile.phone || "",
+    social_instagram: sl?.instagram || "",
+    social_tiktok: sl?.tiktok || "",
+    social_facebook: sl?.facebook || "",
+    social_waze: sl?.waze || "",
+    social_website: sl?.website || "",
+    latitude: profile.latitude ?? null,
+    longitude: profile.longitude ?? null,
+  };
+}
+
+/** The upsertProfile payload — the same shape and conversions the old form's
+ *  submit sent, every field included. */
+function toPayload(values: FormValues) {
+  return {
+    business_name: values.business_name,
+    category: values.category,
+    address: values.address ?? "",
+    about: values.about ?? "",
+    phone: values.phone ?? "",
+    social_links: buildSocialLinks({
+      social_whatsapp: values.social_whatsapp ?? "",
+      social_instagram: values.social_instagram ?? "",
+      social_tiktok: values.social_tiktok ?? "",
+      social_facebook: values.social_facebook ?? "",
+      social_waze: values.social_waze ?? "",
+      social_website: values.social_website ?? "",
+    }),
+    latitude: values.latitude ?? null,
+    longitude: values.longitude ?? null,
+  };
+}
+
+type SheetId = "name" | "category" | "about" | "phone" | "social" | "address" | "pin";
+type TemplateId = "deposit" | "reminder";
+
+// Which form fields each sheet edits. Every other field is sent as stored.
+const SHEET_FIELDS: Record<SheetId, FieldName[]> = {
+  name: ["business_name"],
+  category: ["category"],
+  about: ["about"],
+  phone: ["phone"],
+  social: [...SOCIAL_FIELDS],
+  address: ["address"],
+  pin: ["latitude", "longitude"],
+};
+
+// Each sheet saves on its own Save, sending the full upsertProfile payload
+// with the stored values for every field it does not edit. An unchanged Save
+// writes nothing. Uploads still save the moment a file is picked. Every write
+// targets the active branch (useProviderProfile → profile.id), and the
+// dashboard remounts this section when the branch changes.
 export function BusinessProfileTab() {
   const { t, lang } = useLang();
+  const pl = usePlural();
   const { profile, upsertProfile, updateWhatsAppTemplates, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
 
-  const [accordionValue, setAccordionValue] = useState("");
-  const [locationAccordionValue, setLocationAccordionValue] = useState("");
-  const [depositTemplate, setDepositTemplate] = useState(DEFAULT_DEPOSIT_TEMPLATE);
-  const [reminderTemplate, setReminderTemplate] = useState(DEFAULT_REMINDER_TEMPLATE);
+  const [sheet, setSheet] = useState<SheetId | null>(null);
+  const [draft, setDraft] = useState<FormValues | null>(null);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [templateSheet, setTemplateSheet] = useState<TemplateId | null>(null);
+  const [templateDraft, setTemplateDraft] = useState("");
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const coverInput = useRef<HTMLInputElement>(null);
 
   const {
     position: detectedPosition,
@@ -68,57 +147,17 @@ export function BusinessProfileTab() {
     locate,
   } = useUserLocation();
 
-  const { register, handleSubmit, setValue, watch, reset, control, formState: { errors, isDirty } } = useForm<FormValues>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: {
-      business_name: "", category: "barber", address: "", about: "", phone: "",
-      social_whatsapp: "", social_instagram: "",
-      social_tiktok: "", social_facebook: "", social_waze: "", social_website: "",
-      latitude: null, longitude: null,
-    },
-  });
-
-  useEffect(() => {
-    if (profile) {
-      const sl = profile.social_links;
-      reset({
-        business_name: profile.business_name || "",
-        category: profile.category || "barber",
-        address: profile.address || "",
-        about: profile.about || "",
-        phone: profile.phone || "",
-        social_whatsapp: sl?.whatsapp || profile.phone || "",
-        social_instagram: sl?.instagram || "",
-        social_tiktok: sl?.tiktok || "",
-        social_facebook: sl?.facebook || "",
-        social_waze: sl?.waze || "",
-        social_website: sl?.website || "",
-        latitude: profile.latitude ?? null,
-        longitude: profile.longitude ?? null,
-      });
-      setDepositTemplate(profile.deposit_message_template || DEFAULT_DEPOSIT_TEMPLATE);
-      setReminderTemplate(profile.reminder_message_template || DEFAULT_REMINDER_TEMPLATE);
-    }
-  }, [profile, reset]);
-
-  const socialValues = useWatch({
-    control,
-    name: ["social_whatsapp", "social_instagram", "social_tiktok", "social_facebook", "social_waze", "social_website"],
-  });
-  const socialFilledCount = socialValues.filter(v => v && v.trim() !== "").length;
-
-  const latValue = watch("latitude") ?? null;
-  const lngValue = watch("longitude") ?? null;
-  const hasLocation = latValue !== null && lngValue !== null;
-
-  // Apply detected coordinates into form state
+  // A detected position lands in the open pin sheet's draft; it is saved only
+  // by that sheet's Save, as before (it used to dirty the form).
   useEffect(() => {
     if (!detectedPosition) return;
-    setValue("latitude", roundCoord(detectedPosition.latitude), { shouldDirty: true });
-    setValue("longitude", roundCoord(detectedPosition.longitude), { shouldDirty: true });
-  }, [detectedPosition, setValue]);
+    setDraft((d) => d && {
+      ...d,
+      latitude: roundCoord(detectedPosition.latitude),
+      longitude: roundCoord(detectedPosition.longitude),
+    });
+  }, [detectedPosition]);
 
-  // Show per-code toast on geolocation error
   useEffect(() => {
     if (locationErrorCode === null) return;
     if (locationErrorCode === -1) toast.error(t("locationErrorUnsupported"));
@@ -127,49 +166,107 @@ export function BusinessProfileTab() {
     else if (locationErrorCode === 3) toast.error(t("locationErrorTimeout"));
   }, [locationErrorCode, t]);
 
-  const handleClearLocation = () => {
-    setValue("latitude", null, { shouldDirty: true });
-    setValue("longitude", null, { shouldDirty: true });
+  if (!profile) return null;
+  const stored = storedValues(profile);
+
+  const openSheet = (id: SheetId) => {
+    setDraft(storedValues(profile));
+    setErrors({});
+    setSheet(id);
+  };
+  const closeSheet = () => {
+    if (upsertProfile.isPending) return;
+    setSheet(null);
+  };
+  const set = (patch: Partial<FormValues>) => {
+    setDraft((d) => d && { ...d, ...patch });
+    setErrors((e) => {
+      const next = { ...e };
+      for (const k of Object.keys(patch) as FieldName[]) delete next[k];
+      return next;
+    });
   };
 
-  useEffect(() => {
-    if (SOCIAL_FIELDS.some(f => errors[f])) {
-      setAccordionValue("social");
+  const saveSheet = async () => {
+    if (!sheet || !draft || upsertProfile.isPending) return;
+    const fields = SHEET_FIELDS[sheet];
+    // Only this sheet's fields change; the rest are the stored values.
+    const merged: FormValues = { ...storedValues(profile) };
+    for (const f of fields) (merged as Record<string, unknown>)[f] = draft[f];
+    if (fields.every((f) => (merged[f] ?? null) === (stored[f] ?? null))) {
+      setSheet(null);
+      return;
     }
-  }, [errors]);
-
-  const onSubmit = async (values: FormValues) => {
+    const parsed = profileSchema.safeParse(merged);
+    if (!parsed.success) {
+      const next: FieldErrors = {};
+      let elsewhere: string | null = null;
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0] as FieldName;
+        // Our rules carry a translation key; zod's built-in ones (type checks)
+        // carry English text, which is never shown.
+        const message = issue.message.startsWith("pfErr")
+          ? t(issue.message as TranslationKey)
+          : t("bsSaveError");
+        if (fields.includes(field)) next[field] ??= message;
+        else elsewhere ??= message;
+      }
+      setErrors(next);
+      // A stored field elsewhere is invalid: the same full-payload save would
+      // fail, so say which rule it broke rather than failing silently.
+      if (elsewhere && Object.keys(next).length === 0) toast.error(elsewhere);
+      return;
+    }
     try {
-      const social_links = buildSocialLinks({
-        social_whatsapp: values.social_whatsapp ?? "",
-        social_instagram: values.social_instagram ?? "",
-        social_tiktok: values.social_tiktok ?? "",
-        social_facebook: values.social_facebook ?? "",
-        social_waze: values.social_waze ?? "",
-        social_website: values.social_website ?? "",
-      });
-      await upsertProfile.mutateAsync({
-        business_name: values.business_name,
-        category: values.category,
-        address: values.address ?? "",
-        about: values.about ?? "",
-        phone: values.phone ?? "",
-        social_links,
-        latitude: values.latitude ?? null,
-        longitude: values.longitude ?? null,
-      });
+      await upsertProfile.mutateAsync(toPayload(parsed.data));
       toast.success(t("profileSaved"));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error saving profile");
+      setSheet(null);
+    } catch {
+      toast.error(t("bsSaveError"));
     }
   };
 
-  const handleCoverUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+  const openTemplate = (id: TemplateId) => {
+    setTemplateDraft(
+      id === "deposit"
+        ? profile.deposit_message_template || DEFAULT_DEPOSIT_TEMPLATE
+        : profile.reminder_message_template || DEFAULT_REMINDER_TEMPLATE,
+    );
+    setTemplateSheet(id);
+  };
+  const saveTemplate = async () => {
+    if (!templateSheet || updateWhatsAppTemplates.isPending) return;
+    const current = templateSheet === "deposit"
+      ? profile.deposit_message_template || DEFAULT_DEPOSIT_TEMPLATE
+      : profile.reminder_message_template || DEFAULT_REMINDER_TEMPLATE;
+    if (templateDraft === current) {
+      setTemplateSheet(null);
+      return;
+    }
+    try {
+      await updateWhatsAppTemplates.mutateAsync(
+        templateSheet === "deposit"
+          ? { deposit_message_template: templateDraft }
+          : { reminder_message_template: templateDraft },
+      );
+      toast.success(t("templateSaved"));
+      setTemplateSheet(null);
+    } catch {
+      toast.error(t("bsSaveError"));
+    }
+  };
+
+  const upload = (kind: "avatar" | "cover") => async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      await uploadCoverImage.mutateAsync(file);
-      toast.success(t("coverImageUploaded"));
+      if (kind === "avatar") {
+        await uploadAvatarImage.mutateAsync(file);
+        toast.success(t("avatarUploaded"));
+      } else {
+        await uploadCoverImage.mutateAsync(file);
+        toast.success(t("coverImageUploaded"));
+      }
     } catch {
       toast.error(t("coverImageUploadError"));
     } finally {
@@ -177,356 +274,306 @@ export function BusinessProfileTab() {
     }
   };
 
-  const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      await uploadAvatarImage.mutateAsync(file);
-      toast.success(t("avatarUploaded") || "תמונת פרופיל עודכנה");
-    } catch {
-      toast.error(t("coverImageUploadError"));
-    } finally {
-      event.target.value = "";
-    }
+  // ── Row values ──────────────────────────────────────────────────────────
+  const categoryLabel = (id: string) => {
+    const c = categories.find((x) => x.id === id);
+    return c ? `${c.icon} ${categoryNames[id]?.[lang] ?? id}` : id;
   };
+  const socialCount = SOCIAL_FIELDS.filter((f) => (stored[f] ?? "").trim() !== "").length;
+  const hasPin = stored.latitude != null && stored.longitude != null;
+  const isCustom = (value: string | null | undefined, fallback: string) => !!value && value !== fallback;
+  const initial = (profile.business_name || "?").trim().charAt(0).toUpperCase() || "?";
+  const avatarBusy = uploadAvatarImage.isPending;
+  const coverBusy = uploadCoverImage.isPending;
 
-  const coverPreview = profile?.cover_image?.trim() || "";
-  const businessInitial = (watch("business_name") || profile?.business_name || "?")
-    .trim()
-    .charAt(0)
-    .toUpperCase();
+  const draftPin = draft && draft.latitude != null && draft.longitude != null;
 
   return (
-    <motion.form
-      onSubmit={handleSubmit(onSubmit)}
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-4 pb-16"
-    >
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pb-6">
       <h2 className="text-lg font-semibold">{t("businessProfile")}</h2>
 
-      {/* Branding — avatar + cover */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
-        <h3 className="text-sm font-semibold">{t("sectionBranding")}</h3>
-
-        {/* Avatar */}
-        <div>
-          <Label htmlFor="avatar-upload">{t("avatarImage") || "תמונת פרופיל"}</Label>
-          <div className="mt-2 flex items-center gap-4">
-            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-accent/20 to-accent/5 border border-border">
-              {profile?.avatar_image ? (
-                <img src={profile.avatar_image} alt="avatar" className="h-full w-full object-cover" loading="lazy" />
+      {/* ── Branding: how the business page opens ─────────────────────── */}
+      <section className="glass-card-md overflow-hidden rounded-3xl">
+        <div className="relative h-36 bg-gradient-to-br from-accent/20 to-accent/5">
+          {profile.cover_image?.trim() ? (
+            <img src={profile.cover_image} alt="" className="h-full w-full object-cover" loading="lazy" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-5xl font-bold text-accent/35" aria-hidden>
+              {initial}
+            </div>
+          )}
+          {coverBusy && <UploadVeil label={t("pfUploading")} />}
+        </div>
+        <div className="px-4 pb-4">
+          <div className="-mt-10 flex items-end gap-3">
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-[hsl(30_60%_96%)] to-[hsl(24_70%_90%)] ring-4 ring-white">
+              {profile.avatar_image ? (
+                <img src={profile.avatar_image} alt="" className="h-full w-full object-cover" loading="lazy" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-accent/40">
-                  {businessInitial}
+                <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-accent/50" aria-hidden>
+                  {initial}
                 </div>
               )}
+              {avatarBusy && <UploadVeil />}
             </div>
-            <Input
-              id="avatar-upload"
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarUpload}
-              disabled={uploadAvatarImage.isPending}
-              className="flex-1"
-            />
-          </div>
-        </div>
-
-        <div>
-          <Label htmlFor="cover-upload">{t("coverImage")}</Label>
-          <div className="mt-2 space-y-3">
-            <div className="h-36 w-full overflow-hidden rounded-xl bg-gradient-to-br from-accent/20 to-accent/5">
-              {coverPreview ? (
-                <img src={coverPreview} alt={t("coverImage")} className="h-full w-full object-cover" loading="lazy" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-5xl font-bold text-accent/35">
-                  {businessInitial || "?"}
-                </div>
-              )}
+            <div className="min-w-0 pb-1">
+              <p className="truncate text-base font-semibold leading-snug">{profile.business_name || "—"}</p>
+              <p className="truncate text-xs text-foreground/60">{categoryLabel(stored.category)}</p>
             </div>
-            <Input
-              id="cover-upload"
-              type="file"
-              accept="image/*"
-              onChange={handleCoverUpload}
-              disabled={uploadCoverImage.isPending}
-            />
           </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <ImageButton icon={Camera} label={t("pfPhotoBtn")} busy={avatarBusy} onClick={() => avatarInput.current?.click()} />
+            <ImageButton icon={ImageIcon} label={t("pfCoverBtn")} busy={coverBusy} onClick={() => coverInput.current?.click()} />
+          </div>
+          <input ref={avatarInput} type="file" accept="image/*" className="hidden" onChange={upload("avatar")} aria-label={t("pfPhotoBtn")} />
+          <input ref={coverInput} type="file" accept="image/*" className="hidden" onChange={upload("cover")} aria-label={t("pfCoverBtn")} />
         </div>
-      </div>
+      </section>
 
-      {/* Details — name, category, about */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
-        <h3 className="text-sm font-semibold">{t("sectionDetails")}</h3>
+      <SettingsGroup title={t("pfGroupDetails")}>
+        <NavRow icon={Store} title={t("pfNameTitle")} description={stored.business_name || t("pfNotSet")}
+          muted={!stored.business_name} onClick={() => openSheet("name")} />
+        <NavRow icon={Tag} title={t("pfCategoryTitle")} description={categoryLabel(stored.category)}
+          onClick={() => openSheet("category")} />
+        <NavRow icon={AlignLeft} title={t("pfAboutTitle")} description={stored.about?.trim() || t("pfAboutEmpty")}
+          muted={!stored.about?.trim()} lines={2} onClick={() => openSheet("about")} />
+      </SettingsGroup>
 
-        <div>
-          <Label>{t("businessName")}</Label>
-          <Input {...register("business_name")} className={errors.business_name ? "border-destructive" : ""} />
-          {errors.business_name && <p className="text-xs text-destructive mt-1">{errors.business_name.message}</p>}
-        </div>
+      <SettingsGroup title={t("pfGroupContact")}>
+        <NavRow icon={Phone} title={t("pfPhoneTitle")} description={stored.phone || t("pfNotSet")}
+          descriptionDir={stored.phone ? "ltr" : undefined} muted={!stored.phone} onClick={() => openSheet("phone")} />
+        <NavRow icon={Share2} title={t("pfSocialTitle")}
+          description={socialCount > 0 ? pl("pfSocialCount", socialCount) : t("pfSocialNone")}
+          muted={socialCount === 0} onClick={() => openSheet("social")} />
+      </SettingsGroup>
 
-        <div>
-          <Label>{t("category")}</Label>
-          <Controller
-            name="category"
-            control={control}
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {categories.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.icon} {categoryNames[c.id]?.[lang]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </div>
+      <SettingsGroup title={t("pfGroupLocation")}>
+        <NavRow icon={MapPin} title={t("pfAddressTitle")} description={stored.address || t("pfNotSet")}
+          muted={!stored.address} onClick={() => openSheet("address")} />
+        <NavRow icon={LocateFixed} title={t("pfPinTitle")} description={t(hasPin ? "pfPinSet" : "pfPinNotSet")}
+          muted={!hasPin} onClick={() => openSheet("pin")} />
+      </SettingsGroup>
 
-        <div>
-          <Label>{t("aboutBusiness")}</Label>
-          <Textarea {...register("about")} rows={3} />
-        </div>
-      </div>
+      <SettingsGroup title={t("pfGroupMessages")}>
+        <NavRow icon={Wallet} title={t("pfDepositTitle")}
+          description={t(isCustom(profile.deposit_message_template, DEFAULT_DEPOSIT_TEMPLATE) ? "pfTemplateCustom" : "pfTemplateDefault")}
+          onClick={() => openTemplate("deposit")} />
+        <NavRow icon={BellRing} title={t("pfReminderTitle")}
+          description={t(isCustom(profile.reminder_message_template, DEFAULT_REMINDER_TEMPLATE) ? "pfTemplateCustom" : "pfTemplateDefault")}
+          onClick={() => openTemplate("reminder")} />
+      </SettingsGroup>
 
-      {/* Contact & Social — phone + social links */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
-        <h3 className="text-sm font-semibold">{t("sectionContact")}</h3>
+      {/* ── Field sheets ────────────────────────────────────────────────── */}
+      <EditSheet open={sheet === "name"} onClose={closeSheet} icon={Store} title={t("pfNameTitle")}
+        onSave={saveSheet} saving={upsertProfile.isPending}>
+        {draft && (
+          <Field label={t("pfNameTitle")} htmlFor="pf-name" error={errors.business_name}>
+            <Input id="pf-name" value={draft.business_name} maxLength={100} autoComplete="organization"
+              onChange={(e) => set({ business_name: e.target.value })}
+              className={cn("h-12 rounded-xl", errors.business_name && "border-red-600")} />
+          </Field>
+        )}
+      </EditSheet>
 
-        <div>
-          <Label>{t("phone")}</Label>
-          <Input {...register("phone")} type="tel" />
-        </div>
-
-        {/* Contact & Social Links */}
-        <Accordion type="single" collapsible value={accordionValue} onValueChange={setAccordionValue} className="border-t border-border -mx-4 px-4">
-          <AccordionItem value="social" className="border-b-0">
-            <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
-              {socialFilledCount > 0
-                ? `${t("socialLinks")} (${socialFilledCount} ${t("socialLinksAdded")})`
-                : t("socialLinks")}
-            </AccordionTrigger>
-            <AccordionContent className="space-y-3 pb-1">
-              <div>
-                <Label>{t("socialLinksWhatsapp")}</Label>
-                <Input {...register("social_whatsapp")} type="tel" placeholder={t("socialLinksHelperPhone")} />
-                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperPhone")}</p>
-              </div>
-
-              <div>
-                <Label>{t("socialLinksInstagram")}</Label>
-                <Input {...register("social_instagram")} placeholder={t("socialLinksHelperHandle")} />
-                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperHandle")}</p>
-              </div>
-
-              <div>
-                <Label>{t("socialLinksTiktok")}</Label>
-                <Input {...register("social_tiktok")} placeholder={t("socialLinksHelperHandle")} />
-                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperHandle")}</p>
-              </div>
-
-              <div>
-                <Label>{t("socialLinksFacebook")}</Label>
-                <Input {...register("social_facebook")} placeholder={t("socialLinksHelperHandle")} />
-                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperHandle")}</p>
-              </div>
-
-              <div>
-                <Label>{t("socialLinksWaze")}</Label>
-                <Input {...register("social_waze")} placeholder={t("socialLinksHelperWaze")} />
-                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperWaze")}</p>
-              </div>
-
-              <div>
-                <Label>{t("socialLinksWebsite")}</Label>
-                <Input {...register("social_website")} type="url" placeholder={t("socialLinksHelperWebsite")} />
-                <p className="text-xs text-muted-foreground mt-1">{t("socialLinksHelperWebsite")}</p>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </div>
-
-      {/* Location — address + map */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
-        <h3 className="text-sm font-semibold">{t("sectionLocation")}</h3>
-
-        <div>
-          <Label>{t("address")}</Label>
-          <Input {...register("address")} />
-        </div>
-
-        {/* Location on Map */}
-        <Accordion type="single" collapsible value={locationAccordionValue} onValueChange={setLocationAccordionValue} className="border-t border-border -mx-4 px-4">
-          <AccordionItem value="location" className="border-b-0">
-            <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 shrink-0" />
-                <span>{t("locationOnMap")}</span>
-                {hasLocation && <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />}
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="space-y-3 pb-1">
-              <p className="text-xs text-muted-foreground">{t("locationHelperText")}</p>
-              <p className="text-xs text-muted-foreground">{t("locationPrivacyNote")}</p>
-              <p className="text-xs text-muted-foreground">{t("locationWazeCrossRef")}</p>
-
-              {hasLocation ? (
-                <p className="text-sm">
-                  <span className="text-green-600 font-medium">{t("locationSetLabel")}</span>{" "}
-                  <span dir="ltr">{latValue!.toFixed(4)}, {lngValue!.toFixed(4)}</span>
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">{t("locationNotSet")}</p>
-              )}
-
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  type="button"
-                  variant={hasLocation ? "outline" : "default"}
-                  size="sm"
-                  disabled={isDetectingLocation}
-                  onClick={locate}
-                >
-                  {isDetectingLocation ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {t("locationDetecting")}
-                    </>
-                  ) : hasLocation ? (
-                    t("locationUpdateLocation")
-                  ) : (
-                    t("locationSetCurrentLocation")
-                  )}
-                </Button>
-                {hasLocation && !isDetectingLocation && (
-                  <Button
+      <EditSheet open={sheet === "category"} onClose={closeSheet} icon={Tag} title={t("pfCategoryTitle")}
+        onSave={saveSheet} saving={upsertProfile.isPending}>
+        {draft && (
+          <ul className="space-y-1" role="radiogroup" aria-label={t("pfCategoryTitle")}>
+            {categories.map((c) => {
+              const selected = draft.category === c.id;
+              return (
+                <li key={c.id}>
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearLocation}
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => set({ category: c.id })}
+                    className={cn(
+                      "flex min-h-12 w-full items-center gap-3 rounded-2xl px-4 text-start text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                      selected ? "bg-accent/10 font-semibold" : "active:bg-foreground/[0.04]",
+                    )}
                   >
-                    {t("locationClearLocation")}
-                  </Button>
+                    <span className="text-lg leading-none" aria-hidden>{c.icon}</span>
+                    <span className="flex-1">{categoryNames[c.id]?.[lang]}</span>
+                    {selected && <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={3} />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </EditSheet>
+
+      <EditSheet open={sheet === "about"} onClose={closeSheet} icon={AlignLeft} title={t("pfAboutTitle")}
+        onSave={saveSheet} saving={upsertProfile.isPending}>
+        {draft && (
+          <Field label={t("pfAboutTitle")} htmlFor="pf-about" error={errors.about}
+            help={<span className="flex justify-between gap-3"><span>{t("pfAboutHelp")}</span><span dir="ltr" className="tabular-nums">{(draft.about ?? "").length}/1000</span></span>}>
+            <Textarea id="pf-about" rows={7} value={draft.about ?? ""} maxLength={1000}
+              onChange={(e) => set({ about: e.target.value })} className="rounded-xl text-sm leading-relaxed" />
+          </Field>
+        )}
+      </EditSheet>
+
+      <EditSheet open={sheet === "phone"} onClose={closeSheet} icon={Phone} title={t("pfPhoneTitle")}
+        onSave={saveSheet} saving={upsertProfile.isPending}>
+        {draft && (
+          <Field label={t("pfPhoneTitle")} htmlFor="pf-phone" error={errors.phone}>
+            <Input id="pf-phone" type="tel" dir="ltr" inputMode="tel" autoComplete="tel" value={draft.phone ?? ""}
+              onChange={(e) => set({ phone: e.target.value })}
+              className={cn("h-12 rounded-xl text-start", errors.phone && "border-red-600")} />
+          </Field>
+        )}
+      </EditSheet>
+
+      <EditSheet open={sheet === "social"} onClose={closeSheet} icon={Share2} title={t("pfSocialTitle")}
+        description={t("pfSocialHelp")} onSave={saveSheet} saving={upsertProfile.isPending}>
+        {draft && (
+          <>
+            <SocialInput id="pf-wa" label={t("socialLinksWhatsapp")} help={t("socialLinksHelperPhone")} type="tel"
+              value={draft.social_whatsapp ?? ""} onChange={(v) => set({ social_whatsapp: v })} />
+            <SocialInput id="pf-ig" label={t("socialLinksInstagram")} help={t("socialLinksHelperHandle")}
+              value={draft.social_instagram ?? ""} onChange={(v) => set({ social_instagram: v })} />
+            <SocialInput id="pf-tt" label={t("socialLinksTiktok")} help={t("socialLinksHelperHandle")}
+              value={draft.social_tiktok ?? ""} onChange={(v) => set({ social_tiktok: v })} />
+            <SocialInput id="pf-fb" label={t("socialLinksFacebook")} help={t("socialLinksHelperHandle")}
+              value={draft.social_facebook ?? ""} onChange={(v) => set({ social_facebook: v })} />
+            <SocialInput id="pf-wz" label={t("socialLinksWaze")} help={t("socialLinksHelperWaze")}
+              value={draft.social_waze ?? ""} onChange={(v) => set({ social_waze: v })} />
+            <SocialInput id="pf-web" label={t("socialLinksWebsite")} help={t("socialLinksHelperWebsite")} type="url"
+              value={draft.social_website ?? ""} onChange={(v) => set({ social_website: v })} />
+          </>
+        )}
+      </EditSheet>
+
+      <EditSheet open={sheet === "address"} onClose={closeSheet} icon={MapPin} title={t("pfAddressTitle")}
+        onSave={saveSheet} saving={upsertProfile.isPending}>
+        {draft && (
+          <Field label={t("pfAddressTitle")} htmlFor="pf-address" help={t("pfAddressHelp")} error={errors.address}>
+            <Input id="pf-address" value={draft.address ?? ""} maxLength={200} autoComplete="street-address"
+              onChange={(e) => set({ address: e.target.value })} className="h-12 rounded-xl" />
+          </Field>
+        )}
+      </EditSheet>
+
+      <EditSheet open={sheet === "pin"} onClose={closeSheet} icon={LocateFixed} title={t("pfPinTitle")}
+        description={t("locationHelperText")} onSave={saveSheet} saving={upsertProfile.isPending}
+        saveDisabled={isDetectingLocation}>
+        {draft && (
+          <>
+            <div className={cn(
+              "flex items-center gap-3 rounded-2xl px-4 py-3",
+              draftPin ? "bg-emerald-50 text-emerald-800" : "bg-foreground/[0.04] text-foreground/70",
+            )}>
+              <MapPin className="h-5 w-5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{t(draftPin ? "pfPinSet" : "pfPinNotSet")}</p>
+                {draftPin && (
+                  <p dir="ltr" className="text-start text-xs tabular-nums [unicode-bidi:plaintext]">
+                    {draft.latitude!.toFixed(4)}, {draft.longitude!.toFixed(4)}
+                  </p>
                 )}
               </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button type="button" variant={draftPin ? "outline" : "default"} className="h-12 rounded-2xl"
+                disabled={isDetectingLocation} onClick={locate}>
+                {isDetectingLocation ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />{t("locationDetecting")}</>
+                ) : (
+                  <><LocateFixed className="h-4 w-4" />{t(draftPin ? "locationUpdateLocation" : "locationSetCurrentLocation")}</>
+                )}
+              </Button>
+              {draftPin && !isDetectingLocation && (
+                <Button type="button" variant="ghost" className="h-11 rounded-2xl text-red-600 hover:text-red-700"
+                  onClick={() => set({ latitude: null, longitude: null })}>
+                  {t("locationClearLocation")}
+                </Button>
+              )}
+            </div>
+            <div className="space-y-1.5 text-xs leading-snug text-foreground/60">
+              <p>{t("locationPrivacyNote")}</p>
+              <p>{t("pfPinWazeNote")}</p>
+            </div>
+          </>
+        )}
+      </EditSheet>
 
-      {/* WhatsApp message templates */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-5">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <span>💬</span> {t("whatsappTemplates")}
-        </h3>
-
-        {/* Deposit template */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">{t("depositTemplate")}</Label>
-          <Textarea
-            rows={4}
-            value={depositTemplate}
-            onChange={(e) => setDepositTemplate(e.target.value)}
-            className="text-xs font-mono leading-relaxed"
-          />
-          <p className="text-[11px] text-muted-foreground">
-            <span className="font-medium">{t("availablePlaceholders")}:</span>{" "}
-            {["{customer_name}", "{service_name}", "{date}", "{time}", "{price}"].map((p) => (
-              <code key={p} className="mx-0.5 rounded bg-secondary px-1 py-0.5">{p}</code>
-            ))}
-          </p>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              className="flex-1 text-xs h-8"
-              onClick={() =>
-                updateWhatsAppTemplates.mutate(
-                  { deposit_message_template: depositTemplate },
-                  { onSuccess: () => toast.success(t("templateSaved")), onError: () => toast.error("שגיאה בשמירה") }
-                )
-              }
-              disabled={updateWhatsAppTemplates.isPending}
-            >
-              {updateWhatsAppTemplates.isPending ? "שומר..." : "שמור"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1 text-xs h-8"
-              onClick={() => setDepositTemplate(DEFAULT_DEPOSIT_TEMPLATE)}
-            >
-              <RotateCcw className="h-3 w-3" />
-              {t("resetToDefault")}
-            </Button>
-          </div>
-        </div>
-
-        <div className="border-t border-border/60" />
-
-        {/* Reminder template */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">{t("reminderTemplate")}</Label>
-          <Textarea
-            rows={6}
-            value={reminderTemplate}
-            onChange={(e) => setReminderTemplate(e.target.value)}
-            className="text-xs font-mono leading-relaxed"
-          />
-          <p className="text-[11px] text-muted-foreground">
-            <span className="font-medium">{t("availablePlaceholders")}:</span>{" "}
-            {["{customer_name}", "{service_name}", "{date}", "{time}"].map((p) => (
-              <code key={p} className="mx-0.5 rounded bg-secondary px-1 py-0.5">{p}</code>
-            ))}
-          </p>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              className="flex-1 text-xs h-8"
-              onClick={() =>
-                updateWhatsAppTemplates.mutate(
-                  { reminder_message_template: reminderTemplate },
-                  { onSuccess: () => toast.success(t("templateSaved")), onError: () => toast.error("שגיאה בשמירה") }
-                )
-              }
-              disabled={updateWhatsAppTemplates.isPending}
-            >
-              {updateWhatsAppTemplates.isPending ? "שומר..." : "שמור"}
-            </Button>
+      {/* ── WhatsApp message templates ──────────────────────────────────── */}
+      <EditSheet
+        open={templateSheet !== null}
+        onClose={() => { if (!updateWhatsAppTemplates.isPending) setTemplateSheet(null); }}
+        icon={templateSheet === "reminder" ? BellRing : Wallet}
+        title={t(templateSheet === "reminder" ? "pfReminderTitle" : "pfDepositTitle")}
+        description={t("pfTemplateHelp")}
+        onSave={saveTemplate}
+        saving={updateWhatsAppTemplates.isPending}
+      >
+        {templateSheet && (
+          <>
+            <Textarea
+              rows={templateSheet === "reminder" ? 8 : 6}
+              value={templateDraft}
+              onChange={(e) => setTemplateDraft(e.target.value)}
+              aria-label={t(templateSheet === "reminder" ? "pfReminderTitle" : "pfDepositTitle")}
+              className="rounded-xl text-sm leading-relaxed"
+            />
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-foreground/60">{t("availablePlaceholders")}</p>
+              <div className="flex flex-wrap gap-1.5" dir="ltr">
+                {(templateSheet === "deposit" ? DEPOSIT_PLACEHOLDERS : REMINDER_PLACEHOLDERS).map((p) => (
+                  <code key={p} className="rounded-lg bg-foreground/[0.06] px-2 py-1 text-[11px] text-foreground/80">{p}</code>
+                ))}
+              </div>
+            </div>
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="gap-1 text-xs h-8"
-              onClick={() => setReminderTemplate(DEFAULT_REMINDER_TEMPLATE)}
+              className="h-11 w-full gap-2 rounded-2xl"
+              onClick={() => setTemplateDraft(templateSheet === "deposit" ? DEFAULT_DEPOSIT_TEMPLATE : DEFAULT_REMINDER_TEMPLATE)}
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="h-4 w-4" />
               {t("resetToDefault")}
             </Button>
-          </div>
-        </div>
-      </div>
+          </>
+        )}
+      </EditSheet>
+    </motion.div>
+  );
+}
 
-      {/* Fixed action bar — pinned just above the BottomNav (~4rem tall) and
-          fully opaque, so scrolling form content never shows through or peeks
-          beneath it. The form's matching `pb-16` (plus the page's pb-24)
-          reserves space so the last field always scrolls clear of this bar.
-          A fixed bar (not sticky) is required: the reserved padding would push
-          a sticky last-child bar upward, away from the nav. RTL-safe via
-          inset-x-0 + symmetric px. Enabled only when the form is dirty. */}
-      <div className="fixed inset-x-0 bottom-16 z-30 border-t border-border/60 bg-background/95 px-5 pb-3 pt-3 backdrop-blur-md">
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={!isDirty || upsertProfile.isPending || uploadCoverImage.isPending || uploadAvatarImage.isPending}
-        >
-          {t("saveProfile")}
-        </Button>
-      </div>
-    </motion.form>
+function UploadVeil({ label }: { label?: string }) {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 text-sm font-medium text-white">
+      <Loader2 className="h-5 w-5 animate-spin" />
+      {label}
+    </div>
+  );
+}
+
+function ImageButton({
+  icon: Icon, label, busy, onClick,
+}: { icon: typeof Camera; label: string; busy: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-2xl border border-foreground/10 bg-white/70 px-3 text-sm font-medium transition-colors active:bg-foreground/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+    >
+      {busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Icon className="h-4 w-4 shrink-0 text-accent" />}
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
+function SocialInput({
+  id, label, help, value, onChange, type = "text",
+}: { id: string; label: string; help: string; value: string; onChange: (v: string) => void; type?: string }) {
+  return (
+    <Field label={label} htmlFor={id} help={help}>
+      <Input id={id} type={type} dir="ltr" value={value} onChange={(e) => onChange(e.target.value)}
+        autoCapitalize="none" autoCorrect="off" spellCheck={false} className="h-12 rounded-xl text-start" />
+    </Field>
   );
 }
