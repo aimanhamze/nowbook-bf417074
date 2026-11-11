@@ -12,10 +12,13 @@ export function ServiceColorPicker({
   value,
   onChange,
   className,
+  size = "md",
 }: {
   value: string;
   onChange: (color: string) => void;
   className?: string;
+  /** "lg": 44px swatches in two rows of four (the redesigned service sheet). */
+  size?: "md" | "lg";
 }) {
   const { t } = useLang();
   const selected = normalizeColor(value);
@@ -23,7 +26,11 @@ export function ServiceColorPicker({
   return (
     <div className={className}>
       <p className="text-xs text-muted-foreground mb-1.5">{t("serviceColor")}</p>
-      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("chooseColor")}>
+      <div
+        className={size === "lg" ? "grid w-fit grid-cols-4 gap-3" : "flex flex-wrap gap-2"}
+        role="radiogroup"
+        aria-label={t("chooseColor")}
+      >
         {SERVICE_COLOR_PRESETS.map((color) => {
           const isSelected = selected.toLowerCase() === color;
           return (
@@ -36,7 +43,8 @@ export function ServiceColorPicker({
               title={color}
               onClick={() => onChange(color)}
               className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full transition-all active:scale-90",
+                "flex items-center justify-center rounded-full transition-all active:scale-90",
+                size === "lg" ? "h-11 w-11" : "h-8 w-8",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
                 isSelected ? "ring-2 ring-offset-2 ring-foreground/30 scale-105" : "hover:scale-105",
               )}

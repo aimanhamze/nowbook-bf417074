@@ -20,17 +20,23 @@ export type Icon = ComponentType<{ className?: string }>;
 
 /** A titled glass list. Children are rows; falsy children are skipped and the
  *  first visible row gets no divider. */
+// Inside a sheet (already a solid surface) a list is outlined, not glass.
+export const SHEET_LIST = "overflow-hidden rounded-2xl border border-foreground/10 bg-white";
+
 export function SettingsGroup({
   title,
   action,
   children,
   className,
+  plain,
 }: {
   title?: string;
   /** Rendered at the heading's end (e.g. an "Add" button). */
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Outlined list for use inside a sheet. */
+  plain?: boolean;
 }) {
   const rows = Children.toArray(children).filter((c) => isValidElement(c) || typeof c === "string");
   return (
@@ -42,7 +48,7 @@ export function SettingsGroup({
         </div>
       )}
       {rows.length > 0 && (
-        <ul className={LIST}>
+        <ul className={plain ? SHEET_LIST : LIST}>
           {rows.map((row, i) => (
             <li key={i} className={i > 0 ? DIVIDER : undefined}>{row}</li>
           ))}
