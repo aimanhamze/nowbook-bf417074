@@ -150,7 +150,7 @@ function TreatmentNoteBox({ booking }: { booking: EnrichedBooking }) {
         setShowSaved(true);
         setTimeout(() => setShowSaved(false), 2000);
       },
-      onError: (err) => toast.error(err instanceof Error ? err.message : "שגיאה בשמירה"),
+      onError: () => toast.error(t("bsSaveError")),
     });
   };
 

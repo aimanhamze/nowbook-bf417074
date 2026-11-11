@@ -74,7 +74,10 @@ const Settings = () => {
 
       const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
       if (updateError) {
-        toast.error(updateError.message || t("passwordUpdateError"));
+        // Translated, never Supabase's English text; the two causes a provider
+        // can fix get their own message.
+        const code = (updateError as { code?: string }).code;
+        toast.error(t(code === "same_password" ? "rePasswordSame" : code === "weak_password" ? "rePasswordWeak" : "passwordUpdateError"));
         return;
       }
 
@@ -82,8 +85,8 @@ const Settings = () => {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("passwordUpdateError"));
+    } catch {
+      toast.error(t("passwordUpdateError"));
     } finally {
       setLoading(false);
     }

@@ -28,6 +28,7 @@ import { groupPackagesByCustomerKey } from "@/lib/packageSelection";
 import { packageStatusLabel, packageStatusClass } from "@/lib/packageStatus";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { supabaseErrorMessage } from "@/lib/supabaseError";
 import { z } from "zod";
 import { DangerRow, EditSheet, Field, IconTile, NavRow, SettingsGroup } from "./SettingsRows";
 import { DIVIDER, GROUP_HEADING, LIST, ROW } from "./settingsList";
@@ -55,7 +56,8 @@ const BLANK: EditState = {
 function usePackageErrorToast() {
   const { t } = useLang();
   return (err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
+    // supabase-js throws plain objects, not Errors (see lib/supabaseError).
+    const message = supabaseErrorMessage(err, "");
     const key = packageErrorKey(message);
     toast.error(key ? t(key as never) : t("bsSaveError"));
   };

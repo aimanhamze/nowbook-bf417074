@@ -1237,6 +1237,12 @@ export const translations = {
     pkDeleteTemplate: "מחיקת סוג החבילה",
     pkRemaining: "נותרו {n} מתוך {total}",
     pkOlder: "חבילות קודמות",
+    reApproved: "התור אושר ✅",
+    reRejected: "התור נדחה",
+    reApproveError: "לא הצלחנו לאשר את התור. נסו שוב",
+    reRejectError: "לא הצלחנו לדחות את התור. נסו שוב",
+    rePasswordSame: "הסיסמה החדשה חייבת להיות שונה מהנוכחית",
+    rePasswordWeak: "הסיסמה חלשה מדי. נסו סיסמה ארוכה יותר",
   },
   ar: {
     appName: "Ehjezly",
@@ -2499,6 +2505,12 @@ export const translations = {
     pkDeleteTemplate: "حذف نوع الباقة",
     pkRemaining: "تبقّى {n} من {total}",
     pkOlder: "باقات سابقة",
+    reApproved: "تم تأكيد الموعد ✅",
+    reRejected: "تم رفض الموعد",
+    reApproveError: "تعذّر تأكيد الموعد. حاول مرة أخرى",
+    reRejectError: "تعذّر رفض الموعد. حاول مرة أخرى",
+    rePasswordSame: "يجب أن تختلف كلمة المرور الجديدة عن الحالية",
+    rePasswordWeak: "كلمة المرور ضعيفة جدًا. جرّب كلمة أطول",
   },
   en: {
     appName: "Ehjezly",
@@ -3731,6 +3743,12 @@ export const translations = {
     pkDeleteTemplate: "Delete package type",
     pkRemaining: "{n} of {total} left",
     pkOlder: "Earlier packages",
+    reApproved: "Booking confirmed ✅",
+    reRejected: "Booking declined",
+    reApproveError: "Couldn't confirm the booking. Try again",
+    reRejectError: "Couldn't decline the booking. Try again",
+    rePasswordSame: "The new password must be different from the current one",
+    rePasswordWeak: "That password is too weak. Try a longer one",
   },
 } as const;
 

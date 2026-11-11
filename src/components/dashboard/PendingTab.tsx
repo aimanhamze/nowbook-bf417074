@@ -93,8 +93,8 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
   const handleConfirm = () => {
     if (approveBooking.isPending || rejectBooking.isPending) return;
     approveBooking.mutate(booking.id, {
-      onSuccess: () => toast.success("התור אושר בהצלחה ✅"),
-      onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "שגיאה באישור התור"),
+      onSuccess: () => toast.success(t("reApproved")),
+      onError: () => toast.error(t("reApproveError")),
     });
   };
 
@@ -214,8 +214,8 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
           size="sm"
           className="flex-1 text-xs h-9 text-red-600 border-red-200 bg-white hover:bg-red-50"
           onClick={() => rejectBooking.mutate(booking.id, {
-            onSuccess: () => toast.success("התור נדחה"),
-            onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "שגיאה בדחיית התור"),
+            onSuccess: () => toast.success(t("reRejected")),
+            onError: () => toast.error(t("reRejectError")),
           })}
           disabled={approveBooking.isPending || rejectBooking.isPending}
         >

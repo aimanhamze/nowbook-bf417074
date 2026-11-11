@@ -108,8 +108,8 @@ export default function ProviderNotifications() {
                   try {
                     await updateWhatsAppConfirmEnabled.mutateAsync(next);
                     toast.success(t("profileSaved"));
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : "Error");
+                  } catch {
+                    toast.error(t("bsSaveError"));
                   }
                 }}
                 disabled={updateWhatsAppConfirmEnabled.isPending}
@@ -133,8 +133,8 @@ export default function ProviderNotifications() {
                   try {
                     await updateWhatsAppReminderEnabled.mutateAsync(next);
                     toast.success(t("profileSaved"));
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : "Error");
+                  } catch {
+                    toast.error(t("bsSaveError"));
                   }
                 }}
                 disabled={updateWhatsAppReminderEnabled.isPending}
@@ -156,8 +156,8 @@ export default function ProviderNotifications() {
                     try {
                       await updateWhatsAppReminderHours.mutateAsync(Number(v) as ReminderLeadHours);
                       toast.success(t("profileSaved"));
-                    } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Error");
+                    } catch {
+                      toast.error(t("bsSaveError"));
                     }
                   }}
                   disabled={updateWhatsAppReminderHours.isPending}
@@ -191,8 +191,8 @@ export default function ProviderNotifications() {
                   try {
                     await updateWhatsAppMessageLanguage.mutateAsync(v as MessageLanguage);
                     toast.success(t("profileSaved"));
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : "Error");
+                  } catch {
+                    toast.error(t("bsSaveError"));
                   }
                 }}
                 disabled={updateWhatsAppMessageLanguage.isPending}

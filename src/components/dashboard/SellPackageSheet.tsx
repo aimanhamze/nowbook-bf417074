@@ -14,6 +14,7 @@ import { useProviderCustomers } from "@/hooks/useProviderCustomers";
 import { usePackageActions, packageErrorKey } from "@/hooks/usePackageActions";
 import { isRegisteredKey } from "@/lib/customerKey";
 import { toast } from "sonner";
+import { supabaseErrorMessage } from "@/lib/supabaseError";
 import { EditSheet, Field } from "./SettingsRows";
 
 /**
@@ -80,7 +81,8 @@ export function SellPackageSheet({
       toast.success(t("packageSoldToast"));
       onOpenChange(false);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      // supabase-js throws plain objects, not Errors (see lib/supabaseError).
+    const message = supabaseErrorMessage(err, "");
       const key = packageErrorKey(message);
       toast.error(key ? t(key as never) : t("bsSaveError"));
     }

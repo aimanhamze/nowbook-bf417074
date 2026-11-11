@@ -181,8 +181,8 @@ export default function ProviderStaffMember() {
     try {
       await renameStaff.mutateAsync({ id: member.id, name });
       toast.success(t("staffSaved"));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
+    } catch {
+      toast.error(t("bsSaveError"));
     }
   };
 
@@ -191,8 +191,8 @@ export default function ProviderStaffMember() {
     try {
       await setStaffActive.mutateAsync({ id: member.id, is_active });
       toast.success(is_active ? t("staffReactivated") : t("staffDeactivated"));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
+    } catch {
+      toast.error(t("bsSaveError"));
     } finally {
       setConfirmDeactivate(false);
     }
@@ -208,8 +208,8 @@ export default function ProviderStaffMember() {
       const newId = await createStaff.mutateAsync({ name });
       toast.success(t("staffSaved"));
       navigate(`/staff/${newId}`, { replace: true });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
+    } catch {
+      toast.error(t("bsSaveError"));
     }
   };
 

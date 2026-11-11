@@ -47,7 +47,7 @@ export function StaffModeBanner({ activeCount, staffLoading }: Props) {
         toast.error(t("staffEnableBlockedByFutureBookings"));
       } else {
         console.warn("staff_enabled toggle failed:", err);
-        toast.error(typeof e.message === "string" && e.message ? e.message : "Error");
+        toast.error(t("bsSaveError"));
       }
     }
   };

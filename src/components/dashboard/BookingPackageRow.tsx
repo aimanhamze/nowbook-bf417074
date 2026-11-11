@@ -13,6 +13,7 @@ import { useAssignablePackages } from "@/hooks/useCustomerPackages";
 import { usePackageActions, packageErrorKey } from "@/hooks/usePackageActions";
 import type { EnrichedBooking } from "@/hooks/useProviderBookings";
 import { toast } from "sonner";
+import { supabaseErrorMessage } from "@/lib/supabaseError";
 
 /** Sentinel for the "no package" option — Radix Select rejects an empty value. */
 const NO_PACKAGE = "__none__";
@@ -45,9 +46,10 @@ export function BookingPackageRow({ booking }: { booking: EnrichedBooking }) {
   if (!hasPackage && assignable.length === 0) return null;
 
   const showError = (err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
+    // supabase-js throws plain objects, not Errors (see lib/supabaseError).
+    const message = supabaseErrorMessage(err, "");
     const key = packageErrorKey(message);
-    toast.error(key ? t(key as never) : message);
+    toast.error(key ? t(key as never) : t("bsSaveError"));
   };
 
   // The currently-attached package is not necessarily in `assignable` — that

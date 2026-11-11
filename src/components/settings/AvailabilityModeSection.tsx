@@ -42,8 +42,8 @@ export function AvailabilityModeSection({ delay = 0 }: { delay?: number }) {
           try {
             await updateAvailabilityMode.mutateAsync(v as "weekly" | "monthly");
             toast.success(t("profileSaved"));
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Error");
+          } catch {
+            toast.error(t("bsSaveError"));
           }
         }}
         disabled={updateAvailabilityMode.isPending}
@@ -65,8 +65,8 @@ export function AvailabilityModeSection({ delay = 0 }: { delay?: number }) {
                 try {
                   await updateMonthlyDefaults.mutateAsync({ monthly_default_available: next });
                   toast.success(t("profileSaved"));
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Error");
+                } catch {
+                  toast.error(t("bsSaveError"));
                 }
               }}
               disabled={updateMonthlyDefaults.isPending}
@@ -91,8 +91,8 @@ export function AvailabilityModeSection({ delay = 0 }: { delay?: number }) {
                     try {
                       await updateMonthlyDefaults.mutateAsync({ monthly_default_start: e.target.value });
                       toast.success(t("profileSaved"));
-                    } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Error");
+                    } catch {
+                      toast.error(t("bsSaveError"));
                     }
                   }}
                 />
@@ -106,8 +106,8 @@ export function AvailabilityModeSection({ delay = 0 }: { delay?: number }) {
                     try {
                       await updateMonthlyDefaults.mutateAsync({ monthly_default_end: e.target.value });
                       toast.success(t("profileSaved"));
-                    } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Error");
+                    } catch {
+                      toast.error(t("bsSaveError"));
                     }
                   }}
                 />
