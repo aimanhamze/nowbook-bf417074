@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
-import { CustomerAutocomplete } from "@/components/dashboard/CustomerAutocomplete";
+import { CustomerPicker } from "@/components/dashboard/CustomerPicker";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
@@ -121,6 +121,10 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   // booking, never remembered per customer — the provider has to ask each time.
   const [whatsappConsent, setWhatsappConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Step 4's customer search is focused with the keyboard up: the header drops
+  // to a back control + short title and the footer steps aside, so the field
+  // and its results get the strip above the keyboard. Set by CustomerPicker.
+  const [compact, setCompact] = useState(false);
   // Recurring series. `repeatOpen` only shows/hides the options; the choice
   // itself is `repeatWeekly` + `repeatCount` (2–12, this appointment included).
   const [repeatOpen, setRepeatOpen] = useState(false);
@@ -192,6 +196,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 });
+    setCompact(false);
   }, [step]);
 
   const activeServices = services.filter((s) => s.is_active !== false);
@@ -555,10 +560,26 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
         {/* ── Header + step indicator (fixed; content below scrolls) ── */}
         <div className="shrink-0 px-5 pt-3">
           <SheetHeader className="text-start">
-            <SheetTitle className="text-lg">{t("newBookingSheetTitle")}<BranchSuffix /></SheetTitle>
-            <SheetDescription className="text-xs">{t("newBookingSheetDesc")}</SheetDescription>
+            <div className="flex items-center gap-1">
+              {compact && (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  aria-label={t("back")}
+                  className="-ms-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground/70 active:bg-foreground/[0.06]"
+                >
+                  <BackArrow className="h-5 w-5" />
+                </button>
+              )}
+              <SheetTitle className="text-lg">
+                {compact ? t("walkInCustomerInfo") : t("newBookingSheetTitle")}
+                <BranchSuffix />
+              </SheetTitle>
+            </div>
+            <SheetDescription className={cn("text-xs", compact && "sr-only")}>{t("newBookingSheetDesc")}</SheetDescription>
           </SheetHeader>
 
+          {!compact && (
           <div className="mt-4 mb-1">
             <div className="mb-2 flex gap-1.5">
               {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
@@ -578,6 +599,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
               </p>
             </div>
           </div>
+          )}
         </div>
 
         {/* ── Scrollable step body ── */}
@@ -974,7 +996,60 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                 transition={SPRING}
                 className="space-y-5"
               >
-                {/* Booking summary */}
+                {/* Customer, consent, notes — first, so the search sits at the top */}
+                <div className="space-y-3">
+                  {/* Customer: search → picked card, or name + phone for a new
+                      one. Same name/phone state, validation and payload. */}
+                  <CustomerPicker
+                    name={name}
+                    phone={phone}
+                    onNameChange={setName}
+                    onPhoneChange={setPhone}
+                    onSearchingChange={setCompact}
+                  />
+                  {whatsappConsentOffered && (
+                    <div className="space-y-1">
+                      {/* The whole row is the label, so the tap target is the
+                          full width at 44px min height, not the 20px box. A
+                          click on the box itself is not re-dispatched by the
+                          label (interactive descendant), so it toggles once.
+                          Never disabled: the provider may ask before typing
+                          the number, and an invalid one is reported below. */}
+                      <Label className="flex min-h-11 cursor-pointer items-center gap-3 py-2 text-sm font-normal leading-snug">
+                        <Checkbox
+                          checked={whatsappConsent}
+                          onCheckedChange={(v) => setWhatsappConsent(v === true)}
+                          aria-invalid={consentPhoneInvalid || undefined}
+                          aria-describedby={consentPhoneInvalid ? "walkin-whatsapp-consent-error" : undefined}
+                          className="h-5 w-5 rounded-[6px]"
+                        />
+                        <span className="flex-1 text-start">{t("walkInWhatsappConsent")}</span>
+                      </Label>
+                      {consentPhoneInvalid && (
+                        <p
+                          id="walkin-whatsapp-consent-error"
+                          aria-live="polite"
+                          className="ps-8 text-xs text-destructive"
+                        >
+                          {t("walkInWhatsappPhoneInvalid")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="walkin-notes" className="text-xs">
+                      {t("walkInNotes")}
+                    </Label>
+                    <Textarea
+                      id="walkin-notes"
+                      rows={2}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder={t("walkInNotesPlaceholder")}
+                    />
+                  </div>
+                </div>
+                {/* Booking summary (+ repeats) — after the customer, right above Create */}
                 <div className="space-y-2.5 rounded-2xl border border-border bg-muted/40 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-xs text-muted-foreground">{t("walkInService")}</span>
@@ -1146,90 +1221,15 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                   )}
                 </div>
 
-                {/* Fields */}
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="walkin-name" className="text-xs">
-                      {t("walkInCustomerName")} <span className="text-destructive">*</span>
-                    </Label>
-                    <CustomerAutocomplete
-                      id="walkin-name"
-                      value={name}
-                      onValueChange={setName}
-                      onSelectCustomer={(pickedName, pickedPhone) => {
-                        // Pre-fill BOTH text fields; they stay editable. This does
-                        // NOT link the booking to an account — walk-in stays a text
-                        // name/phone with user_id NULL on insert.
-                        setName(pickedName);
-                        setPhone(pickedPhone);
-                      }}
-                      placeholder={t("walkInCustomerNamePlaceholder")}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="walkin-phone" className="text-xs">
-                      {t("walkInCustomerPhone")} <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="walkin-phone"
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      dir="ltr"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder={t("walkInCustomerPhonePlaceholder")}
-                      className="h-12"
-                    />
-                  </div>
-                  {whatsappConsentOffered && (
-                    <div className="space-y-1">
-                      {/* The whole row is the label, so the tap target is the
-                          full width at 44px min height, not the 20px box. A
-                          click on the box itself is not re-dispatched by the
-                          label (interactive descendant), so it toggles once.
-                          Never disabled: the provider may ask before typing
-                          the number, and an invalid one is reported below. */}
-                      <Label className="flex min-h-11 cursor-pointer items-center gap-3 py-2 text-sm font-normal leading-snug">
-                        <Checkbox
-                          checked={whatsappConsent}
-                          onCheckedChange={(v) => setWhatsappConsent(v === true)}
-                          aria-invalid={consentPhoneInvalid || undefined}
-                          aria-describedby={consentPhoneInvalid ? "walkin-whatsapp-consent-error" : undefined}
-                          className="h-5 w-5 rounded-[6px]"
-                        />
-                        <span className="flex-1 text-start">{t("walkInWhatsappConsent")}</span>
-                      </Label>
-                      {consentPhoneInvalid && (
-                        <p
-                          id="walkin-whatsapp-consent-error"
-                          aria-live="polite"
-                          className="ps-8 text-xs text-destructive"
-                        >
-                          {t("walkInWhatsappPhoneInvalid")}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="walkin-notes" className="text-xs">
-                      {t("walkInNotes")}
-                    </Label>
-                    <Textarea
-                      id="walkin-notes"
-                      rows={2}
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder={t("walkInNotesPlaceholder")}
-                    />
-                  </div>
-                </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        {/* ── Sticky footer: Back / Continue or Create ── */}
+        {/* ── Sticky footer: Back / Continue or Create ──
+            Steps aside while the customer search is in compact mode (nothing
+            to create mid-search; the header keeps a back control). */}
+        {!compact && (
         <div className="shrink-0 border-t border-border bg-background/95 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] backdrop-blur-sm">
           <div className="flex items-center gap-3">
             {step > 1 && (
@@ -1273,6 +1273,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
             )}
           </div>
         </div>
+        )}
       </SheetContent>
     </Sheet>
 

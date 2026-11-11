@@ -1226,6 +1226,12 @@ export const translations = {
     reRejectError: "לא הצלחנו לדחות את התור. נסו שוב",
     rePasswordSame: "הסיסמה החדשה חייבת להיות שונה מהנוכחית",
     rePasswordWeak: "הסיסמה חלשה מדי. נסו סיסמה ארוכה יותר",
+    nbSearch: "חיפוש לפי שם או טלפון",
+    nbChange: "שינוי",
+    nbEditDetails: "עריכת פרטי הלקוח",
+    nbFindExisting: "חיפוש לקוח קיים",
+    nbNoMatches: "לא נמצא לקוח מתאים. אפשר להוסיף לקוח חדש.",
+    nbRecent: "לקוחות אחרונים",
   },
   ar: {
     appName: "Ehjezly",
@@ -2477,6 +2483,12 @@ export const translations = {
     reRejectError: "تعذّر رفض الموعد. حاول مرة أخرى",
     rePasswordSame: "يجب أن تختلف كلمة المرور الجديدة عن الحالية",
     rePasswordWeak: "كلمة المرور ضعيفة جدًا. جرّب كلمة أطول",
+    nbSearch: "البحث بالاسم أو الهاتف",
+    nbChange: "تغيير",
+    nbEditDetails: "تعديل بيانات العميل",
+    nbFindExisting: "البحث عن عميل حالي",
+    nbNoMatches: "لا يوجد عميل مطابق. يمكنك إضافة عميل جديد.",
+    nbRecent: "عملاء حديثون",
   },
   en: {
     appName: "Ehjezly",
@@ -3698,6 +3710,12 @@ export const translations = {
     reRejectError: "Couldn't decline the booking. Try again",
     rePasswordSame: "The new password must be different from the current one",
     rePasswordWeak: "That password is too weak. Try a longer one",
+    nbSearch: "Search by name or phone",
+    nbChange: "Change",
+    nbEditDetails: "Edit customer details",
+    nbFindExisting: "Find an existing customer",
+    nbNoMatches: "No matching customer. You can add a new one.",
+    nbRecent: "Recent customers",
   },
 } as const;
 
