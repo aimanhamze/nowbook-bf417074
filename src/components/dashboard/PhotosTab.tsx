@@ -1,213 +1,249 @@
 import { useRef, useState } from "react";
-import { Trash2, Upload, ChevronUp, ChevronDown, ImageIcon } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { ImageIcon, ImagePlus, Images, Loader2, Plus, Trash2 } from "lucide-react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderPhotos } from "@/hooks/useProviderPhotos";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { DangerRow, EditSheet, Field, SettingsGroup } from "./SettingsRows";
+import { GROUP_HEADING, LIST, ROW } from "./settingsList";
 
+// Touch-first: every action is a tap on a visible control (the old grid hid
+// delete and reorder behind :hover, which a phone never has). Tapping a photo
+// opens its sheet; moving and deleting use the same mutations as before
+// (reorderPhotos rewrites sort_order 0..n-1, deletePhoto removes the row), and
+// uploads insert into the active branch's provider_photos.
 export function PhotosTab() {
   const { t } = useLang();
   const { photos, isLoading, uploadPhoto, deletePhoto, reorderPhotos, maxPhotos } = useProviderPhotos();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [adding, setAdding] = useState(false);
   const [caption, setCaption] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const atMax = photos.length >= maxPhotos;
+  const index = selectedId ? photos.findIndex((p) => p.id === selectedId) : -1;
+  const selected = index >= 0 ? photos[index] : null;
+
+  const openAdd = () => {
+    if (atMax) {
+      toast.error(t("maxPhotos"));
+      return;
+    }
+    setCaption("");
+    setAdding(true);
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (photos.length >= maxPhotos) {
       toast.error(t("maxPhotos"));
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
     setUploading(true);
     try {
       await uploadPhoto.mutateAsync({ file, caption });
       setCaption("");
-      toast.success(t("addPhoto"));
-    } catch (err: any) {
-      if (err?.message === "MAX_PHOTOS") {
-        toast.error(t("maxPhotos"));
-      } else {
-        toast.error(t("coverImageUploadError"));
-      }
+      setAdding(false);
+      toast.success(t("phAdded"));
+    } catch (err) {
+      toast.error(err instanceof Error && err.message === "MAX_PHOTOS" ? t("maxPhotos") : t("coverImageUploadError"));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deletePhoto.mutateAsync(id);
-      setConfirmDeleteId(null);
-    } catch {
-      toast.error(t("coverImageUploadError"));
-    }
-  };
-
-  const move = async (index: number, direction: -1 | 1) => {
+  const move = async (direction: -1 | 1) => {
+    if (index < 0 || reorderPhotos.isPending) return;
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= photos.length) return;
-    const ids = photos.map(p => p.id);
+    const ids = photos.map((p) => p.id);
     const [moved] = ids.splice(index, 1);
     ids.splice(newIndex, 0, moved);
     try {
       await reorderPhotos.mutateAsync(ids);
     } catch {
-      toast.error(t("coverImageUploadError"));
+      toast.error(t("bsSaveError"));
     }
   };
 
-  const atMax = photos.length >= maxPhotos;
+  const handleDelete = async () => {
+    if (!selected || deletePhoto.isPending) return;
+    try {
+      await deletePhoto.mutateAsync(selected.id);
+      setConfirmDelete(false);
+      setSelectedId(null);
+      toast.success(t("phDeleted"));
+    } catch {
+      setConfirmDelete(false);
+      toast.error(t("svDeleteError"));
+    }
+  };
 
   return (
-    <div className="pb-8">
-      {/* Header + count */}
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-muted-foreground">
-          {photos.length}/{maxPhotos} {t("photos")}
-        </p>
-      </div>
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pb-6">
+      <h2 className="text-lg font-semibold">{t("photos")}</h2>
 
-      {/* Upload area */}
-      {!atMax && (
-        <div className="mb-6 p-4 rounded-2xl border border-dashed border-border bg-secondary/30 space-y-3">
-          <Input
-            placeholder={t("photoCaption")}
-            value={caption}
-            onChange={e => setCaption(e.target.value)}
-            disabled={uploading}
-            maxLength={120}
-          />
+      {isLoading ? (
+        <div className={cn(LIST, "grid grid-cols-3 gap-2 p-2")}>
+          {[1, 2, 3].map((i) => <div key={i} className="aspect-square animate-pulse rounded-2xl bg-foreground/[0.05]" />)}
+        </div>
+      ) : photos.length === 0 ? (
+        <section className={cn(LIST, "flex flex-col items-center px-6 py-10 text-center")}>
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+            <Images className="h-6 w-6" />
+          </span>
+          <p className="mt-3 font-semibold">{t("noPhotos")}</p>
+          <p className="mt-1 text-sm text-foreground/60">{t("phEmptyBody")}</p>
+          <Button onClick={openAdd} className="mt-5 h-11 gap-1.5 rounded-2xl px-5">
+            <Plus className="h-4 w-4" />
+            {t("phAddTitle")}
+          </Button>
+        </section>
+      ) : (
+        <section className="space-y-2">
+          <div className="flex items-end justify-between gap-3">
+            <h3 className={GROUP_HEADING}>
+              {t("phCount").replace("{n}", String(photos.length)).replace("{max}", String(maxPhotos))}
+            </h3>
+            {atMax && <p className="text-xs font-medium text-amber-700">{t("maxPhotos")}</p>}
+          </div>
+          <div className={cn(LIST, "grid grid-cols-3 gap-2 p-2 sm:grid-cols-4")}>
+            {!atMax && (
+              <button
+                type="button"
+                onClick={openAdd}
+                className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-accent/35 text-accent transition-colors active:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <ImagePlus className="h-6 w-6" />
+                <span className="px-1 text-xs font-semibold">{t("phAddTitle")}</span>
+              </button>
+            )}
+            {photos.map((photo, i) => (
+              <button
+                key={photo.id}
+                type="button"
+                onClick={() => setSelectedId(photo.id)}
+                aria-haspopup="dialog"
+                aria-label={`${t("phPosition").replace("{n}", String(i + 1)).replace("{total}", String(photos.length))}${photo.caption ? ` · ${photo.caption}` : ""}`}
+                className="relative aspect-square overflow-hidden rounded-2xl bg-foreground/[0.05] transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <img src={photo.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                {i === 0 && (
+                  <span className="absolute start-1.5 top-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white">1</span>
+                )}
+              </button>
+            ))}
+          </div>
+          <p className="px-1 text-xs leading-snug text-foreground/60">{t("phHint")}</p>
+        </section>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleFileChange}
+        aria-label={t("phChoose")}
+      />
+
+      {/* ── Add: optional caption, then pick the file (it uploads at once) ── */}
+      <EditSheet
+        open={adding}
+        onClose={() => setAdding(false)}
+        icon={ImagePlus}
+        title={t("phAddTitle")}
+        saving={uploading}
+        footer={
           <Button
-            type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="w-full gap-2"
-            variant="outline"
+            className="h-12 w-full gap-2 rounded-2xl text-base font-semibold"
           >
-            {uploading ? (
-              <>
-                <div className="h-4 w-4 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-                {t("uploadProgress")}
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4" />
-                {t("addPhoto")} +
-              </>
-            )}
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+            {uploading ? t("uploadProgress") : t("phChoose")}
           </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-        </div>
-      )}
+        }
+      >
+        <Field label={t("photoCaption")} htmlFor="ph-caption" help={t("phCaptionHelp")}>
+          <Input id="ph-caption" value={caption} maxLength={120} disabled={uploading}
+            onChange={(e) => setCaption(e.target.value)} className="h-12 rounded-xl" />
+        </Field>
+      </EditSheet>
 
-      {atMax && (
-        <p className="text-xs text-amber-500 mb-4">{t("maxPhotos")}</p>
-      )}
+      {/* ── One photo: preview, move, delete ─────────────────────────────── */}
+      <EditSheet
+        open={!!selected}
+        onClose={() => setSelectedId(null)}
+        icon={Images}
+        title={selected ? t("phPosition").replace("{n}", String(index + 1)).replace("{total}", String(photos.length)) : t("photos")}
+      >
+        {selected && (
+          <>
+            <div className="overflow-hidden rounded-2xl bg-foreground/[0.05]">
+              <img src={selected.url} alt="" className="mx-auto max-h-[38vh] w-full object-contain" />
+            </div>
+            {selected.caption && <p className="text-center text-sm text-foreground/70">{selected.caption}</p>}
+            <SettingsGroup plain>
+              <button type="button" onClick={() => void move(-1)} disabled={index === 0 || reorderPhotos.isPending}
+                className={cn(ROW, "disabled:opacity-40")}>
+                <BackArrow className="h-[18px] w-[18px] shrink-0 text-accent" />
+                <span className="flex-1 text-sm font-semibold">{t("phMoveEarlier")}</span>
+                {reorderPhotos.isPending && <Loader2 className="h-4 w-4 animate-spin text-foreground/40" />}
+              </button>
+              <button type="button" onClick={() => void move(1)} disabled={index === photos.length - 1 || reorderPhotos.isPending}
+                className={cn(ROW, "disabled:opacity-40")}>
+                <ForwardArrow className="h-[18px] w-[18px] shrink-0 text-accent" />
+                <span className="flex-1 text-sm font-semibold">{t("phMoveLater")}</span>
+              </button>
+            </SettingsGroup>
+            <SettingsGroup plain>
+              <DangerRow icon={Trash2} label={t("deletePhoto")} onClick={() => setConfirmDelete(true)} />
+            </SettingsGroup>
+          </>
+        )}
+      </EditSheet>
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="flex justify-center py-10">
-          <div className="w-6 h-6 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!isLoading && photos.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
-          <ImageIcon className="h-10 w-10 opacity-30" />
-          <p className="text-sm">{t("noPhotos")}</p>
-        </div>
-      )}
-
-      {/* Photo grid */}
-      {photos.length > 0 && (
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-          <AnimatePresence>
-            {photos.map((photo, i) => (
-              <motion.div
-                key={photo.id}
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.2 }}
-                className="relative group rounded-xl overflow-hidden bg-secondary aspect-square"
-              >
-                <img
-                  src={photo.url}
-                  alt={photo.caption ?? ""}
-                  className="w-full h-full object-cover"
-                />
-                {photo.caption && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-1">
-                    <p className="text-white text-[10px] truncate">{photo.caption}</p>
-                  </div>
-                )}
-
-                {/* Reorder buttons */}
-                <div className="absolute top-1 left-1 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => move(i, -1)}
-                    disabled={i === 0 || reorderPhotos.isPending}
-                    className="p-0.5 rounded bg-black/60 text-white disabled:opacity-30"
-                    aria-label="Move up"
-                  >
-                    <ChevronUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => move(i, 1)}
-                    disabled={i === photos.length - 1 || reorderPhotos.isPending}
-                    className="p-0.5 rounded bg-black/60 text-white disabled:opacity-30"
-                    aria-label="Move down"
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
-                </div>
-
-                {/* Delete button */}
-                {confirmDeleteId === photo.id ? (
-                  <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-1 p-2">
-                    <p className="text-white text-[10px] text-center">{t("deleteConfirm")}</p>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => handleDelete(photo.id)}
-                        className="px-2 py-0.5 rounded bg-destructive text-white text-[10px]"
-                      >
-                        {t("deletePhoto")}
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="px-2 py-0.5 rounded bg-secondary text-foreground text-[10px]"
-                      >
-                        {t("cancel")}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setConfirmDeleteId(photo.id)}
-                    className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                    aria-label={t("deletePhoto")}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                )}
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      )}
-    </div>
+      <AlertDialog open={confirmDelete} onOpenChange={(o) => { if (!o && !deletePhoto.isPending) setConfirmDelete(false); }}>
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("phDeleteTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("phDeleteBody")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:space-x-0">
+            <AlertDialogCancel className="mt-0 h-11 rounded-2xl">{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="h-11 rounded-2xl bg-red-600 text-white hover:bg-red-700"
+              disabled={deletePhoto.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDelete();
+              }}
+            >
+              {t("deletePhoto")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </motion.div>
   );
 }
