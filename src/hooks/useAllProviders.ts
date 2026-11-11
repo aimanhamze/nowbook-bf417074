@@ -23,6 +23,12 @@ import { usePublicStaffHours } from "./useProviderStaffHours";
 import { usePublicStaffTimeOff } from "./useProviderStaffTimeOff";
 import { availabilityWindow } from "@/lib/availabilityWindow";
 import { fetchByDateWindow, PAGE_SIZE } from "@/lib/fetchAll";
+import {
+  fetchAllProvidersBlockedDates,
+  fetchPublicBlockedDates,
+  fetchPublicDateOverrides,
+  scheduleFromDate,
+} from "@/lib/scheduleFetch";
 
 export interface DbProvider {
   id: string;
@@ -202,16 +208,13 @@ export function usePublicProviderSchedule(providerId: string | undefined) {
     enabled: !!providerId,
   });
 
+  // Same key AND same fetcher as useRealAvailability (they share one cache entry):
+  // from yesterday onward, paged — see lib/scheduleFetch for why.
   const blockedDatesQuery = useQuery({
     queryKey: ["provider-blocked-dates-public", providerId],
     queryFn: async () => {
       if (!providerId) return [];
-      const { data, error } = await supabase
-        .from("provider_blocked_dates")
-        .select("blocked_date")
-        .eq("provider_id", providerId);
-      if (error) throw error;
-      return (data || []).map(d => d.blocked_date);
+      return fetchPublicBlockedDates(providerId, scheduleFromDate());
     },
     enabled: !!providerId,
   });
@@ -238,17 +241,13 @@ export function usePublicProviderSchedule(providerId: string | undefined) {
     enabled: !!providerId,
   });
 
+  // Same key AND same fetcher as useRealAvailability: from yesterday onward, paged.
   const overridesQuery = useQuery({
     queryKey: ["provider-date-overrides", providerId],
     retry: false,
     queryFn: async () => {
       if (!providerId) return [];
-      const { data, error } = await supabase
-        .from("provider_date_overrides" as any)
-        .select("override_date, is_available, start_time, end_time, break_start, break_end")
-        .eq("provider_id", providerId);
-      if (error) throw error;
-      return (data || []) as unknown as DateOverrideRow[];
+      return fetchPublicDateOverrides(providerId, scheduleFromDate());
     },
     enabled: !!providerId,
   });
@@ -296,18 +295,15 @@ export function useAllProviderSchedules() {
     },
   });
 
+  // Every provider's rows in ONE query — the read most likely to pass the
+  // 1000-row cap, so it is paged. The lower bound moves from today's UTC date to
+  // the shared local "yesterday": for the pill (which only reads today) that is
+  // a superset, never a loss — the old UTC bound already reached back a day
+  // around Israeli midnight.
   const blockedDatesQuery = useQuery({
     queryKey: ["all-provider-blocked-dates"],
     staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data, error } = await supabase
-        .from("provider_blocked_dates")
-        .select("provider_id, blocked_date")
-        .gte("blocked_date", today);
-      if (error) throw error;
-      return data || [];
-    },
+    queryFn: () => fetchAllProvidersBlockedDates(scheduleFromDate()),
   });
 
   const schedulesByProviderId = useMemo(() => {
@@ -385,16 +381,14 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     enabled: !!providerId,
   });
 
+  // Same key AND same fetcher as usePublicProviderSchedule (one shared cache
+  // entry): from yesterday onward, paged. Every flow on this hook starts its
+  // calendar at today — see lib/scheduleFetch.
   const blockedDatesQuery = useQuery({
     queryKey: ["provider-blocked-dates-public", providerId],
     queryFn: async () => {
       if (!providerId) return [];
-      const { data, error } = await supabase
-        .from("provider_blocked_dates")
-        .select("blocked_date")
-        .eq("provider_id", providerId);
-      if (error) throw error;
-      return (data || []).map(d => d.blocked_date);
+      return fetchPublicBlockedDates(providerId, scheduleFromDate());
     },
     enabled: !!providerId,
   });
@@ -542,18 +536,13 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
 
   // Per-date overrides for monthly mode (mirrors blockedDatesQuery). Only
   // consulted when availability_mode==='monthly'; irrelevant to weekly providers.
+  // Same key AND same fetcher as usePublicProviderSchedule: from yesterday onward, paged.
   const overridesQuery = useQuery({
     queryKey: ["provider-date-overrides", providerId],
     retry: false,
     queryFn: async () => {
       if (!providerId) return [];
-      // Table not in generated types.ts until regen — cast the ref (convention here).
-      const { data, error } = await supabase
-        .from("provider_date_overrides" as any)
-        .select("override_date, is_available, start_time, end_time, break_start, break_end")
-        .eq("provider_id", providerId);
-      if (error) throw error;
-      return (data || []) as unknown as DateOverrideRow[];
+      return fetchPublicDateOverrides(providerId, scheduleFromDate());
     },
     enabled: !!providerId,
   });

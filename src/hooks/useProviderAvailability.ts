@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
+import { fetchOwnBlockedDates, fetchOwnDateOverrides } from "@/lib/scheduleFetch";
 
 // `enabled` gates every query here, mirroring useProviderServices(enabled) and
 // useProviderStaffServices(enabled). It DEFAULTS TO TRUE, so all four existing
@@ -62,17 +63,13 @@ export function useProviderAvailability(enabled = true) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["provider-availability"] }),
   });
 
+  // ALL of the provider's own rows, past included (the calendar's out-of-hours
+  // badge reads past days), paged past the 1000-row cap — see lib/scheduleFetch.
   const blockedDatesQuery = useQuery({
     queryKey: ["provider-blocked-dates", profile?.id],
     queryFn: async () => {
       if (!profile) return [];
-      const { data, error } = await supabase
-        .from("provider_blocked_dates")
-        .select("*")
-        .eq("provider_id", profile.id)
-        .order("blocked_date");
-      if (error) throw error;
-      return data || [];
+      return fetchOwnBlockedDates(profile.id);
     },
     enabled: !!profile && enabled,
   });
@@ -116,15 +113,10 @@ export function useProviderAvailability(enabled = true) {
   // updates live the moment a provider edits a day.
   const dateOverridesQuery = useQuery({
     queryKey: ["provider-date-overrides-manage", profile?.id],
+    // All rows, past included, paged past the 1000-row cap (lib/scheduleFetch).
     queryFn: async () => {
       if (!profile) return [];
-      const { data, error } = await supabase
-        .from("provider_date_overrides")
-        .select("*")
-        .eq("provider_id", profile.id)
-        .order("override_date");
-      if (error) throw error;
-      return data || [];
+      return fetchOwnDateOverrides(profile.id);
     },
     enabled: !!profile && enabled,
   });
