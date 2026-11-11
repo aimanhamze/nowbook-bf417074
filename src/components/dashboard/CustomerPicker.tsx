@@ -8,32 +8,6 @@ import { useLang } from "@/contexts/LangContext";
 import { useProviderCustomers, type ProviderCustomer } from "@/hooks/useProviderCustomers";
 import { looksLikePhone, rankCustomers, recentCustomers } from "@/lib/customerSearch";
 
-/**
- * The on-screen keyboard is up: the visual viewport is clearly shorter than
- * the tallest it has been while this step was open. Works on Android (layout
- * resizes) and iOS (it doesn't). Lets the sheet leave compact mode when the
- * keyboard is dismissed with Android's back button, which keeps focus in the
- * field. Without VisualViewport it reports true, so focus alone decides.
- */
-function useKeyboardUp(): boolean {
-  const [up, setUp] = useState(false);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) {
-      setUp(true);
-      return;
-    }
-    let tallest = vv.height;
-    const onResize = () => {
-      tallest = Math.max(tallest, vv.height);
-      setUp(vv.height < tallest - 120);
-    };
-    vv.addEventListener("resize", onResize);
-    return () => vv.removeEventListener("resize", onResize);
-  }, []);
-  return up;
-}
-
 type Mode = "search" | "picked" | "fields";
 
 interface Props {
@@ -41,8 +15,6 @@ interface Props {
   phone: string;
   onNameChange: (name: string) => void;
   onPhoneChange: (phone: string) => void;
-  /** The search field is focused with the keyboard up — the sheet goes compact. */
-  onSearchingChange: (searching: boolean) => void;
 }
 
 /**
@@ -54,7 +26,9 @@ interface Props {
  * links the booking to an account (walk-ins stay user_id NULL; the phone is
  * stored as given and link_walkin_to_account matches it server-side).
  */
-export function CustomerPicker({ name, phone, onNameChange, onPhoneChange, onSearchingChange }: Props) {
+// Compact mode (header + footer stepping aside while typing) is decided by
+// the sheet for every text field in step 4, not here.
+export function CustomerPicker({ name, phone, onNameChange, onPhoneChange }: Props) {
   const { t } = useLang();
   const { data: customers = [], isLoading } = useProviderCustomers();
 
@@ -62,8 +36,6 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange, onSea
     name.trim() && phone.trim() ? "picked" : name.trim() || phone.trim() ? "fields" : "search",
   );
   const [query, setQuery] = useState("");
-  const [focused, setFocused] = useState(false);
-  const keyboardUp = useKeyboardUp();
   const searchRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
@@ -74,11 +46,6 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange, onSea
     if (mode === "search" && !isLoading && customers.length === 0) setMode("fields");
   }, [mode, isLoading, customers.length]);
 
-  const searching = mode === "search" && focused && keyboardUp;
-  useEffect(() => {
-    onSearchingChange(searching);
-  }, [searching, onSearchingChange]);
-  useEffect(() => () => onSearchingChange(false), [onSearchingChange]);
 
   // "New customer" was tapped: focus the field it prefilled the other one of.
   useEffect(() => {
@@ -99,7 +66,6 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange, onSea
     onNameChange(pickedName);
     onPhoneChange(pickedPhone);
     searchRef.current?.blur();
-    setFocused(false);
     // Missing half a record (a phone-only walk-in, say): open the fields so
     // the provider can complete it, instead of a card Create would reject.
     setMode(pickedName && pickedPhone ? "picked" : "fields");
@@ -119,7 +85,6 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange, onSea
       focusNext.current = "name";
     }
     searchRef.current?.blur();
-    setFocused(false);
     setMode("fields");
   };
 
@@ -168,6 +133,14 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange, onSea
             ref={nameRef}
             id="walkin-name"
             autoComplete="off"
+            // Keyboard action key: Next → the phone field (DOM order, so the
+            // same in he/ar/en).
+            enterKeyHint="next"
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+              e.preventDefault();
+              phoneRef.current?.focus();
+            }}
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
             placeholder={t("walkInCustomerNamePlaceholder")}
@@ -181,6 +154,13 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange, onSea
           <Input
             ref={phoneRef}
             id="walkin-phone"
+            // Done → closes the keyboard (drops focus), bringing the footer back.
+            enterKeyHint="done"
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+              e.preventDefault();
+              e.currentTarget.blur();
+            }}
             type="tel"
             inputMode="tel"
             autoComplete="tel"
@@ -219,8 +199,6 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange, onSea
             autoComplete="off"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
             placeholder={t("nbSearch")}
             className="h-12 appearance-none rounded-xl pe-11 ps-11 text-base [&::-webkit-search-cancel-button]:hidden"
           />

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 /**
  * Is the on-screen keyboard (probably) open?
@@ -65,4 +65,35 @@ function subscribe(listener: () => void) {
 
 export function useKeyboardOpen(): boolean {
   return useSyncExternalStore(subscribe, () => open, () => false);
+}
+
+/**
+ * The on-screen keyboard is up, MEASURED: the visual viewport is clearly
+ * shorter than the tallest it has been since `enabled` turned on. Works on
+ * Android (the layout resizes) and iOS (it doesn't), and turns false again
+ * when the keyboard is dismissed with Android's back button, which keeps
+ * focus in the field. Without VisualViewport it reports true, so focus alone
+ * decides.
+ */
+export function useVisualKeyboardUp(enabled = true): boolean {
+  const [up, setUp] = useState(false);
+  useEffect(() => {
+    if (!enabled) {
+      setUp(false);
+      return;
+    }
+    const vv = window.visualViewport;
+    if (!vv) {
+      setUp(true);
+      return;
+    }
+    let tallest = vv.height;
+    const onResize = () => {
+      tallest = Math.max(tallest, vv.height);
+      setUp(vv.height < tallest - 120);
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, [enabled]);
+  return up;
 }

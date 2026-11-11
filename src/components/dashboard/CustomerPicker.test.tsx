@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { useState } from "react";
 import type { ProviderCustomer } from "@/hooks/useProviderCustomers";
 
@@ -19,6 +19,7 @@ vi.mock("@/contexts/LangContext", () => ({ useLang: () => ({ t: (k: string) => k
 
 const { CustomerPicker } = await import("./CustomerPicker");
 const { rankCustomers } = await import("@/lib/customerSearch");
+const { useVisualKeyboardUp } = await import("@/hooks/useKeyboardOpen");
 
 const c = (key: string, name: string | null, phone: string | null, bookingCount = 1, lastVisit = "2026-10-01"): ProviderCustomer =>
   ({ key, name, phone, bookingCount, lastVisit, registered: false });
@@ -36,12 +37,12 @@ beforeEach(() => {
   Object.defineProperty(window, "visualViewport", { configurable: true, value: vv });
 });
 
-function Harness({ onSearching = vi.fn() }: { onSearching?: (v: boolean) => void }) {
+function Harness() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   return (
     <>
-      <CustomerPicker name={name} phone={phone} onNameChange={setName} onPhoneChange={setPhone} onSearchingChange={onSearching} />
+      <CustomerPicker name={name} phone={phone} onNameChange={setName} onPhoneChange={setPhone} />
       <output data-testid="state">{JSON.stringify({ name, phone })}</output>
     </>
   );
@@ -90,17 +91,29 @@ describe("CustomerPicker", () => {
     expect(screen.getByLabelText(/walkInCustomerName/)).toBeInTheDocument();
   });
 
-  it("compact only while the search is focused AND the keyboard is up", () => {
-    const onSearching = vi.fn();
-    render(<Harness onSearching={onSearching} />);
-    const input = screen.getByLabelText("nbSearch");
-    act(() => input.focus());
-    expect(onSearching).toHaveBeenLastCalledWith(false);
+  it("keyboard keys: name Next → phone, phone Done → keyboard closes", () => {
+    customers = [];
+    render(<Harness />);
+    const nameInput = screen.getByLabelText(/walkInCustomerName/);
+    const phoneInput = screen.getByLabelText(/walkInCustomerPhone/);
+    expect(nameInput).toHaveAttribute("enterkeyhint", "next");
+    expect(phoneInput).toHaveAttribute("enterkeyhint", "done");
+    act(() => nameInput.focus());
+    fireEvent.keyDown(nameInput, { key: "Enter" });
+    expect(phoneInput).toHaveFocus();
+    fireEvent.keyDown(phoneInput, { key: "Enter" });
+    expect(phoneInput).not.toHaveFocus();
+  });
+});
+
+describe("useVisualKeyboardUp", () => {
+  it("true while the viewport is shrunk by the keyboard, false once it closes (Android back keeps focus)", () => {
+    const { result } = renderHook(() => useVisualKeyboardUp(true));
+    expect(result.current).toBe(false);
     act(() => { vv.height = 420; vv.dispatchEvent(new Event("resize")); });
-    expect(onSearching).toHaveBeenLastCalledWith(true);
-    // Android back button: keyboard closes, focus stays
+    expect(result.current).toBe(true);
     act(() => { vv.height = 800; vv.dispatchEvent(new Event("resize")); });
-    expect(onSearching).toHaveBeenLastCalledWith(false);
+    expect(result.current).toBe(false);
   });
 });
 

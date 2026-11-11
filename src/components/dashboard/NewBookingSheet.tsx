@@ -30,6 +30,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
 import { CustomerPicker } from "@/components/dashboard/CustomerPicker";
+import { isTextEntry, useVisualKeyboardUp } from "@/hooks/useKeyboardOpen";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
@@ -121,10 +122,9 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   // booking, never remembered per customer — the provider has to ask each time.
   const [whatsappConsent, setWhatsappConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  // Step 4's customer search is focused with the keyboard up: the header drops
-  // to a back control + short title and the footer steps aside, so the field
-  // and its results get the strip above the keyboard. Set by CustomerPicker.
-  const [compact, setCompact] = useState(false);
+  // A text field in step 4 (search, name, phone, notes) has focus. Together
+  // with the measured keyboard below this drives compact mode.
+  const [fieldFocused, setFieldFocused] = useState(false);
   // Recurring series. `repeatOpen` only shows/hides the options; the choice
   // itself is `repeatWeekly` + `repeatCount` (2–12, this appointment included).
   const [repeatOpen, setRepeatOpen] = useState(false);
@@ -196,7 +196,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 });
-    setCompact(false);
+    setFieldFocused(false);
   }, [step]);
 
   const activeServices = services.filter((s) => s.is_active !== false);
@@ -218,6 +218,15 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const timeStep = staffStepEnabled ? 4 : 3;
   const infoStep = staffStepEnabled ? 5 : 4;
   const totalSteps = staffStepEnabled ? 5 : 4;
+
+  // Compact mode, step 4 only: while ANY text field there is focused and the
+  // keyboard is actually up, the header drops to a back control + short title
+  // and the footer (Back / Create) steps aside, so the fields get the strip
+  // above the keyboard. It all returns when the keyboard closes — also via
+  // Android's back button, which keeps focus (hence the measured keyboard,
+  // not focus alone). Other sheets keep their Save above the keyboard.
+  const keyboardUp = useVisualKeyboardUp(open && step === infoStep);
+  const compact = step === infoStep && fieldFocused && keyboardUp;
 
   const privateSlots = service && !isGroup ? getAvailableSlots(date, duration, service.max_capacity ?? 1, service.id) : [];
   const groupSlots = service && isGroup
@@ -603,7 +612,20 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
         </div>
 
         {/* ── Scrollable step body ── */}
-        <div ref={bodyRef} className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5 pt-4">
+        <div
+          ref={bodyRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5 pt-4"
+          onFocusCapture={(e) => {
+            if (step === infoStep && isTextEntry(e.target)) setFieldFocused(true);
+          }}
+          // Re-read once focus has landed, so name → phone (Next) doesn't flicker.
+          onBlurCapture={() => {
+            setTimeout(() => {
+              const el = document.activeElement;
+              setFieldFocused(!!bodyRef.current && isTextEntry(el) && bodyRef.current.contains(el));
+            }, 0);
+          }}
+        >
           <AnimatePresence mode="wait">
             {/* ── STEP 1: Service ── */}
             {step === 1 && (
@@ -1005,7 +1027,6 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                     phone={phone}
                     onNameChange={setName}
                     onPhoneChange={setPhone}
-                    onSearchingChange={setCompact}
                   />
                   {whatsappConsentOffered && (
                     <div className="space-y-1">
@@ -1042,6 +1063,14 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                     </Label>
                     <Textarea
                       id="walkin-notes"
+                      // Done closes the keyboard (Shift+Enter still adds a line
+                      // on a hardware keyboard), bringing the footer back.
+                      enterKeyHint="done"
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      }}
                       rows={2}
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
@@ -1227,8 +1256,8 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
         </div>
 
         {/* ── Sticky footer: Back / Continue or Create ──
-            Steps aside while the customer search is in compact mode (nothing
-            to create mid-search; the header keeps a back control). */}
+            Steps aside in compact mode (keyboard up in step 4); the header
+            keeps a back control. Returns when the keyboard closes. */}
         {!compact && (
         <div className="shrink-0 border-t border-border bg-background/95 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] backdrop-blur-sm">
           <div className="flex items-center gap-3">
