@@ -1,4 +1,4 @@
-import { Calendar, CalendarClock, Clock, Star, XCircle, CalendarPlus, History, Info, UserRound } from "lucide-react";
+import { Calendar, CalendarClock, Clock, Star, XCircle, CalendarPlus, History, Info, UserRound, Repeat } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useLang } from "@/contexts/LangContext";
@@ -420,6 +420,14 @@ function BookingCard({ booking, index, variant, isNext, isLinkedWalkin, getProvi
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/70">
                 <Clock className="h-3.5 w-3.5 text-accent" />
                 <span dir="ltr" className="tabular-nums">{booking.booking_time}</span>
+                {/* Part of a recurring series the business set up. series_id
+                    is not in the generated types until regenerated. */}
+                {(booking as typeof booking & { series_id?: string | null }).series_id && (
+                  <span className="inline-flex items-center" title={t("seriesBadge")}>
+                    <Repeat className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
+                    <span className="sr-only">{t("seriesBadge")}</span>
+                  </span>
+                )}
               </span>
               {showPrices && booking.total_price > 0 ? (
                 <span className="text-sm font-bold">₪{booking.total_price}</span>

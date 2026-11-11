@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { format, addDays, startOfDay, endOfMonth, startOfMonth, eachDayOfInterval } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { Plus, Clock, Users, CalendarDays, Check, CalendarX, UserRound, Pencil, Info, MoonStar } from "lucide-react";
+import { Plus, Clock, Users, CalendarDays, Check, CalendarX, UserRound, Pencil, Info, MoonStar, Repeat, Minus, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sheet,
@@ -48,6 +48,8 @@ import type { TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { BranchSuffix } from "@/components/branch/BranchSuffix";
+import { canOfferRepeat, SERIES_MAX_COUNT, SERIES_MIN_COUNT, type SeriesDateStatus } from "@/lib/recurringSeries";
+import { useCreateRecurringSeries, useSeriesPreview } from "@/hooks/useRecurringSeries";
 
 // Same expressive easing the customer BookAppointment flow uses for its step
 // slides — keeps the walk-in wizard feeling identical to the customer one.
@@ -84,7 +86,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   // tab). Resolving it once here keeps availability, the continue gate, the
   // summary and the insert all reading the same staff id.
   const effectiveStaffId = staffId && eligibleStaff.some((s) => s.id === staffId) ? staffId : "";
-  const { getAvailableSlots, getGroupSlotsWithCapacity } = useRealAvailability(profile?.id, effectiveStaffId || undefined);
+  const { getAvailableSlots, getGroupSlotsWithCapacity, resolveDayWindows } = useRealAvailability(profile?.id, effectiveStaffId || undefined);
   // Resolved hours for the OVERRIDE path. The slot pipeline above answers "are
   // there bookable slots?"; it cannot answer "why not?", because a closed day
   // and a fully-booked one both arrive here as the same empty array. So the
@@ -119,6 +121,12 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   // booking, never remembered per customer — the provider has to ask each time.
   const [whatsappConsent, setWhatsappConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Recurring series. `repeatOpen` only shows/hides the options; the choice
+  // itself is `repeatWeekly` + `repeatCount` (2–12, this appointment included).
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const [repeatWeekly, setRepeatWeekly] = useState(false);
+  const [repeatCount, setRepeatCount] = useState(4);
+  const createSeries = useCreateRecurringSeries();
   // Manual ("שעה אחרת…") time entry on the time step. `manualTime` holds the
   // RAW input value; `time` only ever receives the normalised form.
   const [manualOpen, setManualOpen] = useState(false);
@@ -156,6 +164,9 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     setPhone("");
     setNotes("");
     setWhatsappConsent(false);
+    setRepeatOpen(false);
+    setRepeatWeekly(false);
+    setRepeatCount(4);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -290,12 +301,47 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const consentPhoneInvalid =
     consentActive && phone.trim().length > 0 && !isWhatsAppMobile(phone);
 
+  // ── Recurring series ───────────────────────────────────────────────────────
+  // Ruling 3: offered only for a private service, at a time picked FROM THE
+  // SLOT LIST, on an open day. A manual time leaves `manualTime` non-empty (a
+  // chip tap clears it), so that — not `manualOpen`, which stays open after a
+  // chip is tapped — is what marks a manual pick.
+  const repeatOffered =
+    !!service &&
+    !!time &&
+    canOfferRepeat({
+      serviceType: service.service_type,
+      providerCategory: profile?.category,
+      manualTime: manualTime !== "",
+      dayOverridden: selectedDayOverridable,
+      timeInSlotList: privateSlots.includes(time),
+    });
+  const seriesActive = repeatOffered && repeatWeekly;
+  const series = useSeriesPreview({
+    enabled: seriesActive,
+    providerId: profile?.id,
+    // The same lane the sheet's own useRealAvailability instance runs in.
+    staffId: effectiveStaffId || undefined,
+    serviceId: service?.id,
+    duration,
+    capacity: service?.max_capacity ?? 1,
+    time,
+    firstDate: date,
+    count: repeatCount,
+    getAvailableSlots,
+    resolveDayWindows,
+  });
+  const seriesAvailable = series.availableKeys.length;
+  const seriesSkipped = series.preview.length - seriesAvailable;
+  const seriesReady = seriesActive && !series.isLoading && !series.isError && series.preview.length > 0;
+
   const canSubmit =
     !!service &&
     !!time &&
     name.trim().length > 0 &&
     phone.trim().length > 0 &&
     !(consentActive && !isWhatsAppMobile(phone)) &&
+    !(seriesActive && (!seriesReady || seriesAvailable === 0)) &&
     !submitting;
 
   // Per-step gate: service → [staff] → day → time → (name + phone handled by
@@ -346,6 +392,11 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     if (!phone.trim()) { toast.error(t("walkInPhoneRequired")); return; }
     if (consentActive && !isWhatsAppMobile(phone)) { toast.error(t("walkInWhatsappPhoneInvalid")); return; }
     if (!time) return;
+
+    if (seriesActive) {
+      await handleCreateSeries();
+      return;
+    }
 
     setSubmitting(true);
     const payload: TablesInsert<"bookings"> = {
@@ -405,6 +456,76 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     toast.success(t("walkInCreated"));
     setOpen(false);
   };
+
+  // The series path. Every date in it is a normal walk-in with the same
+  // fields as the one-off insert above; the RPC skips any date taken since the
+  // preview and reports it. ONE WhatsApp confirmation, for the first booking
+  // actually created, under the same consent rule — the reminder cron covers
+  // every booking in the series on its own.
+  const handleCreateSeries = async () => {
+    if (!profile || !service || !seriesReady || seriesAvailable === 0) return;
+    setSubmitting(true);
+    let result: Awaited<ReturnType<typeof createSeries.mutateAsync>>;
+    try {
+      result = await createSeries.mutateAsync({
+        providerId: profile.id,
+        serviceId: service.id,
+        staffId: staffStepEnabled && effectiveStaffId ? effectiveStaffId : null,
+        time,
+        dates: series.availableKeys,
+        requestedCount: repeatCount,
+        customerName: name.trim(),
+        customerPhone: phone.trim(),
+        guestNotes: notes.trim() || null,
+        whatsappConsent: consentActive,
+      });
+    } catch {
+      setSubmitting(false);
+      toast.error(t("seriesFailed"));
+      return;
+    }
+    setSubmitting(false);
+
+    if (result.code === "ALL_TAKEN") {
+      // Stay open: the preview refetches and shows what changed.
+      toast.error(t("seriesAllTaken"));
+      return;
+    }
+    if (result.code !== "OK") {
+      toast.error(t("seriesFailed"));
+      return;
+    }
+
+    if (consentActive && result.firstBookingId) {
+      notifyBookingConfirmed(result.firstBookingId);
+    }
+    const n = result.createdDates.length;
+    const m = result.skippedDates.length;
+    if (m === 0) {
+      toast.success(n === 1 ? t("seriesCreatedOne") : t("seriesCreated").replace("{n}", String(n)));
+    } else {
+      const title = (n === 1 ? t("seriesCreatedSkippedOne") : t("seriesCreatedSkipped"))
+        .replace("{n}", String(n))
+        .replace("{m}", String(m));
+      const dates = result.skippedDates
+        .map((key) => {
+          const [y, mo, d] = key.split("-").map(Number);
+          return format(new Date(y, mo - 1, d), "d/M");
+        })
+        .join(", ");
+      toast.success(title, { description: t("seriesSkippedDates").replace("{dates}", dates) });
+    }
+    setOpen(false);
+  };
+
+  const seriesStatusLabel = (status: SeriesDateStatus): string =>
+    status === "available"
+      ? t("seriesStatusAvailable")
+      : status === "taken"
+        ? t("seriesStatusTaken")
+        : status === "staffOff"
+          ? t("seriesStatusStaffOff").replace("{name}", selectedStaff?.name ?? "")
+          : t("seriesStatusClosed");
 
   const stepLabels = [
     t("selectServices"),
@@ -876,6 +997,147 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                       <span dir="ltr" className="tabular-nums">{time}</span>
                     </span>
                   </div>
+
+                  {/* ── Repeats (recurring series) ──
+                      Only for a slot-list time on an open day (ruling 3). The
+                      row is a disclosure: it opens the options below it; the
+                      choice itself lives in the options. */}
+                  {repeatOffered && (
+                    <div className="-mx-1">
+                      <button
+                        type="button"
+                        onClick={() => setRepeatOpen((o) => !o)}
+                        aria-expanded={repeatOpen}
+                        aria-controls="walkin-repeat-panel"
+                        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-1 text-start transition-colors active:bg-muted/60"
+                      >
+                        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                          <Repeat className="h-3.5 w-3.5" />
+                          {t("seriesRepeatLabel")}
+                        </span>
+                        <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+                          <span className={cn("truncate", seriesActive && "text-accent")}>
+                            {seriesActive
+                              ? t("seriesRepeatWeeklyValue").replace("{n}", String(repeatCount))
+                              : t("seriesRepeatNo")}
+                          </span>
+                          <ChevronDown
+                            className={cn(
+                              "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                              repeatOpen && "rotate-180",
+                            )}
+                          />
+                        </span>
+                      </button>
+
+                      {repeatOpen && (
+                        <div id="walkin-repeat-panel" className="space-y-3 px-1 pb-1 pt-2">
+                          {/* None / weekly */}
+                          <div role="radiogroup" aria-label={t("seriesRepeatLabel")} className="grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1">
+                            {[
+                              { on: false, label: t("seriesOptionNone") },
+                              { on: true, label: t("seriesOptionWeekly") },
+                            ].map((opt) => {
+                              const selected = repeatWeekly === opt.on;
+                              return (
+                                <button
+                                  key={String(opt.on)}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={selected}
+                                  onClick={() => setRepeatWeekly(opt.on)}
+                                  className={cn(
+                                    "min-h-11 rounded-lg px-2 text-sm font-semibold transition-colors",
+                                    selected ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
+                                  )}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {repeatWeekly && (
+                            <>
+                              {/* Count, 2–12, this appointment included */}
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="min-w-0 text-xs text-muted-foreground">{t("seriesCountLabel")}</span>
+                                <div className="flex shrink-0 items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setRepeatCount((c) => Math.max(SERIES_MIN_COUNT, c - 1))}
+                                    disabled={repeatCount <= SERIES_MIN_COUNT}
+                                    aria-label={t("seriesCountFewer")}
+                                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card transition-transform active:scale-95 disabled:opacity-40"
+                                  >
+                                    <Minus className="h-4 w-4" />
+                                  </button>
+                                  <span className="w-8 text-center text-base font-bold tabular-nums" aria-live="polite">
+                                    {repeatCount}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRepeatCount((c) => Math.min(SERIES_MAX_COUNT, c + 1))}
+                                    disabled={repeatCount >= SERIES_MAX_COUNT}
+                                    aria-label={t("seriesCountMore")}
+                                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card transition-transform active:scale-95 disabled:opacity-40"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Every date, with its status, BEFORE saving */}
+                              {series.isError ? (
+                                <p className="text-xs text-destructive">{t("seriesLoadError")}</p>
+                              ) : !seriesReady ? (
+                                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+                                  {t("seriesLoading")}
+                                </p>
+                              ) : (
+                                <>
+                                  <ul className="divide-y divide-border/60 rounded-xl border border-border bg-card">
+                                    {series.preview.map((p) => {
+                                      const ok = p.status === "available";
+                                      return (
+                                        <li key={p.key} className="flex min-h-10 items-center justify-between gap-3 px-3 py-1.5">
+                                          <span className={cn("min-w-0 truncate text-sm", ok ? "font-medium" : "text-muted-foreground line-through")}>
+                                            {format(p.date, "EEE, d MMM", { locale: dateFnsLocale })}
+                                          </span>
+                                          <span
+                                            className={cn(
+                                              "inline-flex max-w-[55%] shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                                              ok ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground",
+                                            )}
+                                          >
+                                            {ok && <Check className="h-3 w-3 shrink-0" />}
+                                            <span className="truncate">{seriesStatusLabel(p.status)}</span>
+                                          </span>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                  <p className="text-xs font-semibold" aria-live="polite">
+                                    {seriesAvailable === 0
+                                      ? t("seriesNoneAvailable")
+                                      : seriesSkipped === 0
+                                        ? t("seriesSummaryNoSkip").replace("{n}", String(seriesAvailable))
+                                        : (seriesAvailable === 1 ? t("seriesSummaryOne") : t("seriesSummary"))
+                                            .replace("{n}", String(seriesAvailable))
+                                            .replace("{m}", String(seriesSkipped))}
+                                  </p>
+                                  {seriesSkipped > 0 && (
+                                    <p className="text-[11px] leading-relaxed text-muted-foreground">{t("seriesSkipNote")}</p>
+                                  )}
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {!!service && service.price > 0 && (
                     <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-2.5">
                       <span className="text-xs text-muted-foreground">{t("total")}</span>
@@ -999,6 +1261,10 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                 >
                   {submitting ? (
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent-foreground/30 border-t-accent-foreground" />
+                  ) : seriesActive && seriesReady && seriesAvailable > 0 ? (
+                    seriesAvailable === 1
+                      ? t("seriesCreateBtnOne")
+                      : t("seriesCreateBtn").replace("{n}", String(seriesAvailable))
                   ) : (
                     t("walkInCreate")
                   )}

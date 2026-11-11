@@ -1,13 +1,21 @@
 // whatsapp-booking-confirm — sends a Meta-approved WhatsApp template to the
 // customer when their booking is confirmed, or when the PROVIDER cancels it.
 //
-// ⚠ NAME IS A MISNOMER. This function now serves two message kinds, not just
+// ⚠ NAME IS A MISNOMER. This function now serves three message kinds, not just
 // confirmations. The slug is kept deliberately: renaming means redeploying under
 // a new name and updating every call site, and churning a working production
 // deployment is not worth the tidier label.
 //
 // CONTRACT:  POST { "booking_id": "<uuid>", "kind"?: "booking_confirm" | "booking_cancelled" }
+//            POST { "kind": "recurring_cancelled", "cancellation_id": "<uuid>" }
 //            → 200 { ok, result, ... }        ("kind" defaults to booking_confirm)
+//
+// recurring_cancelled is ONE message for a whole series cancel (never one per
+// booking). Its only input is a recurring_series_cancellations row, written
+// solely by cancel_recurring_series: the booking (its first_booking_id), the
+// first date and the count all come from that row, never from the browser. It
+// runs through every gate below unchanged, against that first booking, and is
+// logged once in whatsapp_send_log as (first_booking_id, recurring_cancelled).
 //
 // Besides the booking id, the ONLY thing the body may carry is `kind`, which
 // selects among the server-side constants in MESSAGE_KINDS below. Every value
@@ -80,6 +88,7 @@ const MESSAGE_KINDS = {
   },
   booking_cancelled: {
     requiredStatus: "cancelled",
+    // Same five-parameter body as booking_confirm (see buildParams).
     // NEVER a customer. A customer who cancels their own booking passes the
     // status gate, so allowing them here would let them send themselves a
     // "your appointment was cancelled" notice. Provider-owner or admin only.
@@ -88,6 +97,20 @@ const MESSAGE_KINDS = {
     templates: {
       he: { name: "booking_cancelled_hebrew", languageCode: "he" },
       ar: { name: "booking_cancelled_arabic", languageCode: "ar" },
+    },
+  },
+  // A provider cancelling several bookings of a recurring series in one action.
+  // Approved by Meta with a FOUR-parameter body and no button:
+  //   {{1}} customer  {{2}} business  {{3}} first cancelled date DD/MM/YYYY
+  //   {{4}} number of appointments cancelled
+  // Provider-owner or admin only, for the same reason as booking_cancelled.
+  recurring_cancelled: {
+    requiredStatus: "cancelled",
+    allowCustomerCaller: false,
+    wrongStatusReason: "NOT_CANCELLED",
+    templates: {
+      he: { name: "recurring_cancelled_hebrew", languageCode: "he" },
+      ar: { name: "recurring_cancelled_arabic", languageCode: "ar" },
     },
   },
 } as const;
@@ -105,6 +128,40 @@ const SENDPULSE_SEND_URL = "https://api.sendpulse.com/whatsapp/contacts/sendTemp
 const TOKEN_EXPIRY_SKEW_SECONDS = 60;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The series-cancel facts, read from recurring_series_cancellations. */
+interface SeriesCancellation {
+  id: string;
+  provider_id: string;
+  first_booking_id: string;
+  first_date: string;
+  cancelled_count: number;
+}
+
+/**
+ * The template body parameters, per kind, in the order Meta approved them.
+ * booking_confirm and booking_cancelled return exactly the array they always
+ * did; recurring_cancelled has its own four.
+ */
+function buildParams(
+  kind: MessageKind,
+  v: {
+    customerName: string;
+    businessName: string;
+    dateText: string;
+    timeText: string;
+    serviceName: string;
+    seriesDateText: string | null;
+    seriesCount: number | null;
+  },
+): string[] {
+  if (kind === "recurring_cancelled") {
+    return [v.customerName, v.businessName, v.seriesDateText ?? "", String(v.seriesCount ?? "")];
+  }
+  return [v.customerName, v.businessName, v.dateText, v.timeText, v.serviceName];
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -494,7 +551,7 @@ Deno.serve(async (req) => {
     const callerId = userData.user.id;
 
     // ── Input: a booking id, and optionally which kind of message ────────────
-    let body: { booking_id?: unknown; kind?: unknown };
+    let body: { booking_id?: unknown; kind?: unknown; cancellation_id?: unknown };
     try {
       body = await req.json();
     } catch {
@@ -522,7 +579,32 @@ Deno.serve(async (req) => {
     const kindConfig = MESSAGE_KINDS[messageKind];
     kindForLog = messageKind;
 
-    const bookingId = body.booking_id;
+    // recurring_cancelled: the booking comes from the cancellation row, never
+    // from the body. Any booking_id the body carries is ignored for this kind.
+    let seriesCancellation: SeriesCancellation | null = null;
+    let requestedBookingId: unknown = body.booking_id;
+    if (messageKind === "recurring_cancelled") {
+      const cancellationId = body.cancellation_id;
+      if (typeof cancellationId !== "string" || !UUID_RE.test(cancellationId)) {
+        console.warn("whatsapp-booking-confirm: cancellation_id unusable", {
+          gate: "invalid_cancellation_id",
+          status: 400,
+          received_type: cancellationId === null ? "null" : typeof cancellationId,
+        });
+        return reject("invalid_cancellation_id", 400, { error: "cancellation_id (uuid) is required" });
+      }
+      const { data: sc, error: scError } = await createAdminClient()
+        .from("recurring_series_cancellations")
+        .select("id, provider_id, first_booking_id, first_date, cancelled_count")
+        .eq("id", cancellationId)
+        .maybeSingle();
+      if (scError) throw scError;
+      if (!sc) return json(404, { error: "Cancellation not found" });
+      seriesCancellation = sc as SeriesCancellation;
+      requestedBookingId = seriesCancellation.first_booking_id;
+    }
+
+    const bookingId = requestedBookingId;
     if (typeof bookingId !== "string" ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingId)) {
       // The received TYPE is logged, never the value: a caller-supplied value
@@ -547,6 +629,12 @@ Deno.serve(async (req) => {
 
     if (bookingError) throw bookingError;
     if (!booking) return json(404, { error: "Booking not found" });
+
+    // Defence in depth: the row's own provider must be the booking's. Both are
+    // written by the same RPC, so a mismatch means tampering or a bug.
+    if (seriesCancellation && seriesCancellation.provider_id !== booking.provider_id) {
+      return reject("cancellation_provider_mismatch", 400, { error: "Cancellation does not match booking" });
+    }
 
     // ── GATE 1: authorization, per kind ──────────────────────────────────────
     // The provider who owns the booking and admins may trigger any kind. The
@@ -782,14 +870,19 @@ Deno.serve(async (req) => {
         serviceName = (service?.name ?? "").trim();
       }
     }
-    if (!serviceName) {
+    // recurring_cancelled carries no service parameter, so a missing service
+    // must not block it.
+    if (!serviceName && messageKind !== "recurring_cancelled") {
       await logSkip(admin, bookingId, messageKind, provider.id, "NO_SERVICE", phoneDigits);
       return json(200, { ok: true, result: "skipped", reason: "NO_SERVICE" });
     }
 
     const dateText = formatBookingDate(booking.booking_date);
     const timeText = formatBookingTime(booking.booking_time);
-    if (!dateText || !timeText) {
+    const seriesDateText = seriesCancellation ? formatBookingDate(seriesCancellation.first_date) : null;
+    const seriesCount = seriesCancellation ? seriesCancellation.cancelled_count : null;
+    if (!dateText || !timeText ||
+        (seriesCancellation && (!seriesDateText || !Number.isInteger(seriesCount) || seriesCount! < 1))) {
       await logSkip(admin, bookingId, messageKind, provider.id, "BAD_DATETIME", phoneDigits);
       return json(200, { ok: true, result: "skipped", reason: "BAD_DATETIME" });
     }
@@ -828,7 +921,15 @@ Deno.serve(async (req) => {
     claimId = claim.id;
 
     // ── Send ─────────────────────────────────────────────────────────────────
-    const params = [customerName, businessName, dateText, timeText, serviceName];
+    const params = buildParams(messageKind, {
+      customerName,
+      businessName,
+      dateText,
+      timeText,
+      serviceName,
+      seriesDateText,
+      seriesCount,
+    });
 
     let sent: SendResult;
     try {

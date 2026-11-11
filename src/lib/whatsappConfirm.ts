@@ -90,3 +90,25 @@ export function notifyBookingsCancelled(bookingIds: string[]): void {
     Promise.resolve(),
   );
 }
+
+/**
+ * ONE WhatsApp for a whole recurring-series cancel (recurring_cancelled
+ * templates) — never one per booking. Call ONLY after cancel_recurring_series
+ * returned OK, with the cancellation id it returned: the Edge Function reads
+ * the booking, the first date and the count from that row itself, so nothing
+ * that reaches the message comes from the browser. Fire-and-forget, like the
+ * others; provider-owner or admin only (403 for anyone else).
+ */
+export function notifySeriesCancelled(cancellationId: string): void {
+  if (!cancellationId) return;
+  void (async () => {
+    try {
+      const { error } = await supabase.functions.invoke("whatsapp-booking-confirm", {
+        body: { kind: "recurring_cancelled", cancellation_id: cancellationId },
+      });
+      if (error) console.warn("whatsapp-booking-confirm (recurring_cancelled) invoke failed:", error.message);
+    } catch (err) {
+      console.warn("whatsapp-booking-confirm (recurring_cancelled) invoke threw:", err);
+    }
+  })();
+}
