@@ -1231,6 +1231,12 @@ export const translations = {
     phDeleteTitle: "למחוק את התמונה?",
     phDeleteBody: "היא תוסר מהעמוד שלך.",
     phEmptyBody: "תמונות של העבודה והמקום עוזרות ללקוחות לבחור בך.",
+    pkHidden: "מוסתרת מלקוחות",
+    pkActiveTitle: "פעילה",
+    pkActiveHelp: "כשהיא פעילה, לקוחות רואים אותה ויכולים לבקש אותה.",
+    pkDeleteTemplate: "מחיקת סוג החבילה",
+    pkRemaining: "נותרו {n} מתוך {total}",
+    pkOlder: "חבילות קודמות",
   },
   ar: {
     appName: "Ehjezly",
@@ -2487,6 +2493,12 @@ export const translations = {
     phDeleteTitle: "حذف الصورة؟",
     phDeleteBody: "ستُزال من صفحتك.",
     phEmptyBody: "صور عملك ومكانك تساعد الزبائن على اختيارك.",
+    pkHidden: "مخفية عن الزبائن",
+    pkActiveTitle: "فعّالة",
+    pkActiveHelp: "عندما تكون فعّالة، يراها الزبائن ويمكنهم طلبها.",
+    pkDeleteTemplate: "حذف نوع الباقة",
+    pkRemaining: "تبقّى {n} من {total}",
+    pkOlder: "باقات سابقة",
   },
   en: {
     appName: "Ehjezly",
@@ -3713,6 +3725,12 @@ export const translations = {
     phDeleteTitle: "Delete this photo?",
     phDeleteBody: "It will be removed from your page.",
     phEmptyBody: "Photos of your work and your place help customers choose you.",
+    pkHidden: "Hidden from customers",
+    pkActiveTitle: "Active",
+    pkActiveHelp: "When active, customers see it and can request it.",
+    pkDeleteTemplate: "Delete package type",
+    pkRemaining: "{n} of {total} left",
+    pkOlder: "Earlier packages",
   },
 } as const;
 

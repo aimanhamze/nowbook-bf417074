@@ -1,10 +1,9 @@
 import { format, parseISO } from "date-fns";
-import { ArrowDown, ArrowUp, Minus } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { providerDesktopSheet } from "@/components/layout/providerDesktop";
+import { ArrowDown, ArrowUp, History, Minus } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { usePackageHistory, type EnrichedCustomerPackage } from "@/hooks/useCustomerPackages";
 import type { PackageUsageAction } from "@/integrations/supabase/packageTypes";
+import { EditSheet } from "./SettingsRows";
 
 /** Ledger action → translation key. Mirrors the DB CHECK constraint exactly. */
 const ACTION_LABELS: Record<PackageUsageAction, string> = {
@@ -38,73 +37,58 @@ export function PackageHistorySheet({
   const { t } = useLang();
   const { data: history = [], isLoading } = usePackageHistory(pkg?.id ?? null);
 
+  // Read-only: the shared shell without a footer or branch suffix.
   return (
-    <Sheet open={!!pkg} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        side="bottom"
-        className={`max-h-[85vh] overflow-y-auto rounded-t-3xl ${providerDesktopSheet}`}
-      >
-        <SheetHeader>
-          <SheetTitle>{t("packageHistory")}</SheetTitle>
-        </SheetHeader>
-
-        {pkg && (
-          <p className="pt-1 text-xs text-muted-foreground">
-            {pkg.customer_name || pkg.customer_phone} · {pkg.template_name} ·{" "}
-            <span className="tabular-nums font-medium text-foreground">
-              {pkg.entries_remaining}/{pkg.total_entries}
-            </span>
-          </p>
-        )}
-
-        <div className="space-y-2 py-4">
-          {isLoading ? (
-            <div className="h-16 animate-pulse rounded-xl bg-secondary/60" />
-          ) : history.length === 0 ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">{t("historyEmpty")}</p>
-          ) : (
-            history.map((row) => {
-              const delta = row.entries_after - row.entries_before;
-              return (
-                <div
-                  key={row.id}
-                  className="flex items-start gap-3 rounded-xl border border-border bg-card p-3"
+    <EditSheet
+      open={!!pkg}
+      onClose={onClose}
+      icon={History}
+      title={t("packageHistory")}
+      writes={false}
+      description={pkg ? (
+        <>
+          {pkg.customer_name || pkg.customer_phone} · {pkg.template_name} ·{" "}
+          <span dir="ltr" className="font-medium tabular-nums text-foreground">
+            {pkg.entries_remaining}/{pkg.total_entries}
+          </span>
+        </>
+      ) : undefined}
+    >
+      {isLoading ? (
+        <div className="h-16 animate-pulse rounded-2xl bg-foreground/[0.05]" />
+      ) : history.length === 0 ? (
+        <p className="py-6 text-center text-sm text-foreground/60">{t("historyEmpty")}</p>
+      ) : (
+        <ul className="overflow-hidden rounded-2xl border border-foreground/10 bg-white">
+          {history.map((row, i) => {
+            const delta = row.entries_after - row.entries_before;
+            return (
+              <li key={row.id} className={`flex items-start gap-3 px-4 py-3 ${i > 0 ? "border-t border-foreground/[0.07]" : ""}`}>
+                <span
+                  className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                    delta > 0
+                      ? "bg-emerald-50 text-emerald-600"
+                      : delta < 0
+                        ? "bg-rose-50 text-rose-600"
+                        : "bg-foreground/[0.06] text-foreground/50"
+                  }`}
                 >
-                  <div
-                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-                      delta > 0
-                        ? "bg-emerald-50 text-emerald-600"
-                        : delta < 0
-                          ? "bg-rose-50 text-rose-600"
-                          : "bg-secondary text-muted-foreground"
-                    }`}
-                  >
-                    {delta > 0 ? (
-                      <ArrowUp className="h-3 w-3" />
-                    ) : delta < 0 ? (
-                      <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <Minus className="h-3 w-3" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium">
-                      {t(ACTION_LABELS[row.action_type] as never)}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
-                      {row.entries_before} → {row.entries_after} ·{" "}
-                      {format(parseISO(row.created_at), "dd/MM/yyyy HH:mm")}
-                    </p>
-                    {row.note && (
-                      <p className="mt-1 break-words text-[11px] text-foreground/70">{row.note}</p>
-                    )}
-                  </div>
+                  {delta > 0 ? <ArrowUp className="h-3.5 w-3.5" /> : delta < 0 ? <ArrowDown className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{t(ACTION_LABELS[row.action_type] as never)}</p>
+                  <p className="mt-0.5 text-xs text-foreground/60">
+                    <span dir="ltr" className="tabular-nums">{row.entries_before} → {row.entries_after}</span>
+                    {" · "}
+                    <span dir="ltr" className="tabular-nums">{format(parseISO(row.created_at), "dd/MM/yyyy HH:mm")}</span>
+                  </p>
+                  {row.note && <p className="mt-1 break-words text-xs text-foreground/75">{row.note}</p>}
                 </div>
-              );
-            })
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </EditSheet>
   );
 }

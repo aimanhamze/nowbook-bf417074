@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
-import { Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search, UserPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -11,14 +8,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
 import { usePackageTemplates } from "@/hooks/usePackageTemplates";
 import { useProviderCustomers } from "@/hooks/useProviderCustomers";
 import { usePackageActions, packageErrorKey } from "@/hooks/usePackageActions";
 import { isRegisteredKey } from "@/lib/customerKey";
 import { toast } from "sonner";
-import { BranchSuffix } from "@/components/branch/BranchSuffix";
+import { EditSheet, Field } from "./SettingsRows";
 
 /**
  * Sell a package to one of the provider's existing customers.
@@ -86,104 +82,95 @@ export function SellPackageSheet({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const key = packageErrorKey(message);
-      toast.error(key ? t(key as never) : message);
+      toast.error(key ? t(key as never) : t("bsSaveError"));
     }
   };
 
+  const canSell = registered.length > 0 && activeTemplates.length > 0;
+
+  // Same shell as the other dashboard editors. The Save button only appears
+  // when there is something to sell, exactly as before.
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className={`rounded-t-3xl ${providerDesktopSheet}`}>
-        <SheetHeader>
-          <SheetTitle>{t("sellPackage")}<BranchSuffix /></SheetTitle>
-        </SheetHeader>
-
-        <div className="space-y-4 py-4">
-          {registered.length === 0 ? (
-            <p className="py-4 text-center text-xs text-muted-foreground">
-              {t("noRegisteredCustomers")}
-            </p>
-          ) : activeTemplates.length === 0 ? (
-            // Nothing to sell. Saying so beats an empty dropdown.
-            <p className="py-4 text-center text-xs text-muted-foreground">
-              {t("noPackageTemplates")}
-            </p>
-          ) : (
-            <>
-              {presetCustomer ? (
-                <div className="rounded-xl border border-border bg-secondary/40 px-3 py-2">
-                  <p className="text-xs font-semibold">
-                    {presetCustomer.name || presetCustomer.phone || "—"}
-                  </p>
-                  {presetCustomer.phone && (
-                    <p className="text-[11px] text-muted-foreground">{presetCustomer.phone}</p>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{t("selectCustomer")}</Label>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground [inset-inline-start:0.65rem]" />
-                    <Input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder={t("searchCustomer")}
-                      className="h-9 text-xs [padding-inline-start:2rem]"
-                    />
-                  </div>
-                  <Select value={customerKey} onValueChange={setCustomerKey}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("selectCustomer")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filtered.length === 0 ? (
-                        <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-                          {t("noCustomersMatch")}
-                        </div>
-                      ) : (
-                        filtered.map((c) => (
-                          <SelectItem key={c.key} value={c.key}>
-                            <span className="flex flex-col items-start">
-                              <span>{c.name || c.phone || "—"}</span>
-                              <span className="text-[10px] text-muted-foreground">
-                                {c.phone}
-                                {c.lastVisit ? ` · ${t("lastVisit")} ${c.lastVisit}` : ""}
-                              </span>
-                            </span>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
+    <EditSheet
+      open={open}
+      onClose={() => { if (!sellPackage.isPending) onOpenChange(false); }}
+      icon={UserPlus}
+      title={t("sellPackage")}
+      onSave={canSell ? handleSave : undefined}
+      saving={sellPackage.isPending}
+      saveDisabled={!customerKey || !templateId}
+    >
+      {registered.length === 0 ? (
+        <p className="py-4 text-center text-sm text-foreground/60">{t("noRegisteredCustomers")}</p>
+      ) : activeTemplates.length === 0 ? (
+        // Nothing to sell. Saying so beats an empty dropdown.
+        <p className="py-4 text-center text-sm text-foreground/60">{t("noPackageTemplates")}</p>
+      ) : (
+        <>
+          {presetCustomer ? (
+            <div className="rounded-2xl border border-foreground/10 bg-white px-4 py-3">
+              <p className="text-sm font-semibold">{presetCustomer.name || presetCustomer.phone || "—"}</p>
+              {presetCustomer.phone && (
+                <p dir="ltr" className="text-start text-xs text-foreground/60 [unicode-bidi:plaintext]">{presetCustomer.phone}</p>
               )}
-
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t("selectPackageType")}</Label>
-                <Select value={templateId} onValueChange={setTemplateId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("selectPackageType")} />
+            </div>
+          ) : (
+            <Field label={t("selectCustomer")}>
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/40 [inset-inline-start:0.85rem]" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={t("searchCustomer")}
+                    aria-label={t("searchCustomer")}
+                    className="h-12 rounded-xl [padding-inline-start:2.5rem]"
+                  />
+                </div>
+                <Select value={customerKey} onValueChange={setCustomerKey}>
+                  <SelectTrigger className="h-12 rounded-xl" aria-label={t("selectCustomer")}>
+                    <SelectValue placeholder={t("selectCustomer")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {activeTemplates.map((tpl) => (
-                      <SelectItem key={tpl.id} value={tpl.id}>
-                        {tpl.name} · {tpl.total_entries} {t("entriesShort")} · ₪{tpl.price}
-                      </SelectItem>
-                    ))}
+                    {filtered.length === 0 ? (
+                      <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                        {t("noCustomersMatch")}
+                      </div>
+                    ) : (
+                      filtered.map((c) => (
+                        <SelectItem key={c.key} value={c.key} className="min-h-11">
+                          <span className="flex flex-col items-start">
+                            <span>{c.name || c.phone || "—"}</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {c.phone}
+                              {c.lastVisit ? ` · ${t("lastVisit")} ${c.lastVisit}` : ""}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
-
-              <Button
-                className="w-full"
-                onClick={handleSave}
-                disabled={sellPackage.isPending || !customerKey || !templateId}
-              >
-                {sellPackage.isPending ? "..." : t("save")}
-              </Button>
-            </>
+            </Field>
           )}
-        </div>
-      </SheetContent>
-    </Sheet>
+
+          <Field label={t("selectPackageType")}>
+            <Select value={templateId} onValueChange={setTemplateId}>
+              <SelectTrigger className="h-12 rounded-xl" aria-label={t("selectPackageType")}>
+                <SelectValue placeholder={t("selectPackageType")} />
+              </SelectTrigger>
+              <SelectContent>
+                {activeTemplates.map((tpl) => (
+                  <SelectItem key={tpl.id} value={tpl.id} className="min-h-11">
+                    {tpl.name} · {tpl.total_entries} {t("entriesShort")} · ₪{tpl.price}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </>
+      )}
+    </EditSheet>
   );
 }
