@@ -5,12 +5,17 @@ import { fetchByDateWindow, PAGE_SIZE } from "@/lib/fetchAll";
 import { toDateKeyString } from "@/lib/staffTimeOff";
 import type { BusySlotRow, SlotOptions } from "@/hooks/useAllProviders";
 import type { DayWindow } from "@/lib/availabilityResolver";
+import { notifySeriesCancelled } from "@/lib/whatsappConfirm";
 import {
   classifySeriesDate,
   SERIES_MAX_COUNT,
   seriesDateKey,
+  summarizeSeriesCancel,
   summarizeSeriesCreate,
   weeklySeriesDates,
+  type SeriesCancelResult,
+  type SeriesCancelRow,
+  type SeriesCancelScope,
   type SeriesCreateResult,
   type SeriesCreateRow,
   type SeriesDateStatus,
@@ -205,6 +210,35 @@ export function useCreateRecurringSeries() {
       queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched", input.providerId] });
       queryClient.invalidateQueries({ queryKey: ["provider-bookings-public", input.providerId] });
       queryClient.invalidateQueries({ queryKey: ["recurring-series-busy", input.providerId] });
+    },
+  });
+}
+
+/**
+ * cancel_recurring_series, then ONE WhatsApp for the whole action. The
+ * per-booking cancellation message is never sent from here — the single-
+ * booking path (useCancelBooking) is the only caller of that one. Resolves
+ * with the RPC's code; rejects only on a transport or database error.
+ */
+export function useCancelRecurringSeries() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { bookingId: string; scope: SeriesCancelScope }): Promise<SeriesCancelResult> => {
+      const { data, error } = await db.rpc("cancel_recurring_series", {
+        p_booking_id: input.bookingId,
+        p_scope: input.scope,
+      });
+      if (error) throw error;
+      const result = summarizeSeriesCancel((data || []) as SeriesCancelRow[]);
+      if (result.code === "OK" && result.cancellationId) {
+        notifySeriesCancelled(result.cancellationId);
+      }
+      return result;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-enriched"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-bookings-public"] });
+      queryClient.invalidateQueries({ queryKey: ["recurring-series-busy"] });
     },
   });
 }

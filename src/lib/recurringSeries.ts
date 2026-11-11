@@ -198,3 +198,75 @@ export function seriesPositions(rows: readonly SeriesMember[]): Map<string, Seri
 
 /** "YYYY-MM-DD" for a local date — re-exported so callers need one import. */
 export const seriesDateKey = toLocalDateStr;
+
+// ── Cancelling a series (Phase 5) ───────────────────────────────────────────
+
+export type SeriesCancelScope = "from_here" | "all_upcoming";
+
+/** One row returned by cancel_recurring_series. */
+export interface SeriesCancelRow {
+  r_code: string;
+  r_cancellation_id: string | null;
+  r_cancelled_count: number | null;
+  r_first_booking_id: string | null;
+  r_first_date: string | null;
+}
+
+export type SeriesCancelCode = "OK" | "NOTHING_TO_CANCEL" | "NOT_FOUND" | "BAD_SCOPE" | "UNKNOWN";
+
+export interface SeriesCancelResult {
+  code: SeriesCancelCode;
+  /** The recurring_series_cancellations row — the ONLY input the WhatsApp takes. */
+  cancellationId: string | null;
+  cancelledCount: number;
+}
+
+const CANCEL_CODES: readonly SeriesCancelCode[] = ["OK", "NOTHING_TO_CANCEL", "NOT_FOUND", "BAD_SCOPE"];
+
+export function summarizeSeriesCancel(rows: readonly SeriesCancelRow[]): SeriesCancelResult {
+  const row = rows[0];
+  const code: SeriesCancelCode = CANCEL_CODES.includes(row?.r_code as SeriesCancelCode)
+    ? (row!.r_code as SeriesCancelCode)
+    : "UNKNOWN";
+  return {
+    code,
+    cancellationId: code === "OK" ? row?.r_cancellation_id ?? null : null,
+    cancelledCount: code === "OK" ? row?.r_cancelled_count ?? 0 : 0,
+  };
+}
+
+/** A series booking as the provider calendar holds it. */
+export interface SeriesBookingRow extends SeriesMember {
+  status: string;
+}
+
+/**
+ * How many bookings each scope would cancel, for the dialog's labels. Mirrors
+ * cancel_recurring_series: same series, confirmed/pending, starting after
+ * `now`; "from here" also at or after this booking's own start. Display only —
+ * the toast reports the server's own count.
+ *
+ * Start times are compared as local wall-clock strings; the app runs in the
+ * business's timezone (Israel), as everywhere else on the provider side.
+ */
+export function seriesCancelCounts(
+  rows: readonly SeriesBookingRow[],
+  booking: SeriesMember,
+  now: Date = new Date(),
+): { fromHere: number; allUpcoming: number } {
+  if (!booking.series_id) return { fromHere: 0, allUpcoming: 0 };
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const nowKey = `${toLocalDateStr(now)}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const keyOf = (r: SeriesMember) => `${r.booking_date}T${r.booking_time.slice(0, 5)}`;
+  const thisKey = keyOf(booking);
+  const upcoming = rows.filter(
+    (r) =>
+      r.series_id === booking.series_id &&
+      (r.status === "confirmed" || r.status === "pending") &&
+      keyOf(r) > nowKey,
+  );
+  return {
+    fromHere: upcoming.filter((r) => keyOf(r) >= thisKey).length,
+    allUpcoming: upcoming.length,
+  };
+}

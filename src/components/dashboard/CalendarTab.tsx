@@ -19,6 +19,7 @@ import { BackArrow, ForwardArrow } from "@/components/ui/directional-icon";
 import { NewBookingSheet } from "@/components/dashboard/NewBookingSheet";
 import { RescheduleSheet } from "@/components/dashboard/RescheduleSheet";
 import { BookingPackageRow } from "@/components/dashboard/BookingPackageRow";
+import { SeriesCancelDialog } from "@/components/dashboard/SeriesCancelDialog";
 import { DEFAULT_REMINDER_TEMPLATE } from "@/components/dashboard/BusinessProfileTab";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -332,6 +333,14 @@ function BookingCard({ booking, index, color = null, showDurationEditor = false 
   const reminderTemplate = profile?.reminder_message_template || DEFAULT_REMINDER_TEMPLATE;
   const outOfHours = useOutOfHours()(booking.booking_date, booking.booking_time);
   const seriesLabel = useSeriesLabel(booking);
+  // Series bookings get the three-way cancel; everything else keeps one tap.
+  const isSeriesBooking = !!seriesIdOf(booking);
+  const [seriesCancelOpen, setSeriesCancelOpen] = useState(false);
+  // The existing single cancel, unchanged — also what "only this one" runs.
+  const cancelThisBooking = () => cancelBooking.mutate(booking.id, {
+    onSuccess: () => toast.success("התור בוטל בהצלחה"),
+    onError: () => toast.error("שגיאה בביטול התור"),
+  });
 
   const initials = booking.customer_name
     ? booking.customer_name.split(" ").map((w) => w[0]).join("").slice(0, 2)
@@ -483,15 +492,20 @@ function BookingCard({ booking, index, color = null, showDurationEditor = false 
       <div className="flex gap-2 pt-1">
         {!isCancelled && !isPending && (
           <Button variant="outline" size="sm" className="flex-1 text-xs h-8 text-amber-600 border-amber-200 hover:bg-amber-50"
-            onClick={() => cancelBooking.mutate(booking.id, {
-              onSuccess: () => toast.success("התור בוטל בהצלחה"),
-              onError: () => toast.error("שגיאה בביטול התור"),
-            })}
+            onClick={() => (isSeriesBooking ? setSeriesCancelOpen(true) : cancelThisBooking())}
             disabled={cancelBooking.isPending}
           >
             <XCircle className="h-3.5 w-3.5 mr-1" />
             {cancelBooking.isPending ? "מבטל..." : "בטל תור"}
           </Button>
+        )}
+        {isSeriesBooking && (
+          <SeriesCancelDialog
+            booking={booking}
+            open={seriesCancelOpen}
+            onOpenChange={setSeriesCancelOpen}
+            onOnlyThis={cancelThisBooking}
+          />
         )}
         <Button variant="outline" size="sm"
           className={`${isCancelled || isPending ? 'flex-1' : ''} text-xs h-8 text-red-600 border-red-200 hover:bg-red-50`}
