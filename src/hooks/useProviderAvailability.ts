@@ -125,6 +125,8 @@ export function useProviderAvailability(enabled = true) {
     queryClient.invalidateQueries({ queryKey: ["provider-date-overrides-manage"] });
     // Customer booking view reads overrides via this key (useAllProviders).
     queryClient.invalidateQueries({ queryKey: ["provider-date-overrides"] });
+    // Home status pills read today's override too.
+    queryClient.invalidateQueries({ queryKey: ["all-provider-date-overrides"] });
     queryClient.invalidateQueries({ queryKey: ["all-providers"] });
   };
 

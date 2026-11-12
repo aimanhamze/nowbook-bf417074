@@ -36,6 +36,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 import {
   fetchAllProvidersBlockedDates,
+  fetchAllProvidersDateOverrides,
   fetchOwnBlockedDates,
   fetchOwnDateOverrides,
   fetchPublicBlockedDates,
@@ -107,6 +108,19 @@ describe("public fetchers: from yesterday onward, ordered on a unique key, paged
     expect(out).toHaveLength(PAGE_SIZE + 1);
     expect(out.at(-1)).toBe("last");
     expect(has(calls[1], "range", PAGE_SIZE, 2 * PAGE_SIZE - 1)).toBe(true);
+  });
+
+  it("all providers' overrides (Home): no provider filter, lower bound, ordered on (provider_id, override_date)", async () => {
+    const row = { provider_id: "a", override_date: "2026-11-13", is_available: true, start_time: "10:00", end_time: "14:00" };
+    pages = [[row]];
+    expect(await fetchAllProvidersDateOverrides("2026-11-10")).toEqual([row]);
+    const c = calls[0];
+    expect(has(c, "from", "provider_date_overrides")).toBe(true);
+    expect(c.some((x) => x[0] === "eq")).toBe(false);
+    expect(has(c, "gte", "override_date", "2026-11-10")).toBe(true);
+    const orders = c.filter((x) => x[0] === "order").map((x) => x[1]);
+    expect(orders).toEqual(["provider_id", "override_date"]);
+    expect(has(c, "range", 0, PAGE_SIZE - 1)).toBe(true);
   });
 
   it("all providers (Home): no provider filter, ordered on (provider_id, blocked_date)", async () => {

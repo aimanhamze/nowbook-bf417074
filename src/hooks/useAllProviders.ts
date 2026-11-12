@@ -5,7 +5,7 @@ import type { Database } from "@/integrations/supabase/types";
 import type { Provider, Service } from "@/lib/mock-data";
 import type { Lang } from "@/lib/translations";
 import type { SocialLinks } from "@/lib/socialLinks";
-import type { AvailabilityRow } from "@/lib/providerStatus";
+import type { AvailabilityRow, StatusOverrideRow } from "@/lib/providerStatus";
 import { bookingDuration } from "@/lib/bookingDuration";
 // Shared date→hours resolver + types. ONE source of truth for "hours for date X",
 // reused by the slot logic below AND the customer profile's hours display.
@@ -25,6 +25,7 @@ import { availabilityWindow } from "@/lib/availabilityWindow";
 import { fetchByDateWindow, PAGE_SIZE } from "@/lib/fetchAll";
 import {
   fetchAllProvidersBlockedDates,
+  fetchAllProvidersDateOverrides,
   fetchPublicBlockedDates,
   fetchPublicDateOverrides,
   scheduleFromDate,
@@ -276,12 +277,14 @@ export function usePublicProviderSchedule(providerId: string | undefined) {
 export interface ProviderSchedule {
   availability: AvailabilityRow[];
   blockedDates: string[];
+  overrides: StatusOverrideRow[];
 }
 
 /**
  * Batched schedule fetch for ALL providers — used by the Home page to render
- * open/closed status pills without an N+1 per-provider query. Two round-trips
- * total (availability + future blocked dates), grouped by provider_id in JS.
+ * open/closed status pills without an N+1 per-provider query. Three round-trips
+ * total (availability + future blocked dates + future date overrides), grouped
+ * by provider_id in JS.
  */
 export function useAllProviderSchedules() {
   const availabilityQuery = useQuery({
@@ -307,12 +310,20 @@ export function useAllProviderSchedules() {
     queryFn: () => fetchAllProvidersBlockedDates(scheduleFromDate()),
   });
 
+  // Same lower bound and paging as the blocked dates above. An override for
+  // today (special opening, or a monthly day's own hours) drives the pill.
+  const overridesQuery = useQuery({
+    queryKey: ["all-provider-date-overrides"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: () => fetchAllProvidersDateOverrides(scheduleFromDate()),
+  });
+
   const schedulesByProviderId = useMemo(() => {
     const map = new Map<string, ProviderSchedule>();
     const ensure = (id: string): ProviderSchedule => {
       let entry = map.get(id);
       if (!entry) {
-        entry = { availability: [], blockedDates: [] };
+        entry = { availability: [], blockedDates: [], overrides: [] };
         map.set(id, entry);
       }
       return entry;
@@ -329,12 +340,20 @@ export function useAllProviderSchedules() {
     for (const row of blockedDatesQuery.data || []) {
       ensure(row.provider_id).blockedDates.push(row.blocked_date);
     }
+    for (const row of overridesQuery.data || []) {
+      ensure(row.provider_id).overrides.push({
+        override_date: row.override_date,
+        is_available: row.is_available,
+        start_time: row.start_time,
+        end_time: row.end_time,
+      });
+    }
     return map;
-  }, [availabilityQuery.data, blockedDatesQuery.data]);
+  }, [availabilityQuery.data, blockedDatesQuery.data, overridesQuery.data]);
 
   return {
     schedulesByProviderId,
-    isLoading: availabilityQuery.isLoading || blockedDatesQuery.isLoading,
+    isLoading: availabilityQuery.isLoading || blockedDatesQuery.isLoading || overridesQuery.isLoading,
   };
 }
 

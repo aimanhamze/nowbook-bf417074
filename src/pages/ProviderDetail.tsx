@@ -184,16 +184,16 @@ const ProviderDetail = () => {
   const liked = id ? isFavorite(id) : false;
 
   const [status, setStatus] = useState<ProviderStatus>(() =>
-    getProviderStatus(availability, blockedDates, new Date()),
+    getProviderStatus(availability, blockedDates, new Date(), overrides),
   );
 
   useEffect(() => {
-    setStatus(getProviderStatus(availability, blockedDates, new Date()));
+    setStatus(getProviderStatus(availability, blockedDates, new Date(), overrides));
     const intervalId = setInterval(() => {
-      setStatus(getProviderStatus(availability, blockedDates, new Date()));
+      setStatus(getProviderStatus(availability, blockedDates, new Date(), overrides));
     }, 60_000);
     return () => clearInterval(intervalId);
-  }, [availability, blockedDates]);
+  }, [availability, blockedDates, overrides]);
 
   const reviewCount = dbReviews?.length || 0;
   const avgRating = dbReviews && dbReviews.length > 0

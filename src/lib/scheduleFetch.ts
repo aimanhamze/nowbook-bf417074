@@ -92,6 +92,25 @@ export async function fetchAllProvidersBlockedDates(
   );
 }
 
+/**
+ * Every provider's date overrides from `fromDate` onward (Home status pills:
+ * special opening days and monthly per-date hours). Ordered on
+ * (provider_id, override_date), unique per the table's UNIQUE constraint.
+ */
+export async function fetchAllProvidersDateOverrides(
+  fromDate: string,
+): Promise<{ provider_id: string; override_date: string; is_available: boolean; start_time: string; end_time: string }[]> {
+  return fetchAllPages((from, to) =>
+    supabase
+      .from("provider_date_overrides")
+      .select("provider_id, override_date, is_available, start_time, end_time")
+      .gte("override_date", fromDate)
+      .order("provider_id")
+      .order("override_date")
+      .range(from, to),
+  );
+}
+
 /** The signed-in provider's own blocked dates — ALL of them (past included), paged. */
 export async function fetchOwnBlockedDates(providerId: string) {
   return fetchAllPages((from, to) =>
