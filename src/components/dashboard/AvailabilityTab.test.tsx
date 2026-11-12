@@ -21,7 +21,12 @@ const seed = () =>
     break_start: null, break_end: null,
   }));
 
-vi.mock("@/hooks/useProviderAvailability", () => ({ useProviderAvailability: () => avail }));
+vi.mock("@/hooks/useProviderAvailability", () => ({
+  useProviderAvailability: () => avail,
+  useDayActiveBookingCount: () => ({ data: 0, isLoading: false }),
+}));
+vi.mock("@/hooks/useProviderStaff", () => ({ useProviderStaff: () => ({ activeStaff: [] }) }));
+vi.mock("@/hooks/useProviderStaffHours", () => ({ useProviderStaffHours: () => ({ hoursByStaff: new Map() }) }));
 vi.mock("@/hooks/useProviderProfile", () => ({ useProviderProfile: () => ({ profile }) }));
 vi.mock("@/components/branch/BranchSuffix", () => ({ BranchSuffix: () => null }));
 // t() returns the key, except the confirmation body keeps its placeholders
@@ -147,6 +152,31 @@ describe("AvailabilityTab — other providers", () => {
     expect(screen.getByRole("heading", { name: "setupRowClosedDays" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /monday/ })).toBeNull();
     expect(screen.getByRole("button", { name: "hrsAddClosedDay" })).toBeInTheDocument();
+  });
+
+  it("a fitness studio gets no special opening days", () => {
+    profile = { ...profile, category: "fitness_studio" };
+    renderTab();
+    expect(screen.queryByText("openingsTitle")).toBeNull();
+  });
+
+  it("an academy gets no special opening days", () => {
+    profile = { ...profile, category: "academy" };
+    renderTab();
+    expect(screen.queryByText("openingsTitle")).toBeNull();
+  });
+
+  it("monthly mode gets no special opening days (its calendar edits dates)", () => {
+    profile = { ...profile, availability_mode: "monthly" };
+    renderTab();
+    expect(screen.queryByText("openingsTitle")).toBeNull();
+  });
+
+  it("a weekly provider sees special opening days between the week and closed days", () => {
+    renderTab();
+    const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(headings).toEqual(["openingsTitle", "setupRowClosedDays"]);
+    expect(screen.getByRole("button", { name: "openingsAdd" })).toBeInTheDocument();
   });
 
   it("monthly mode shows the default-hours row and calendar, not the week", () => {

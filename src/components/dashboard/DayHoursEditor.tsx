@@ -22,12 +22,15 @@ export function DayHoursEditor({
   onChange,
   error,
   closedHint,
+  showOpenSwitch = true,
 }: {
   value: DayDraft;
   onChange: (next: DayDraft) => void;
   error: HoursError | null;
   /** Shown under the switch while the day is closed. */
   closedHint: string;
+  /** false = hours only (special openings are always open). */
+  showOpenSwitch?: boolean;
 }) {
   const { t } = useLang();
   const switchId = useId();
@@ -37,13 +40,15 @@ export function DayHoursEditor({
 
   return (
     <div className="space-y-4">
-      <label
-        htmlFor={switchId}
-        className="flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl bg-foreground/[0.03] px-4"
-      >
-        <span className="text-sm font-semibold">{t("editDayOpenLabel")}</span>
-        <SettingsSwitch id={switchId} checked={value.open} onCheckedChange={(open) => set({ open })} />
-      </label>
+      {showOpenSwitch && (
+        <label
+          htmlFor={switchId}
+          className="flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl bg-foreground/[0.03] px-4"
+        >
+          <span className="text-sm font-semibold">{t("editDayOpenLabel")}</span>
+          <SettingsSwitch id={switchId} checked={value.open} onCheckedChange={(open) => set({ open })} />
+        </label>
+      )}
 
       {!value.open ? (
         <p className="px-1 text-xs leading-relaxed text-foreground/70">{closedHint}</p>

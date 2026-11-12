@@ -3,6 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
 import { fetchOwnBlockedDates, fetchOwnDateOverrides } from "@/lib/scheduleFetch";
 
+/** save_date_openings, typed by hand until types.ts includes it. */
+type OpeningsRpc = (
+  fn: "save_date_openings",
+  args: {
+    p_provider_id: string;
+    p_dates: string[];
+    p_start: string;
+    p_end: string;
+    p_break_start: string | null;
+    p_break_end: string | null;
+    p_replace_blocks: boolean;
+  },
+) => PromiseLike<{ data: number | null; error: { message: string } | null }>;
+
 // `enabled` gates every query here, mirroring useProviderServices(enabled) and
 // useProviderStaffServices(enabled). It DEFAULTS TO TRUE, so all four existing
 // callers (AvailabilityTab, CalendarTab, MonthlyAvailabilityCalendar,
@@ -159,6 +173,40 @@ export function useProviderAvailability(enabled = true) {
     onSuccess: invalidateOverrides,
   });
 
+  // Special opening days (weekly mode): one save_date_openings call writes
+  // every date in one transaction, and with replaceBlocks deletes those dates'
+  // blocked rows in the same transaction. Invalidates blocked AND overrides.
+  const saveDateOpenings = useMutation({
+    mutationFn: async (o: {
+      dates: string[];
+      start: string;
+      end: string;
+      breakStart: string | null;
+      breakEnd: string | null;
+      replaceBlocks: boolean;
+    }) => {
+      if (!profile) throw new Error("No provider profile");
+      // Narrow cast: the RPC is DEV-only until it ships; types.ts is generated
+      // from PROD and is not regenerated from DEV (see packageTypes.ts).
+      const db = supabase as unknown as { rpc: OpeningsRpc };
+      const { data, error } = await db.rpc("save_date_openings", {
+        p_provider_id: profile.id,
+        p_dates: o.dates,
+        p_start: o.start,
+        p_end: o.end,
+        p_break_start: o.breakStart,
+        p_break_end: o.breakEnd,
+        p_replace_blocks: o.replaceBlocks,
+      });
+      if (error) throw error;
+      return data as number;
+    },
+    onSettled: () => {
+      invalidateOverrides();
+      invalidateBlocked();
+    },
+  });
+
   const deleteDateOverride = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("provider_date_overrides").delete().eq("id", id);
@@ -184,5 +232,30 @@ export function useProviderAvailability(enabled = true) {
     unblockDate,
     upsertDateOverride,
     deleteDateOverride,
+    saveDateOpenings,
   };
+}
+
+/**
+ * Active (confirmed / pending) bookings on one date for the signed-in
+ * provider's active branch. Shown before an opening is removed, so the owner
+ * knows who is booked into it. `date` null = disabled.
+ */
+export function useDayActiveBookingCount(date: string | null) {
+  const { profile } = useProviderProfile();
+  return useQuery({
+    queryKey: ["provider-day-booking-count", profile?.id, date],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("provider_id", profile!.id)
+        .eq("booking_date", date!)
+        .in("status", ["confirmed", "pending"]);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!profile && !!date,
+    staleTime: 0,
+  });
 }
