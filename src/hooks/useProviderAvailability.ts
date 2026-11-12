@@ -106,7 +106,7 @@ export function useProviderAvailability(enabled = true) {
     onSuccess: invalidateBlocked,
   });
 
-  // ── Monthly per-date overrides (only used when availability_mode = 'monthly') ─
+  // ── Per-date overrides (both modes: monthly days + weekly special openings) ─
   // Provider-side list, kept on a DISTINCT key from the customer resolver's
   // ["provider-date-overrides", providerId] query so the two caches never collide
   // (this one selects *). Mutations invalidate BOTH so customer availability

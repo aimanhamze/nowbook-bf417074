@@ -13,7 +13,7 @@
 //   3. waitlist_candidates(ids)       every (entry, event) pair that passes the
 //                                     SQL-side rules
 //   4. opening hours, here            the shared resolver copy: shop + staff
-//                                     hours, blocked days, monthly overrides,
+//                                     hours, blocked days, date overrides,
 //                                     staff time off, end before closing, the
 //                                     slot grid, the break, latest_start_time
 //   5. per entry, earliest slot first:

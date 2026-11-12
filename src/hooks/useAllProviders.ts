@@ -223,7 +223,8 @@ export function usePublicProviderSchedule(providerId: string | undefined) {
   // Same query keys / casts / retry:false as useRealAvailability (booking flow),
   // so React Query dedupes the round-trips when both are mounted and a
   // pre-migration DB can never break the weekly path. For weekly providers this
-  // data is inert (mode resolves to 'weekly', overrides come back empty).
+  // the monthly settings are inert (mode resolves to 'weekly'); overrides are
+  // read in BOTH modes (special opening days, see resolveDayHours).
   const monthlySettingsQuery = useQuery({
     queryKey: ["provider-monthly-settings", providerId],
     staleTime: 5 * 60 * 1000,
@@ -468,7 +469,7 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
   // that transient state quiet. supabase is cast to any because types.ts is
   // regenerated only AFTER apply (same pattern the slot_interval column used).
   // For every existing provider availability_mode is 'weekly', so this data is
-  // inert: resolveDayHours takes the weekly branch and ignores all of it.
+  // inert: resolveDayHours takes the weekly branch and ignores the defaults.
   const monthlySettingsQuery = useQuery({
     queryKey: ["provider-monthly-settings", providerId],
     staleTime: 5 * 60 * 1000,
@@ -535,7 +536,7 @@ export function useRealAvailability(providerId: string | undefined, selectedStaf
     (selectedStaffId ? staffTimeOffByStaff.get(selectedStaffId) : undefined) ?? NO_BLOCKED_DATES;
 
   // Per-date overrides for monthly mode (mirrors blockedDatesQuery). Only
-  // consulted when availability_mode==='monthly'; irrelevant to weekly providers.
+  // consulted in BOTH modes: blocked -> override -> normal hours (resolveDayHours).
   // Same key AND same fetcher as usePublicProviderSchedule: from yesterday onward, paged.
   const overridesQuery = useQuery({
     queryKey: ["provider-date-overrides", providerId],

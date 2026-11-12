@@ -14,7 +14,7 @@ export interface MonthlySettings {
   monthly_default_end: string;
 }
 
-/** One row of provider_date_overrides (monthly per-date exception). */
+/** One row of provider_date_overrides (per-date exception, both modes). */
 export interface DateOverrideRow {
   override_date: string;
   is_available: boolean;
@@ -60,17 +60,16 @@ export function toLocalDateStr(date: Date): string {
  * window, or null = closed. Everything after this (slot stepping, overlap,
  * capacity, break, latest-start) is unchanged and lives in the callers.
  *
- * BLOCKED DATES ALWAYS WIN — checked FIRST, in BOTH modes, exactly as before.
+ * PRECEDENCE, identical in BOTH modes:
+ *   1. blocked date        → closed. Blocked ALWAYS wins, checked first.
+ *   2. date override       → that date's window (or closed if is_available=false).
+ *   3. normal hours        → weekly: the weekday row; monthly: the flat default.
  *
- * WEEKLY branch (settings.availability_mode !== 'monthly'; the default for every
- * existing provider) is byte-for-byte the original inline logic: same blocked
- * early-return, same `date.getDay()` weekday-row lookup, same
- * `!slot || !slot.is_available → closed`, same start/end and
- * `break ?? null` handling. When mode is weekly, `overrides`/monthly defaults
- * are never read, so they cannot affect the result.
- *
- * MONTHLY branch is additive: an override for the date wins; otherwise the flat
- * monthly default applies (or closed if the default is unavailable).
+ * Step 2 used to run in monthly mode only. It now runs in weekly mode too, so a
+ * weekly provider can OPEN a normally-closed date ("special opening days",
+ * written by the save_date_openings RPC). A weekly provider with no override
+ * rows resolves exactly as before: step 2 finds nothing and step 3 is the
+ * original inline weekday logic, unchanged.
  */
 export function resolveDayHours(
   date: Date,
@@ -81,20 +80,23 @@ export function resolveDayHours(
 ): DayWindow | null {
   const dateStr = toLocalDateStr(date);
 
-  // Blocked dates close the day in BOTH modes, checked first — unchanged.
+  // 1. Blocked dates close the day in BOTH modes, checked first.
   if (blockedDates.includes(dateStr)) return null;
 
+  // 2. A per-date override wins over normal hours, in BOTH modes.
+  const override = overrides.find(o => o.override_date === dateStr);
+  if (override) {
+    if (!override.is_available) return null;
+    return {
+      start_time: override.start_time,
+      end_time: override.end_time,
+      break_start: override.break_start ?? null,
+      break_end: override.break_end ?? null,
+    };
+  }
+
+  // 3. Normal hours.
   if (settings.availability_mode === "monthly") {
-    const override = overrides.find(o => o.override_date === dateStr);
-    if (override) {
-      if (!override.is_available) return null;
-      return {
-        start_time: override.start_time,
-        end_time: override.end_time,
-        break_start: override.break_start ?? null,
-        break_end: override.break_end ?? null,
-      };
-    }
     // No override for this date → flat monthly default.
     if (!settings.monthly_default_available) return null;
     return {
@@ -105,7 +107,7 @@ export function resolveDayHours(
     };
   }
 
-  // WEEKLY (default): the original inline logic, unchanged.
+  // WEEKLY (default): the original inline weekday logic, unchanged.
   const dow = date.getDay();
   const slot = weeklyRows.find(a => a.day_of_week === dow);
   if (!slot || !slot.is_available) return null;
