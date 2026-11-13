@@ -3,6 +3,7 @@ import { Phone, Search, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLang } from "@/contexts/LangContext";
+import { cn } from "@/lib/utils";
 import { useProviderCustomers, type ProviderCustomer } from "@/hooks/useProviderCustomers";
 import { rankCustomers } from "@/lib/customerSearch";
 
@@ -123,7 +124,7 @@ export function CustomerPicker({ name, phone, initialQuery = "", onPick, onClear
     <div ref={searchBoxRef} className="scroll-mt-1">
       <label htmlFor="walkin-search" className="sr-only">{t("nbSearch")}</label>
       <div className="relative">
-        <Search className="pointer-events-none absolute start-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-foreground/40" />
+        <Search className="pointer-events-none absolute start-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-foreground/40" />
         <Input
           ref={searchRef}
           id="walkin-search"
@@ -134,7 +135,13 @@ export function CustomerPicker({ name, phone, initialQuery = "", onPick, onClear
           onChange={(e) => setQuery(e.target.value)}
           onFocus={onSearchFocus}
           placeholder={t("nbSearch")}
-          className="h-12 appearance-none rounded-xl pe-11 ps-11 text-base [&::-webkit-search-cancel-button]:hidden"
+          // 16px (no iOS zoom). The end padding is reserved for the clear
+          // button only while it shows, so the longest placeholder (en, 266px
+          // in DM Sans) fits the 283px a 375px sheet leaves.
+          className={cn(
+            "h-12 appearance-none rounded-xl ps-10 text-base [&::-webkit-search-cancel-button]:hidden",
+            query ? "pe-11" : "pe-3",
+          )}
         />
         {query && (
           <button

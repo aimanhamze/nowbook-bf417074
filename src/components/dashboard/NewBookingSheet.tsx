@@ -1061,50 +1061,53 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                 transition={SPRING}
                 className="space-y-4"
               >
-                {/* ── 1. Booking summary — two compact lines: what & when; then
-                    price and the repeat control (its panel expands below). ── */}
-                <div className="rounded-2xl border border-border bg-muted/40 px-4 py-2">
-                  <p className="flex min-h-8 items-center gap-1.5 text-sm">
-                    <span className="min-w-0 truncate font-semibold">
-                      {service?.name}
-                      {staffStepEnabled && selectedStaff && (
-                        <span className="font-medium text-foreground/70"> · {selectedStaff.name}</span>
-                      )}
-                    </span>
-                    <span className="shrink-0 text-foreground/70">
-                      {" · "}
+                {/* ── 1. Booking summary (+ repeats), at the top — the labelled
+                    card, with slightly tighter padding so the step still fits. ── */}
+                <div className="space-y-2 rounded-2xl border border-border bg-muted/40 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">{t("walkInService")}</span>
+                    <span className="truncate text-sm font-semibold">{service?.name}</span>
+                  </div>
+                  {staffStepEnabled && selectedStaff && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-muted-foreground">{t("staffMemberLabel")}</span>
+                      <span className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                        <UserRound className="h-3.5 w-3.5 text-accent shrink-0" />
+                        {selectedStaff.name}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">{t("selectDate")}</span>
+                    <span className="text-sm font-medium">
                       {format(date, "EEE, d MMM", { locale: dateFnsLocale })}
                       {" · "}
                       <span dir="ltr" className="tabular-nums">{time}</span>
                     </span>
-                  </p>
-                  {(repeatOffered || (!!service && service.price > 0)) && (
-                    <div className="flex min-h-11 items-center justify-between gap-3">
-                      {!!service && service.price > 0 ? (
-                        <span className="text-base font-bold text-accent tabular-nums">
-                          <span className="sr-only">{t("total")} </span>₪{service.price}
+                  </div>
+
+                  {/* ── Repeats (recurring series) ──
+                      Only for a slot-list time on an open day (ruling 3). The
+                      row is a disclosure: it opens the options below it; the
+                      choice itself lives in the options. */}
+                  {repeatOffered && (
+                    <div className="-mx-1">
+                      <button
+                        type="button"
+                        onClick={() => setRepeatOpen((o) => !o)}
+                        aria-expanded={repeatOpen}
+                        aria-controls="walkin-repeat-panel"
+                        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-1 text-start transition-colors active:bg-muted/60"
+                      >
+                        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                          <Repeat className="h-3.5 w-3.5" />
+                          {t("seriesRepeatLabel")}
                         </span>
-                      ) : <span />}
-                      {/* ── Repeats (recurring series) ──
-                          Only for a slot-list time on an open day (ruling 3). A
-                          disclosure: it opens the options below; the choice
-                          itself lives in the options. */}
-                      {repeatOffered && (
-                        <button
-                          type="button"
-                          onClick={() => setRepeatOpen((o) => !o)}
-                          aria-expanded={repeatOpen}
-                          aria-controls="walkin-repeat-panel"
-                          aria-label={`${t("seriesRepeatLabel")}: ${seriesActive
-                            ? t("seriesRepeatWeeklyValue").replace("{n}", String(repeatCount))
-                            : t("seriesRepeatNo")}`}
-                          className="-me-2 flex min-h-11 min-w-0 items-center gap-1.5 rounded-xl px-2 text-sm font-medium transition-colors active:bg-muted/60"
-                        >
-                          <Repeat className={cn("h-4 w-4 shrink-0", seriesActive ? "text-accent" : "text-muted-foreground")} />
+                        <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
                           <span className={cn("truncate", seriesActive && "text-accent")}>
                             {seriesActive
                               ? t("seriesRepeatWeeklyValue").replace("{n}", String(repeatCount))
-                              : t("seriesRepeatLabel")}
+                              : t("seriesRepeatNo")}
                           </span>
                           <ChevronDown
                             className={cn(
@@ -1112,12 +1115,9 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                               repeatOpen && "rotate-180",
                             )}
                           />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {repeatOffered && (
-                    <div className="-mx-1 pb-1">
+                        </span>
+                      </button>
+
                       {repeatOpen && (
                         <div id="walkin-repeat-panel" className="space-y-3 px-1 pb-1 pt-2">
                           {/* None / weekly */}
@@ -1224,6 +1224,12 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                           )}
                         </div>
                       )}
+                    </div>
+                  )}
+                  {!!service && service.price > 0 && (
+                    <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-2">
+                      <span className="text-xs text-muted-foreground">{t("total")}</span>
+                      <span className="text-lg font-bold text-accent tabular-nums">₪{service.price}</span>
                     </div>
                   )}
                 </div>
