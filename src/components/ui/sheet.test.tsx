@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, render, screen } from "@testing-library/react";
-import { renderHook } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 
 /**
  * The shared sheet vs the phone keyboard:
@@ -10,7 +10,8 @@ import { renderHook } from "@testing-library/react";
  * - a bottom sheet is lifted by the part of the layout the keyboard hides
  *   (iOS: VisualViewport shorter than innerHeight) and capped to the visible
  *   height; listeners are removed when it closes
- * - useKeyboardOpen: a focused text field on a touch device
+ * - useKeyboardOpen: a focused, still-attached text field on a touch device
+ *   AND a keyboard-shortened viewport; re-checked on route changes
  */
 
 vi.mock("@/contexts/LangContext", () => ({ useLang: () => ({ t: (k: string) => k }) }));
@@ -19,6 +20,7 @@ const { Sheet, SheetContent, SheetTitle, SheetDescription } = await import("./sh
 const { useKeyboardOpen } = await import("@/hooks/useKeyboardOpen");
 
 class FakeViewport extends EventTarget {
+  width = 375;
   height = 800;
   offsetTop = 0;
 }
@@ -94,33 +96,90 @@ describe("SheetContent and the keyboard", () => {
   });
 });
 
-describe("useKeyboardOpen", () => {
+describe("useKeyboardOpen (bottom nav / Book bar)", () => {
   const touch = (coarse: boolean) =>
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       value: () => ({ matches: coarse }),
     });
+  const keyboard = (up: boolean) =>
+    act(() => {
+      vv.height = up ? 460 : 800;
+      vv.dispatchEvent(new Event("resize"));
+    });
 
-  it("is true while a text field has focus on a touch device", async () => {
+  function Probe() {
+    const open = useKeyboardOpen();
+    const navigate = useNavigate();
+    return (
+      <>
+        <output data-testid="open">{String(open)}</output>
+        <button onClick={() => navigate("/next")}>go</button>
+      </>
+    );
+  }
+  const renderProbe = () =>
+    render(
+      <MemoryRouter initialEntries={["/auth"]}>
+        <Probe />
+      </MemoryRouter>,
+    );
+  const isOpen = () => screen.getByTestId("open").textContent === "true";
+
+  beforeEach(() => {
     touch(true);
-    document.body.innerHTML = '<input id="t" /><input id="d" type="date" />';
-    const { result } = renderHook(() => useKeyboardOpen());
-    expect(result.current).toBe(false);
-    act(() => (document.getElementById("t") as HTMLInputElement).focus());
-    expect(result.current).toBe(true);
-    // A date picker isn't the keyboard.
-    act(() => (document.getElementById("d") as HTMLInputElement).focus());
-    await act(() => new Promise((r) => setTimeout(r, 0)));
-    expect(result.current).toBe(false);
+    document.body.innerHTML = "";
   });
 
-  it("stays false on a mouse device", () => {
+  it("needs a focused text field AND a keyboard-shortened viewport", () => {
+    const input = document.body.appendChild(document.createElement("input"));
+    renderProbe();
+    act(() => input.focus());
+    expect(isOpen()).toBe(false); // focused, keyboard not up yet
+    keyboard(true);
+    expect(isOpen()).toBe(true);
+    // Android's back button: the keyboard goes, focus stays.
+    keyboard(false);
+    expect(isOpen()).toBe(false);
+    act(() => input.blur());
+  });
+
+  it("a focused field REMOVED by a navigation (login) can't leave it stuck", async () => {
+    const input = document.body.appendChild(document.createElement("input"));
+    renderProbe();
+    act(() => input.focus());
+    keyboard(true);
+    expect(isOpen()).toBe(true);
+    // The page unmounts the field: no blur / focusout fires…
+    act(() => input.remove());
+    // …but the route change re-checks, even before the viewport resizes.
+    fireEvent.click(screen.getByRole("button", { name: "go" }));
+    expect(isOpen()).toBe(false);
+  });
+
+  it("a date picker isn't the keyboard; a mouse device never hides the nav", async () => {
+    const date = document.body.appendChild(document.createElement("input"));
+    date.type = "date";
+    renderProbe();
+    act(() => date.focus());
+    keyboard(true);
+    expect(isOpen()).toBe(false);
+    keyboard(false);
     touch(false);
-    document.body.innerHTML = '<input id="t" />';
-    const { result } = renderHook(() => useKeyboardOpen());
-    act(() => (document.getElementById("t") as HTMLInputElement).focus());
-    expect(result.current).toBe(false);
+    const text = document.body.appendChild(document.createElement("input"));
+    act(() => text.focus());
+    keyboard(true);
+    expect(isOpen()).toBe(false);
+    keyboard(false);
+    act(() => text.blur());
+  });
+
+  it("without VisualViewport, focus alone decides", () => {
+    Object.defineProperty(window, "visualViewport", { configurable: true, value: undefined });
+    const input = document.body.appendChild(document.createElement("input"));
+    renderProbe();
+    act(() => input.focus());
+    expect(isOpen()).toBe(true);
+    act(() => input.blur());
   });
 });
-
-
