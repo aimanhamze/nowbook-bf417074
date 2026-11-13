@@ -64,6 +64,10 @@ interface SheetContentProps
    * the dialog), and the keyboard opens only when a field is tapped.
    */
   autoFocusOnOpen?: boolean;
+  /** Hide the corner ✕ — for a view that puts its own back + action at the
+   *  top (e.g. the new-appointment sheet's new-customer view). Esc and the
+   *  overlay still close the sheet. */
+  hideClose?: boolean;
 }
 
 /**
@@ -124,7 +128,7 @@ function useKeyboardAwareSheet(node: HTMLElement | null, enabled: boolean) {
 }
 
 const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Content>, SheetContentProps>(
-  ({ side = "right", className, children, autoFocusOnOpen = false, onOpenAutoFocus, ...props }, ref) => {
+  ({ side = "right", className, children, autoFocusOnOpen = false, hideClose = false, onOpenAutoFocus, ...props }, ref) => {
     const { t } = useLang();
     const [node, setNode] = React.useState<HTMLDivElement | null>(null);
     // A ref as well as state: Radix fires onOpenAutoFocus during mount, before
@@ -158,12 +162,14 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
           {children}
           {/* Logical end (left in he/ar, right in en), a 44px target, and a
               translated label. SheetHeader reserves room for it (pe-10). */}
+          {!hideClose && (
           <SheetPrimitive.Close
             aria-label={t("closeBtn")}
             className="absolute end-2 top-2 flex h-11 w-11 items-center justify-center rounded-full text-foreground/60 transition-colors hover:bg-foreground/[0.06] hover:text-foreground active:bg-foreground/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none"
           >
             <X className="h-5 w-5" aria-hidden />
           </SheetPrimitive.Close>
+          )}
         </SheetPrimitive.Content>
       </SheetPortal>
     );

@@ -30,6 +30,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BookingMonthCalendar } from "@/components/booking/BookingMonthCalendar";
 import { CustomerPicker } from "@/components/dashboard/CustomerPicker";
+import { NewCustomerView, type CustomerViewKind } from "@/components/dashboard/NewCustomerView";
+import { looksLikePhone } from "@/lib/customerSearch";
 import { isTextEntry, useVisualKeyboardUp } from "@/hooks/useKeyboardOpen";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { cn } from "@/lib/utils";
@@ -125,6 +127,12 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   // A text field in step 4 (search, name, phone, notes) has focus. Together
   // with the measured keyboard below this drives compact mode.
   const [fieldFocused, setFieldFocused] = useState(false);
+  // Step 4's new-customer view (new / edit the card / complete a half record).
+  // While open it replaces the sheet's header, step content and footer.
+  // Only ever writes `name` + `phone` (on Add), the same state as before.
+  const [customerView, setCustomerView] = useState<{ kind: CustomerViewKind; name: string; phone: string } | null>(null);
+  // The search text when the view was opened, so Back returns to it.
+  const [customerQuery, setCustomerQuery] = useState("");
   // Recurring series. `repeatOpen` only shows/hides the options; the choice
   // itself is `repeatWeekly` + `repeatCount` (2–12, this appointment included).
   const [repeatOpen, setRepeatOpen] = useState(false);
@@ -166,6 +174,8 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     setManualTime("");
     setName("");
     setPhone("");
+    setCustomerView(null);
+    setCustomerQuery("");
     setNotes("");
     setWhatsappConsent(false);
     setRepeatOpen(false);
@@ -197,6 +207,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 });
     setFieldFocused(false);
+    setCustomerView(null);
   }, [step]);
 
   const activeServices = services.filter((s) => s.is_active !== false);
@@ -562,9 +573,33 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
       <SheetContent
         side="bottom"
         className={`flex max-h-[calc(var(--vvh,100dvh)*0.92)] flex-col gap-0 rounded-t-3xl border-t p-0 ${providerDesktopSheet}`}
+        // The new-customer view owns the top row (back · title · Add); the
+        // corner ✕ would sit on top of Add.
+        hideClose={!!customerView}
       >
         {/* Grab handle — bottom-sheet affordance */}
         <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/20" />
+
+        {customerView ? (
+          <NewCustomerView
+            key={customerView.kind}
+            kind={customerView.kind}
+            initialName={customerView.name}
+            initialPhone={customerView.phone}
+            onBack={() => {
+              // Nothing saved. New / complete → the search (query kept); edit →
+              // the card, unchanged.
+              setCustomerView(null);
+            }}
+            onCommit={(n, p) => {
+              setName(n);
+              setPhone(p);
+              setCustomerQuery("");
+              setCustomerView(null);
+            }}
+          />
+        ) : (
+        <>
 
         {/* ── Header + step indicator (fixed; content below scrolls) ── */}
         <div className="shrink-0 px-5 pt-3">
@@ -1020,13 +1055,38 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
               >
                 {/* Customer, consent, notes — first, so the search sits at the top */}
                 <div className="space-y-3">
-                  {/* Customer: search → picked card, or name + phone for a new
-                      one. Same name/phone state, validation and payload. */}
+                  {/* Customer: search, or the card once set. New / edit open the
+                      new-customer view above. Same name/phone state and payload. */}
                   <CustomerPicker
                     name={name}
                     phone={phone}
-                    onNameChange={setName}
-                    onPhoneChange={setPhone}
+                    initialQuery={customerQuery}
+                    onPick={(n, p) => {
+                      // Same fill as the old autocomplete's pick.
+                      setName(n);
+                      setPhone(p);
+                      setCustomerQuery("");
+                    }}
+                    onClear={() => {
+                      setName("");
+                      setPhone("");
+                      setCustomerQuery("");
+                    }}
+                    onNew={(q) => {
+                      // What was typed carries over: a phone if it looks like
+                      // one (kept exactly as typed), otherwise the name.
+                      setCustomerQuery(q);
+                      setCustomerView(
+                        q && looksLikePhone(q)
+                          ? { kind: "new", name: "", phone: q }
+                          : { kind: "new", name: q, phone: "" },
+                      );
+                    }}
+                    onEdit={() => setCustomerView({ kind: "edit", name, phone })}
+                    onIncomplete={(n, p, q) => {
+                      setCustomerQuery(q);
+                      setCustomerView({ kind: "complete", name: n, phone: p });
+                    }}
                   />
                   {whatsappConsentOffered && (
                     <div className="space-y-1">
@@ -1302,6 +1362,8 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
             )}
           </div>
         </div>
+        )}
+        </>
         )}
       </SheetContent>
     </Sheet>

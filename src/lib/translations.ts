@@ -1229,9 +1229,9 @@ export const translations = {
     nbSearch: "חיפוש לפי שם או טלפון",
     nbChange: "שינוי",
     nbEditDetails: "עריכת פרטי הלקוח",
-    nbFindExisting: "חיפוש לקוח קיים",
     nbNoMatches: "לא נמצא לקוח מתאים. אפשר להוסיף לקוח חדש.",
     nbRecent: "לקוחות אחרונים",
+    nbAdd: "הוסף",
   },
   ar: {
     appName: "Ehjezly",
@@ -2486,9 +2486,9 @@ export const translations = {
     nbSearch: "البحث بالاسم أو الهاتف",
     nbChange: "تغيير",
     nbEditDetails: "تعديل بيانات العميل",
-    nbFindExisting: "البحث عن عميل حالي",
     nbNoMatches: "لا يوجد عميل مطابق. يمكنك إضافة عميل جديد.",
     nbRecent: "عملاء حديثون",
+    nbAdd: "إضافة",
   },
   en: {
     appName: "Ehjezly",
@@ -3713,9 +3713,9 @@ export const translations = {
     nbSearch: "Search by name or phone",
     nbChange: "Change",
     nbEditDetails: "Edit customer details",
-    nbFindExisting: "Find an existing customer",
     nbNoMatches: "No matching customer. You can add a new one.",
     nbRecent: "Recent customers",
+    nbAdd: "Add",
   },
 } as const;
 

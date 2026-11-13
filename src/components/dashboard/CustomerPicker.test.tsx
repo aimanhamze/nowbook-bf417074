@@ -1,30 +1,32 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
-import { useState } from "react";
 import type { ProviderCustomer } from "@/hooks/useProviderCustomers";
 
 /**
- * Step 4's customer search. What must hold: picking fills name + phone
- * exactly as the old autocomplete did (trimmed, nothing else), "New customer"
- * opens the same two fields, the sheet goes compact only while searching with
- * the keyboard up, and the ranking puts the best matches first.
+ * Step 4's customer search + the new-customer view. What must hold: picking
+ * fills name + phone exactly as the old autocomplete did (trimmed), "New
+ * customer" hands over what was typed, Add validates like Create (name and
+ * phone required, translated) and returns the values exactly as typed, Back
+ * saves nothing, and the keyboard keys go name → phone → Add.
  */
 
 let customers: ProviderCustomer[];
 vi.mock("@/hooks/useProviderCustomers", () => ({
   useProviderCustomers: () => ({ data: customers, isLoading: false }),
 }));
-vi.mock("@/contexts/LangContext", () => ({ useLang: () => ({ t: (k: string) => k }) }));
+vi.mock("@/contexts/LangContext", () => ({ useLang: () => ({ t: (k: string) => k, isRtl: true }) }));
 
 const { CustomerPicker } = await import("./CustomerPicker");
+const { NewCustomerView } = await import("./NewCustomerView");
+const { Sheet, SheetContent } = await import("@/components/ui/sheet");
 const { rankCustomers } = await import("@/lib/customerSearch");
 const { useVisualKeyboardUp } = await import("@/hooks/useKeyboardOpen");
 
 const c = (key: string, name: string | null, phone: string | null, bookingCount = 1, lastVisit = "2026-10-01"): ProviderCustomer =>
   ({ key, name, phone, bookingCount, lastVisit, registered: false });
 
-class FakeViewport extends EventTarget { height = 800; }
+class FakeViewport extends EventTarget { height = 800; offsetTop = 0; }
 let vv: FakeViewport;
 
 beforeEach(() => {
@@ -37,72 +39,115 @@ beforeEach(() => {
   Object.defineProperty(window, "visualViewport", { configurable: true, value: vv });
 });
 
-function Harness() {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  return (
-    <>
-      <CustomerPicker name={name} phone={phone} onNameChange={setName} onPhoneChange={setPhone} />
-      <output data-testid="state">{JSON.stringify({ name, phone })}</output>
-    </>
-  );
-}
-const state = () => JSON.parse(screen.getByTestId("state").textContent || "{}");
+const handlers = () => ({
+  onPick: vi.fn(), onClear: vi.fn(), onNew: vi.fn(), onEdit: vi.fn(), onIncomplete: vi.fn(),
+});
 
 describe("CustomerPicker", () => {
-  it("starts with the search and recent customers; picking fills name + phone like before", () => {
-    render(<Harness />);
-    expect(screen.getByLabelText("nbSearch")).toBeInTheDocument();
+  it("search first; picking a customer fills name + phone like before (trimmed)", () => {
+    const h = handlers();
+    render(<CustomerPicker name="" phone="" {...h} />);
     fireEvent.change(screen.getByLabelText("nbSearch"), { target: { value: "dana" } });
     fireEvent.click(screen.getByRole("button", { name: /Dana Levi/ }));
-    expect(state()).toEqual({ name: "Dana Levi", phone: "050-1234567" });
-    // Compact card with a change action
-    expect(screen.getByRole("button", { name: "nbChange" })).toBeInTheDocument();
+    expect(h.onPick).toHaveBeenCalledWith("Dana Levi", "050-1234567");
   });
 
-  it("Change clears the pick and goes back to the search", () => {
-    render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: /Dana Levi/ }));
-    fireEvent.click(screen.getByRole("button", { name: "nbChange" }));
-    expect(state()).toEqual({ name: "", phone: "" });
-    expect(screen.getByLabelText("nbSearch")).toBeInTheDocument();
+  it("'+ New customer' is the first row and hands over what was typed", () => {
+    const h = handlers();
+    render(<CustomerPicker name="" phone="" {...h} />);
+    fireEvent.change(screen.getByLabelText("nbSearch"), { target: { value: "054 12-3" } });
+    const rows = screen.getAllByRole("button").filter((b) => b.closest("ul"));
+    expect(rows[0]).toHaveTextContent("walkInNewCustomer");
+    fireEvent.click(rows[0]);
+    expect(h.onNew).toHaveBeenCalledWith("054 12-3");
   });
 
-  it("a customer without a name opens the fields to complete it", () => {
-    render(<Harness />);
+  it("a past customer missing a name goes to completion, not the card", () => {
+    const h = handlers();
+    render(<CustomerPicker name="" phone="" {...h} />);
     fireEvent.change(screen.getByLabelText("nbSearch"), { target: { value: "0540" } });
     fireEvent.click(screen.getByRole("button", { name: /054-0000000/ }));
-    expect(state()).toEqual({ name: "", phone: "054-0000000" });
-    expect(screen.getByLabelText(/walkInCustomerName/)).toBeInTheDocument();
+    expect(h.onPick).not.toHaveBeenCalled();
+    expect(h.onIncomplete).toHaveBeenCalledWith("", "054-0000000", "0540");
   });
 
-  it("New customer opens the same fields, prefilled from the query, phone kept as typed", () => {
-    render(<Harness />);
-    fireEvent.change(screen.getByLabelText("nbSearch"), { target: { value: "054 12-3" } });
-    fireEvent.click(screen.getByRole("button", { name: /walkInNewCustomer/ }));
-    expect(state()).toEqual({ name: "", phone: "054 12-3" });
-    expect(screen.getByLabelText(/walkInCustomerPhone/)).toHaveValue("054 12-3");
+  it("with a customer set: the card; Change clears, tapping the card edits", () => {
+    const h = handlers();
+    render(<CustomerPicker name="Dana" phone="050" {...h} />);
+    fireEvent.click(screen.getByRole("button", { name: "nbChange" }));
+    expect(h.onClear).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /nbEditDetails/ }));
+    expect(h.onEdit).toHaveBeenCalled();
   });
 
-  it("no past customers: straight to the fields", () => {
+  it("Back from the new-customer view returns to the same search", () => {
+    render(<CustomerPicker name="" phone="" initialQuery="dan" {...handlers()} />);
+    expect(screen.getByLabelText("nbSearch")).toHaveValue("dan");
+  });
+
+  it("no past customers: just the new-customer row", () => {
     customers = [];
-    render(<Harness />);
+    render(<CustomerPicker name="" phone="" {...handlers()} />);
     expect(screen.queryByLabelText("nbSearch")).toBeNull();
-    expect(screen.getByLabelText(/walkInCustomerName/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /walkInNewCustomer/ })).toBeInTheDocument();
+  });
+});
+
+describe("NewCustomerView", () => {
+  const renderView = (props: Partial<Parameters<typeof NewCustomerView>[0]> = {}) => {
+    const onCommit = vi.fn();
+    const onBack = vi.fn();
+    render(
+      <Sheet open>
+        <SheetContent side="bottom" hideClose>
+          <NewCustomerView kind="new" initialName="" initialPhone="" onBack={onBack} onCommit={onCommit} {...props} />
+        </SheetContent>
+      </Sheet>,
+    );
+    return { onCommit, onBack };
+  };
+
+  it("Add sits in the header; the sheet's corner close is hidden", () => {
+    renderView();
+    expect(screen.getByRole("button", { name: "nbAdd" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "closeBtn" })).toBeNull();
   });
 
-  it("keyboard keys: name Next → phone, phone Done → keyboard closes", () => {
-    customers = [];
-    render(<Harness />);
+  it("Add validates like Create: name and phone required, translated, nothing returned", () => {
+    const { onCommit } = renderView();
+    fireEvent.click(screen.getByRole("button", { name: "nbAdd" }));
+    expect(screen.getByText("walkInNameRequired")).toBeInTheDocument();
+    expect(screen.getByText("walkInPhoneRequired")).toBeInTheDocument();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("returns name + phone exactly as typed", () => {
+    const { onCommit } = renderView({ initialName: "Dana" });
+    fireEvent.change(screen.getByLabelText(/walkInCustomerPhone/), { target: { value: " 050-12 34 " } });
+    fireEvent.click(screen.getByRole("button", { name: "nbAdd" }));
+    expect(onCommit).toHaveBeenCalledWith("Dana", " 050-12 34 ");
+  });
+
+  it("keys: name Next → phone; phone Done = Add", () => {
+    const { onCommit } = renderView();
     const nameInput = screen.getByLabelText(/walkInCustomerName/);
     const phoneInput = screen.getByLabelText(/walkInCustomerPhone/);
     expect(nameInput).toHaveAttribute("enterkeyhint", "next");
     expect(phoneInput).toHaveAttribute("enterkeyhint", "done");
+    fireEvent.change(nameInput, { target: { value: "Dana" } });
     act(() => nameInput.focus());
     fireEvent.keyDown(nameInput, { key: "Enter" });
     expect(phoneInput).toHaveFocus();
+    fireEvent.change(phoneInput, { target: { value: "0501234567" } });
     fireEvent.keyDown(phoneInput, { key: "Enter" });
-    expect(phoneInput).not.toHaveFocus();
+    expect(onCommit).toHaveBeenCalledWith("Dana", "0501234567");
+  });
+
+  it("Back saves nothing", () => {
+    const { onBack, onCommit } = renderView({ initialName: "Dana" });
+    fireEvent.click(screen.getByRole("button", { name: "back" }));
+    expect(onBack).toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
   });
 });
 

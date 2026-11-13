@@ -2,57 +2,51 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Phone, Search, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
 import { useProviderCustomers, type ProviderCustomer } from "@/hooks/useProviderCustomers";
-import { looksLikePhone, rankCustomers, recentCustomers } from "@/lib/customerSearch";
-
-type Mode = "search" | "picked" | "fields";
+import { rankCustomers, recentCustomers } from "@/lib/customerSearch";
 
 interface Props {
   name: string;
   phone: string;
-  onNameChange: (name: string) => void;
-  onPhoneChange: (phone: string) => void;
+  /** What was typed in the search when step 4 was last left for the
+   *  new-customer view, so Back from there returns to the same search. */
+  initialQuery?: string;
+  /** A complete past customer was tapped: fill name + phone. */
+  onPick: (name: string, phone: string) => void;
+  /** "Change" on the card: clear name + phone, back to the search. */
+  onClear: () => void;
+  /** "+ New customer": open the new-customer view with what was typed. */
+  onNew: (query: string) => void;
+  /** The card was tapped: edit the picked name + phone. */
+  onEdit: () => void;
+  /** A past customer missing a name or phone: complete it first. */
+  onIncomplete: (name: string, phone: string, query: string) => void;
 }
 
 /**
  * Step 4's customer: a search over the provider's OWN past customers (the same
- * useProviderCustomers data the old autocomplete used), a compact card once
- * one is picked, or today's name + phone fields for a new customer.
+ * useProviderCustomers data the old autocomplete used), or the compact card
+ * once one is set. New customers and edits happen in the sheet's dedicated
+ * new-customer view, not here.
  *
  * Picking only fills the name and phone text, exactly as before: it never
  * links the booking to an account (walk-ins stay user_id NULL; the phone is
  * stored as given and link_walkin_to_account matches it server-side).
  */
-// Compact mode (header + footer stepping aside while typing) is decided by
-// the sheet for every text field in step 4, not here.
-export function CustomerPicker({ name, phone, onNameChange, onPhoneChange }: Props) {
+export function CustomerPicker({ name, phone, initialQuery = "", onPick, onClear, onNew, onEdit, onIncomplete }: Props) {
   const { t } = useLang();
   const { data: customers = [], isLoading } = useProviderCustomers();
-
-  const [mode, setMode] = useState<Mode>(() =>
-    name.trim() && phone.trim() ? "picked" : name.trim() || phone.trim() ? "fields" : "search",
-  );
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const searchRef = useRef<HTMLInputElement>(null);
-  const nameRef = useRef<HTMLInputElement>(null);
-  const phoneRef = useRef<HTMLInputElement>(null);
-  const focusNext = useRef<"name" | "phone" | null>(null);
+  const picked = !!name.trim() && !!phone.trim();
 
-  // A provider with no past customers has nothing to search: straight to the fields.
+  // Back from the new-customer view lands on the search with the query kept;
+  // put the caret back in it only if there was one (the provider was typing).
   useEffect(() => {
-    if (mode === "search" && !isLoading && customers.length === 0) setMode("fields");
-  }, [mode, isLoading, customers.length]);
-
-
-  // "New customer" was tapped: focus the field it prefilled the other one of.
-  useEffect(() => {
-    if (mode !== "fields" || !focusNext.current) return;
-    (focusNext.current === "phone" ? phoneRef : nameRef).current?.focus();
-    focusNext.current = null;
-  }, [mode]);
+    if (initialQuery && !picked) searchRef.current?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const results = useMemo(
     () => (query.trim() ? rankCustomers(customers, query) : recentCustomers(customers)),
@@ -63,48 +57,23 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange }: Pro
     // Same fill as the old autocomplete's pick.
     const pickedName = c.name?.trim() || "";
     const pickedPhone = c.phone?.trim() || "";
-    onNameChange(pickedName);
-    onPhoneChange(pickedPhone);
     searchRef.current?.blur();
-    // Missing half a record (a phone-only walk-in, say): open the fields so
-    // the provider can complete it, instead of a card Create would reject.
-    setMode(pickedName && pickedPhone ? "picked" : "fields");
-  };
-
-  const startNew = () => {
-    const q = query.trim();
-    if (q) {
-      if (looksLikePhone(q)) {
-        onPhoneChange(q);
-        focusNext.current = "name";
-      } else {
-        onNameChange(q);
-        focusNext.current = "phone";
-      }
-    } else {
-      focusNext.current = "name";
-    }
-    searchRef.current?.blur();
-    setMode("fields");
-  };
-
-  const change = () => {
-    onNameChange("");
-    onPhoneChange("");
-    setQuery("");
-    setMode("search");
+    // Missing half a record (a phone-only walk-in, say): complete it in the
+    // new-customer view, instead of a card Create would reject.
+    if (pickedName && pickedPhone) onPick(pickedName, pickedPhone);
+    else onIncomplete(pickedName, pickedPhone, query.trim());
   };
 
   // Rows keep the search field focused through the tap (mousedown default
   // prevented), so the header doesn't re-expand under the finger mid-tap.
   const keepFocus = (e: React.MouseEvent) => e.preventDefault();
 
-  if (mode === "picked") {
+  if (picked) {
     return (
       <div className="flex items-center gap-2 rounded-2xl border border-accent/30 bg-accent/[0.06] p-2">
         <button
           type="button"
-          onClick={() => setMode("fields")}
+          onClick={onEdit}
           aria-label={`${t("nbEditDetails")}: ${name}`}
           className="flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-xl px-1.5 text-start transition-colors active:bg-accent/10"
         >
@@ -114,7 +83,7 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange }: Pro
             <span dir="ltr" className="block truncate text-start text-xs text-foreground/60 [unicode-bidi:plaintext]">{phone}</span>
           </span>
         </button>
-        <Button type="button" variant="ghost" onClick={change}
+        <Button type="button" variant="ghost" onClick={() => { setQuery(""); onClear(); }}
           className="h-11 shrink-0 rounded-xl px-3 font-semibold text-accent hover:bg-accent/10 hover:text-accent">
           {t("nbChange")}
         </Button>
@@ -122,67 +91,25 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange }: Pro
     );
   }
 
-  if (mode === "fields") {
-    return (
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="walkin-name" className="text-xs">
-            {t("walkInCustomerName")} <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            ref={nameRef}
-            id="walkin-name"
-            autoComplete="off"
-            // Keyboard action key: Next → the phone field (DOM order, so the
-            // same in he/ar/en).
-            enterKeyHint="next"
-            onKeyDown={(e) => {
-              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
-              e.preventDefault();
-              phoneRef.current?.focus();
-            }}
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder={t("walkInCustomerNamePlaceholder")}
-            className="h-12"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="walkin-phone" className="text-xs">
-            {t("walkInCustomerPhone")} <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            ref={phoneRef}
-            id="walkin-phone"
-            // Done → closes the keyboard (drops focus), bringing the footer back.
-            enterKeyHint="done"
-            onKeyDown={(e) => {
-              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
-              e.preventDefault();
-              e.currentTarget.blur();
-            }}
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            dir="ltr"
-            value={phone}
-            onChange={(e) => onPhoneChange(e.target.value)}
-            placeholder={t("walkInCustomerPhonePlaceholder")}
-            className="h-12"
-          />
-        </div>
-        {customers.length > 0 && (
-          <Button type="button" variant="ghost" onClick={() => { setQuery(""); setMode("search"); }}
-            className="h-11 w-full gap-2 rounded-xl text-accent hover:bg-accent/10 hover:text-accent">
-            <Search className="h-4 w-4" />
-            {t("nbFindExisting")}
-          </Button>
-        )}
-      </div>
-    );
+  const newRow = (
+    <button type="button" onMouseDown={keepFocus} onClick={() => { searchRef.current?.blur(); onNew(query.trim()); }}
+      className="flex min-h-14 w-full items-center gap-3 px-3 text-start text-accent transition-colors active:bg-accent/10">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10">
+        <UserPlus className="h-[18px] w-[18px]" />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+        {t("walkInNewCustomer")}
+        {query.trim() && <span className="font-normal text-foreground/60"> · <bdi>{query.trim()}</bdi></span>}
+      </span>
+    </button>
+  );
+
+  // A provider with no past customers has nothing to search: just the
+  // new-customer row.
+  if (!isLoading && customers.length === 0) {
+    return <div className="overflow-hidden rounded-2xl border border-foreground/10 bg-white">{newRow}</div>;
   }
 
-  // ── Search ────────────────────────────────────────────────────────────────
   return (
     <div>
       {/* Pinned to the top of the step's scroller: results scroll under it, so
@@ -220,18 +147,7 @@ export function CustomerPicker({ name, phone, onNameChange, onPhoneChange }: Pro
         <p className="mb-1.5 mt-1 px-1 text-xs font-semibold text-foreground/60">{t("nbRecent")}</p>
       )}
       <ul className="mt-1 overflow-hidden rounded-2xl border border-foreground/10 bg-white">
-        <li>
-          <button type="button" onMouseDown={keepFocus} onClick={startNew}
-            className="flex min-h-14 w-full items-center gap-3 px-3 text-start text-accent transition-colors active:bg-accent/10">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10">
-              <UserPlus className="h-[18px] w-[18px]" />
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-              {t("walkInNewCustomer")}
-              {query.trim() && <span className="font-normal text-foreground/60"> · <bdi>{query.trim()}</bdi></span>}
-            </span>
-          </button>
-        </li>
+        <li>{newRow}</li>
         {results.map((c) => (
           <li key={c.key} className="border-t border-foreground/[0.07]">
             <button type="button" onMouseDown={keepFocus} onClick={() => pick(c)}
