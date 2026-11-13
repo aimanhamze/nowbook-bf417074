@@ -43,7 +43,7 @@ export function ProviderCardGrid({ provider, schedule, now }: ProviderCardGridPr
   const showsStatus = !isAcademyCategory(provider.category);
   const status = useMemo(() => {
     if (!showsStatus || !schedule || !now) return null;
-    return getProviderStatus(schedule.availability, schedule.blockedDates, now);
+    return getProviderStatus(schedule.availability, schedule.blockedDates, now, schedule.overrides);
   }, [showsStatus, schedule, now]);
 
   const handleFavorite = (e: React.MouseEvent) => {

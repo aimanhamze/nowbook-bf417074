@@ -143,7 +143,7 @@ function FavoriteStory({ provider, schedule, now, onClick }: FavoriteStoryProps)
 
   const isOpen = (() => {
     if (!schedule) return false;
-    return getProviderStatus(schedule.availability, schedule.blockedDates, now).isOpen;
+    return getProviderStatus(schedule.availability, schedule.blockedDates, now, schedule.overrides).isOpen;
   })();
 
   const initial = provider.name[lang].trim()[0]?.toUpperCase() ?? "·";

@@ -28,6 +28,8 @@ import {
 } from "@/lib/weeklyHours";
 import { toast } from "sonner";
 import { BranchSuffix } from "@/components/branch/BranchSuffix";
+import { SpecialOpeningsGroup } from "@/components/dashboard/SpecialOpeningsGroup";
+import { isAcademyCategory } from "@/lib/academyCategory";
 
 // The app's week order (Sunday first), as everywhere else.
 const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
@@ -50,6 +52,11 @@ export function AvailabilityTab() {
   // both hours editors are hidden for it. The closed-days group stays: it is a
   // studio's only way to close a day, and the class booking flow honours it.
   const isFitnessStudio = profile?.category === "fitness_studio";
+  // Special opening days: weekly providers only (monthly mode edits each date
+  // in its own calendar). Never a studio or an academy; the RPC refuses both.
+  // An academy never reaches this section (lib/dashboardSetup); the check is
+  // defence in depth.
+  const showsOpenings = !isFitnessStudio && !isMonthly && !isAcademyCategory(profile?.category);
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -60,6 +67,8 @@ export function AvailabilityTab() {
 
       {!isFitnessStudio && isMonthly && <MonthlyAvailabilityCalendar />}
       {!isFitnessStudio && !isMonthly && <WeekSummary />}
+
+      {showsOpenings && <SpecialOpeningsGroup />}
 
       <ClosedDaysGroup showHeading={!isFitnessStudio} />
     </motion.div>

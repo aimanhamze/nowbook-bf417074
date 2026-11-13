@@ -1,6 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
+import { fetchOwnBlockedDates, fetchOwnDateOverrides } from "@/lib/scheduleFetch";
+
+/** save_date_openings, typed by hand until types.ts includes it. */
+type OpeningsRpc = (
+  fn: "save_date_openings",
+  args: {
+    p_provider_id: string;
+    p_dates: string[];
+    p_start: string;
+    p_end: string;
+    p_break_start: string | null;
+    p_break_end: string | null;
+    p_replace_blocks: boolean;
+  },
+) => PromiseLike<{ data: number | null; error: { message: string } | null }>;
 
 // `enabled` gates every query here, mirroring useProviderServices(enabled) and
 // useProviderStaffServices(enabled). It DEFAULTS TO TRUE, so all four existing
@@ -62,17 +77,13 @@ export function useProviderAvailability(enabled = true) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["provider-availability"] }),
   });
 
+  // ALL of the provider's own rows, past included (the calendar's out-of-hours
+  // badge reads past days), paged past the 1000-row cap — see lib/scheduleFetch.
   const blockedDatesQuery = useQuery({
     queryKey: ["provider-blocked-dates", profile?.id],
     queryFn: async () => {
       if (!profile) return [];
-      const { data, error } = await supabase
-        .from("provider_blocked_dates")
-        .select("*")
-        .eq("provider_id", profile.id)
-        .order("blocked_date");
-      if (error) throw error;
-      return data || [];
+      return fetchOwnBlockedDates(profile.id);
     },
     enabled: !!profile && enabled,
   });
@@ -109,22 +120,17 @@ export function useProviderAvailability(enabled = true) {
     onSuccess: invalidateBlocked,
   });
 
-  // ── Monthly per-date overrides (only used when availability_mode = 'monthly') ─
+  // ── Per-date overrides (both modes: monthly days + weekly special openings) ─
   // Provider-side list, kept on a DISTINCT key from the customer resolver's
   // ["provider-date-overrides", providerId] query so the two caches never collide
   // (this one selects *). Mutations invalidate BOTH so customer availability
   // updates live the moment a provider edits a day.
   const dateOverridesQuery = useQuery({
     queryKey: ["provider-date-overrides-manage", profile?.id],
+    // All rows, past included, paged past the 1000-row cap (lib/scheduleFetch).
     queryFn: async () => {
       if (!profile) return [];
-      const { data, error } = await supabase
-        .from("provider_date_overrides")
-        .select("*")
-        .eq("provider_id", profile.id)
-        .order("override_date");
-      if (error) throw error;
-      return data || [];
+      return fetchOwnDateOverrides(profile.id);
     },
     enabled: !!profile && enabled,
   });
@@ -133,6 +139,8 @@ export function useProviderAvailability(enabled = true) {
     queryClient.invalidateQueries({ queryKey: ["provider-date-overrides-manage"] });
     // Customer booking view reads overrides via this key (useAllProviders).
     queryClient.invalidateQueries({ queryKey: ["provider-date-overrides"] });
+    // Home status pills read today's override too.
+    queryClient.invalidateQueries({ queryKey: ["all-provider-date-overrides"] });
     queryClient.invalidateQueries({ queryKey: ["all-providers"] });
   };
 
@@ -165,6 +173,40 @@ export function useProviderAvailability(enabled = true) {
     onSuccess: invalidateOverrides,
   });
 
+  // Special opening days (weekly mode): one save_date_openings call writes
+  // every date in one transaction, and with replaceBlocks deletes those dates'
+  // blocked rows in the same transaction. Invalidates blocked AND overrides.
+  const saveDateOpenings = useMutation({
+    mutationFn: async (o: {
+      dates: string[];
+      start: string;
+      end: string;
+      breakStart: string | null;
+      breakEnd: string | null;
+      replaceBlocks: boolean;
+    }) => {
+      if (!profile) throw new Error("No provider profile");
+      // Narrow cast: the RPC is DEV-only until it ships; types.ts is generated
+      // from PROD and is not regenerated from DEV (see packageTypes.ts).
+      const db = supabase as unknown as { rpc: OpeningsRpc };
+      const { data, error } = await db.rpc("save_date_openings", {
+        p_provider_id: profile.id,
+        p_dates: o.dates,
+        p_start: o.start,
+        p_end: o.end,
+        p_break_start: o.breakStart,
+        p_break_end: o.breakEnd,
+        p_replace_blocks: o.replaceBlocks,
+      });
+      if (error) throw error;
+      return data as number;
+    },
+    onSettled: () => {
+      invalidateOverrides();
+      invalidateBlocked();
+    },
+  });
+
   const deleteDateOverride = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("provider_date_overrides").delete().eq("id", id);
@@ -190,5 +232,30 @@ export function useProviderAvailability(enabled = true) {
     unblockDate,
     upsertDateOverride,
     deleteDateOverride,
+    saveDateOpenings,
   };
+}
+
+/**
+ * Active (confirmed / pending) bookings on one date for the signed-in
+ * provider's active branch. Shown before an opening is removed, so the owner
+ * knows who is booked into it. `date` null = disabled.
+ */
+export function useDayActiveBookingCount(date: string | null) {
+  const { profile } = useProviderProfile();
+  return useQuery({
+    queryKey: ["provider-day-booking-count", profile?.id, date],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("provider_id", profile!.id)
+        .eq("booking_date", date!)
+        .in("status", ["confirmed", "pending"]);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!profile && !!date,
+    staleTime: 0,
+  });
 }

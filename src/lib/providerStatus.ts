@@ -16,6 +16,14 @@ export interface AvailabilityRow {
   is_available: boolean;
 }
 
+/** The provider_date_overrides fields the pill reads. */
+export interface StatusOverrideRow {
+  override_date: string;
+  is_available: boolean;
+  start_time: string | null;
+  end_time: string | null;
+}
+
 function normalizeTime(value: string | null | undefined): string | null {
   if (!value) return null;
   const sliced = value.slice(0, 5);
@@ -34,21 +42,33 @@ function todayDateString(now: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * The open/closed pill. Same precedence as resolveDayHours:
+ * blocked -> date override -> weekday row.
+ *
+ * `overrides` is optional; omitted or empty gives the old result exactly.
+ * A provider with no weekday rows but an override for today counts as having a
+ * schedule today, so its special opening still shows.
+ */
 export function getProviderStatus(
   availability: AvailabilityRow[] | null | undefined,
   blockedDates: string[] | null | undefined,
   now: Date,
+  overrides?: StatusOverrideRow[] | null,
 ): ProviderStatus {
-  const hasSchedule = (availability?.length ?? 0) > 0;
+  const today = todayDateString(now);
+  const override = overrides?.find(o => o.override_date.slice(0, 10) === today);
+
+  const hasSchedule = (availability?.length ?? 0) > 0 || !!override;
   if (!hasSchedule) {
     return { isOpen: false, todayHours: null, hasSchedule: false };
   }
 
-  if (blockedDates?.includes(todayDateString(now))) {
+  if (blockedDates?.includes(today)) {
     return { isOpen: false, todayHours: null, hasSchedule: true };
   }
 
-  const row = availability!.find(r => r.day_of_week === now.getDay());
+  const row = override ?? availability!.find(r => r.day_of_week === now.getDay());
   if (!row || !row.is_available) {
     return { isOpen: false, todayHours: null, hasSchedule: true };
   }
