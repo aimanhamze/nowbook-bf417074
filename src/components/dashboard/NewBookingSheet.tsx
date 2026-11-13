@@ -131,9 +131,10 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   // booking, never remembered per customer — the provider has to ask each time.
   const [whatsappConsent, setWhatsappConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  // A text field in step 4 (search, name, phone, notes) has focus. Together
-  // with the measured keyboard below this drives compact mode.
-  const [fieldFocused, setFieldFocused] = useState(false);
+  // The id of the focused text field in step 4 (search, notes; null = none).
+  // Together with the measured keyboard below this drives compact mode and
+  // search mode.
+  const [focusedField, setFocusedField] = useState<string | null>(null);
   // Step 4's new-customer view (new / edit the card / complete a half record).
   // While open it replaces the sheet's header, step content and footer.
   // Only ever writes `name` + `phone` (on Add), the same state as before.
@@ -214,7 +215,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 });
-    setFieldFocused(false);
+    setFocusedField(null);
     setCustomerView(null);
   }, [step]);
 
@@ -245,7 +246,15 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   // Android's back button, which keeps focus (hence the measured keyboard,
   // not focus alone). Other sheets keep their Save above the keyboard.
   const keyboardUp = useVisualKeyboardUp(open && step === infoStep);
-  const compact = step === infoStep && fieldFocused && keyboardUp;
+  const compact = step === infoStep && !!focusedField && keyboardUp;
+  // SEARCH MODE: the customer search is focused with the keyboard up (it only
+  // exists while no customer is set). The summary card, the consent box and
+  // the notes link step aside, so the search sits right under the compact
+  // header and its results get all the space above the keyboard. It ends when
+  // a customer is picked, the ✕ clears the search (it drops focus), or the
+  // keyboard closes — Android's back button included, via the measured
+  // keyboard — and the normal layout returns.
+  const searching = compact && focusedField === "walkin-search";
 
   const privateSlots = service && !isGroup ? getAvailableSlots(date, duration, service.max_capacity ?? 1, service.id) : [];
   const groupSlots = service && isGroup
@@ -580,13 +589,19 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
 
       <SheetContent
         side="bottom"
-        className={`flex max-h-[calc(var(--vvh,100dvh)*0.92)] flex-col gap-0 rounded-t-3xl border-t p-0 ${providerDesktopSheet}`}
+        // Search mode takes the whole visible height (no top gap, no grab
+        // handle) so 3–4 results fit between the search and the keyboard.
+        className={cn(
+          "flex flex-col gap-0 rounded-t-3xl border-t p-0",
+          searching ? "max-h-[var(--vvh,100dvh)]" : "max-h-[calc(var(--vvh,100dvh)*0.92)]",
+          providerDesktopSheet,
+        )}
         // The new-customer view owns the top row (back · title · Add); the
         // corner ✕ would sit on top of Add.
         hideClose={!!customerView}
       >
-        {/* Grab handle — bottom-sheet affordance */}
-        <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/20" />
+        {/* Grab handle — bottom-sheet affordance (not in search mode) */}
+        {!searching && <div className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/20" />}
 
         {customerView ? (
           <NewCustomerView
@@ -657,15 +672,17 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
         {/* ── Scrollable step body ── */}
         <div
           ref={bodyRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5 pt-4"
+          className={cn("flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5", searching ? "pt-2" : "pt-4")}
           onFocusCapture={(e) => {
-            if (step === infoStep && isTextEntry(e.target)) setFieldFocused(true);
+            if (step === infoStep && isTextEntry(e.target)) setFocusedField(e.target.id || "field");
           }}
           // Re-read once focus has landed, so name → phone (Next) doesn't flicker.
           onBlurCapture={() => {
             setTimeout(() => {
               const el = document.activeElement;
-              setFieldFocused(!!bodyRef.current && isTextEntry(el) && bodyRef.current.contains(el));
+              setFocusedField(
+                bodyRef.current && isTextEntry(el) && bodyRef.current.contains(el) ? el.id || "field" : null,
+              );
             }, 0);
           }}
         >
@@ -1061,6 +1078,8 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                 transition={SPRING}
                 className="space-y-4"
               >
+                {!searching && (
+                <>
                 {/* ── 1. Booking summary (+ repeats), at the top — the labelled
                     card, with slightly tighter padding so the step still fits. ── */}
                 <div className="space-y-2 rounded-2xl border border-border bg-muted/40 px-4 py-3">
@@ -1233,6 +1252,8 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                     </div>
                   )}
                 </div>
+                </>
+                )}
 
                 {/* ── 2. Customer: search (nothing listed until typing) + "New
                     customer", or the card once set; then WhatsApp consent.
@@ -1270,7 +1291,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                       setCustomerView({ kind: "complete", name: n, phone: p });
                     }}
                   />
-                  {whatsappConsentOffered && (
+                  {whatsappConsentOffered && !searching && (
                     <div className="space-y-1">
                       {/* The whole row is the label, so the tap target is the
                           full width at 44px min height, not the 20px box. A
@@ -1301,8 +1322,9 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                   )}
                 </div>
 
-                {/* ── 3. Notes, collapsed to a link; open while it has text. ── */}
-                {notesOpen || notes.trim() ? (
+                {/* ── 3. Notes, collapsed to a link; open while it has text.
+                    Hidden in search mode. ── */}
+                {searching ? null : notesOpen || notes.trim() ? (
                   <Textarea
                     ref={notesRef}
                     id="walkin-notes"

@@ -60,6 +60,16 @@ describe("CustomerPicker", () => {
     expect(screen.getByRole("button", { name: /walkInNewCustomer/ })).toBeInTheDocument();
   });
 
+  it("the ✕ clears the search and drops focus (ends search mode)", () => {
+    render(<CustomerPicker name="" phone="" {...handlers()} />);
+    const input = screen.getByLabelText("nbSearch");
+    act(() => input.focus());
+    fireEvent.change(input, { target: { value: "dana" } });
+    fireEvent.click(screen.getByRole("button", { name: "clear" }));
+    expect(input).toHaveValue("");
+    expect(input).not.toHaveFocus();
+  });
+
   it("'+ New customer' hands over what was typed", () => {
     const h = handlers();
     render(<CustomerPicker name="" phone="" {...h} />);

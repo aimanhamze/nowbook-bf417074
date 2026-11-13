@@ -41,7 +41,6 @@ export function CustomerPicker({ name, phone, initialQuery = "", onPick, onClear
   const { data: customers = [], isLoading } = useProviderCustomers();
   const [query, setQuery] = useState(initialQuery);
   const searchRef = useRef<HTMLInputElement>(null);
-  const searchBoxRef = useRef<HTMLDivElement>(null);
   const picked = !!name.trim() && !!phone.trim();
 
   // Back from the new-customer view lands on the search with the query kept;
@@ -53,20 +52,6 @@ export function CustomerPicker({ name, phone, initialQuery = "", onPick, onClear
 
   // Nothing is listed until something is typed; then the best five.
   const results = useMemo(() => rankCustomers(customers, query), [customers, query]);
-
-  // The booking summary sits above the search, so once the keyboard has
-  // settled bring the search to the top of the step's scroller: its results
-  // then get the strip above the keyboard.
-  const focusTimer = useRef<ReturnType<typeof setTimeout>>();
-  useEffect(() => () => clearTimeout(focusTimer.current), []);
-  const onSearchFocus = () => {
-    clearTimeout(focusTimer.current);
-    focusTimer.current = setTimeout(() => {
-      if (document.activeElement === searchRef.current) {
-        searchBoxRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-      }
-    }, 350);
-  };
 
   const pick = (c: ProviderCustomer) => {
     // Same fill as the old autocomplete's pick.
@@ -121,7 +106,7 @@ export function CustomerPicker({ name, phone, initialQuery = "", onPick, onClear
   if (!isLoading && customers.length === 0) return newButton;
 
   return (
-    <div ref={searchBoxRef} className="scroll-mt-1">
+    <div>
       <label htmlFor="walkin-search" className="sr-only">{t("nbSearch")}</label>
       <div className="relative">
         <Search className="pointer-events-none absolute start-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-foreground/40" />
@@ -133,7 +118,6 @@ export function CustomerPicker({ name, phone, initialQuery = "", onPick, onClear
           autoComplete="off"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={onSearchFocus}
           placeholder={t("nbSearch")}
           // 16px (no iOS zoom). The end padding is reserved for the clear
           // button only while it shows, so the longest placeholder (en, 266px
@@ -147,7 +131,12 @@ export function CustomerPicker({ name, phone, initialQuery = "", onPick, onClear
           <button
             type="button"
             onMouseDown={keepFocus}
-            onClick={() => setQuery("")}
+            // Clearing ends the search: drop focus so the keyboard closes and
+            // the sheet's normal layout (summary, consent, notes) returns.
+            onClick={() => {
+              setQuery("");
+              searchRef.current?.blur();
+            }}
             aria-label={t("clear")}
             className="absolute end-0.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-foreground/50 active:bg-foreground/[0.06]"
           >
