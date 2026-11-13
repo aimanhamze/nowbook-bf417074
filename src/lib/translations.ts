@@ -1230,8 +1230,8 @@ export const translations = {
     nbChange: "שינוי",
     nbEditDetails: "עריכת פרטי הלקוח",
     nbNoMatches: "לא נמצא לקוח מתאים. אפשר להוסיף לקוח חדש.",
-    nbRecent: "לקוחות אחרונים",
     nbAdd: "הוסף",
+    nbAddNote: "הוספת הערה",
   },
   ar: {
     appName: "Ehjezly",
@@ -2487,8 +2487,8 @@ export const translations = {
     nbChange: "تغيير",
     nbEditDetails: "تعديل بيانات العميل",
     nbNoMatches: "لا يوجد عميل مطابق. يمكنك إضافة عميل جديد.",
-    nbRecent: "عملاء حديثون",
     nbAdd: "إضافة",
+    nbAddNote: "إضافة ملاحظة",
   },
   en: {
     appName: "Ehjezly",
@@ -3714,8 +3714,8 @@ export const translations = {
     nbChange: "Change",
     nbEditDetails: "Edit customer details",
     nbNoMatches: "No matching customer. You can add a new one.",
-    nbRecent: "Recent customers",
     nbAdd: "Add",
+    nbAddNote: "Add a note",
   },
 } as const;
 

@@ -4,7 +4,8 @@ import { act, fireEvent, render, renderHook, screen } from "@testing-library/rea
 import type { ProviderCustomer } from "@/hooks/useProviderCustomers";
 
 /**
- * Step 4's customer search + the new-customer view. What must hold: picking
+ * Step 4's customer search + the new-customer view. What must hold: nothing
+ * is listed until typing, picking
  * fills name + phone exactly as the old autocomplete did (trimmed), "New
  * customer" hands over what was typed, Add validates like Create (name and
  * phone required, translated) and returns the values exactly as typed, Back
@@ -52,14 +53,26 @@ describe("CustomerPicker", () => {
     expect(h.onPick).toHaveBeenCalledWith("Dana Levi", "050-1234567");
   });
 
-  it("'+ New customer' is the first row and hands over what was typed", () => {
+  it("nothing is listed before typing; '+ New customer' sits under the search", () => {
+    render(<CustomerPicker name="" phone="" {...handlers()} />);
+    expect(screen.queryByRole("list")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Dana Levi/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /walkInNewCustomer/ })).toBeInTheDocument();
+  });
+
+  it("'+ New customer' hands over what was typed", () => {
     const h = handlers();
     render(<CustomerPicker name="" phone="" {...h} />);
     fireEvent.change(screen.getByLabelText("nbSearch"), { target: { value: "054 12-3" } });
-    const rows = screen.getAllByRole("button").filter((b) => b.closest("ul"));
-    expect(rows[0]).toHaveTextContent("walkInNewCustomer");
-    fireEvent.click(rows[0]);
+    fireEvent.click(screen.getByRole("button", { name: /walkInNewCustomer/ }));
     expect(h.onNew).toHaveBeenCalledWith("054 12-3");
+  });
+
+  it("while typing: at most five results", () => {
+    customers = Array.from({ length: 8 }, (_, i) => c(String(i), `Dana ${i}`, `050${i}`));
+    render(<CustomerPicker name="" phone="" {...handlers()} />);
+    fireEvent.change(screen.getByLabelText("nbSearch"), { target: { value: "dana" } });
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
   });
 
   it("a past customer missing a name goes to completion, not the card", () => {

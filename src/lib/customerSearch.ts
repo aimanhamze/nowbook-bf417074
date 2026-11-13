@@ -39,13 +39,6 @@ export function rankCustomers(customers: ProviderCustomer[], query: string): Pro
     .map((s) => s.c);
 }
 
-/** With nothing typed: the customers with the latest booking date first. */
-export function recentCustomers(customers: ProviderCustomer[]): ProviderCustomer[] {
-  return [...customers]
-    .sort((a, b) => (b.lastVisit ?? "").localeCompare(a.lastVisit ?? ""))
-    .slice(0, MAX_RESULTS);
-}
-
 /** Looks like a phone number rather than a name ("054-12", "+972…"). */
 export const looksLikePhone = (s: string) => /^[+\d\s\-()]+$/.test(s.trim()) && digits(s).length >= 3;
 

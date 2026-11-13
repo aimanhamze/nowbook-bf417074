@@ -120,6 +120,13 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  // Step 4's notes field is folded to a "+ Add a note" link until tapped.
+  const [notesOpen, setNotesOpen] = useState(false);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  // The provider tapped "+ Add a note": the caret goes in (keyboard expected).
+  useEffect(() => {
+    if (notesOpen) notesRef.current?.focus();
+  }, [notesOpen]);
   // Provider-recorded consent for WhatsApp messages about THIS booking. Per
   // booking, never remembered per customer — the provider has to ask each time.
   const [whatsappConsent, setWhatsappConsent] = useState(false);
@@ -177,6 +184,7 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
     setCustomerView(null);
     setCustomerQuery("");
     setNotes("");
+    setNotesOpen(false);
     setWhatsappConsent(false);
     setRepeatOpen(false);
     setRepeatWeekly(false);
@@ -1051,139 +1059,52 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={SPRING}
-                className="space-y-5"
+                className="space-y-4"
               >
-                {/* Customer, consent, notes — first, so the search sits at the top */}
-                <div className="space-y-3">
-                  {/* Customer: search, or the card once set. New / edit open the
-                      new-customer view above. Same name/phone state and payload. */}
-                  <CustomerPicker
-                    name={name}
-                    phone={phone}
-                    initialQuery={customerQuery}
-                    onPick={(n, p) => {
-                      // Same fill as the old autocomplete's pick.
-                      setName(n);
-                      setPhone(p);
-                      setCustomerQuery("");
-                    }}
-                    onClear={() => {
-                      setName("");
-                      setPhone("");
-                      setCustomerQuery("");
-                    }}
-                    onNew={(q) => {
-                      // What was typed carries over: a phone if it looks like
-                      // one (kept exactly as typed), otherwise the name.
-                      setCustomerQuery(q);
-                      setCustomerView(
-                        q && looksLikePhone(q)
-                          ? { kind: "new", name: "", phone: q }
-                          : { kind: "new", name: q, phone: "" },
-                      );
-                    }}
-                    onEdit={() => setCustomerView({ kind: "edit", name, phone })}
-                    onIncomplete={(n, p, q) => {
-                      setCustomerQuery(q);
-                      setCustomerView({ kind: "complete", name: n, phone: p });
-                    }}
-                  />
-                  {whatsappConsentOffered && (
-                    <div className="space-y-1">
-                      {/* The whole row is the label, so the tap target is the
-                          full width at 44px min height, not the 20px box. A
-                          click on the box itself is not re-dispatched by the
-                          label (interactive descendant), so it toggles once.
-                          Never disabled: the provider may ask before typing
-                          the number, and an invalid one is reported below. */}
-                      <Label className="flex min-h-11 cursor-pointer items-center gap-3 py-2 text-sm font-normal leading-snug">
-                        <Checkbox
-                          checked={whatsappConsent}
-                          onCheckedChange={(v) => setWhatsappConsent(v === true)}
-                          aria-invalid={consentPhoneInvalid || undefined}
-                          aria-describedby={consentPhoneInvalid ? "walkin-whatsapp-consent-error" : undefined}
-                          className="h-5 w-5 rounded-[6px]"
-                        />
-                        <span className="flex-1 text-start">{t("walkInWhatsappConsent")}</span>
-                      </Label>
-                      {consentPhoneInvalid && (
-                        <p
-                          id="walkin-whatsapp-consent-error"
-                          aria-live="polite"
-                          className="ps-8 text-xs text-destructive"
-                        >
-                          {t("walkInWhatsappPhoneInvalid")}
-                        </p>
+                {/* ── 1. Booking summary — two compact lines: what & when; then
+                    price and the repeat control (its panel expands below). ── */}
+                <div className="rounded-2xl border border-border bg-muted/40 px-4 py-2">
+                  <p className="flex min-h-8 items-center gap-1.5 text-sm">
+                    <span className="min-w-0 truncate font-semibold">
+                      {service?.name}
+                      {staffStepEnabled && selectedStaff && (
+                        <span className="font-medium text-foreground/70"> · {selectedStaff.name}</span>
                       )}
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="walkin-notes" className="text-xs">
-                      {t("walkInNotes")}
-                    </Label>
-                    <Textarea
-                      id="walkin-notes"
-                      // Done closes the keyboard (Shift+Enter still adds a line
-                      // on a hardware keyboard), bringing the footer back.
-                      enterKeyHint="done"
-                      onKeyDown={(e) => {
-                        if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
-                        e.preventDefault();
-                        e.currentTarget.blur();
-                      }}
-                      rows={2}
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder={t("walkInNotesPlaceholder")}
-                    />
-                  </div>
-                </div>
-                {/* Booking summary (+ repeats) — after the customer, right above Create */}
-                <div className="space-y-2.5 rounded-2xl border border-border bg-muted/40 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs text-muted-foreground">{t("walkInService")}</span>
-                    <span className="truncate text-sm font-semibold">{service?.name}</span>
-                  </div>
-                  {staffStepEnabled && selectedStaff && (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-muted-foreground">{t("staffMemberLabel")}</span>
-                      <span className="flex items-center gap-1.5 truncate text-sm font-semibold">
-                        <UserRound className="h-3.5 w-3.5 text-accent shrink-0" />
-                        {selectedStaff.name}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs text-muted-foreground">{t("selectDate")}</span>
-                    <span className="text-sm font-medium">
+                    </span>
+                    <span className="shrink-0 text-foreground/70">
+                      {" · "}
                       {format(date, "EEE, d MMM", { locale: dateFnsLocale })}
                       {" · "}
                       <span dir="ltr" className="tabular-nums">{time}</span>
                     </span>
-                  </div>
-
-                  {/* ── Repeats (recurring series) ──
-                      Only for a slot-list time on an open day (ruling 3). The
-                      row is a disclosure: it opens the options below it; the
-                      choice itself lives in the options. */}
-                  {repeatOffered && (
-                    <div className="-mx-1">
-                      <button
-                        type="button"
-                        onClick={() => setRepeatOpen((o) => !o)}
-                        aria-expanded={repeatOpen}
-                        aria-controls="walkin-repeat-panel"
-                        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-1 text-start transition-colors active:bg-muted/60"
-                      >
-                        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                          <Repeat className="h-3.5 w-3.5" />
-                          {t("seriesRepeatLabel")}
+                  </p>
+                  {(repeatOffered || (!!service && service.price > 0)) && (
+                    <div className="flex min-h-11 items-center justify-between gap-3">
+                      {!!service && service.price > 0 ? (
+                        <span className="text-base font-bold text-accent tabular-nums">
+                          <span className="sr-only">{t("total")} </span>₪{service.price}
                         </span>
-                        <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+                      ) : <span />}
+                      {/* ── Repeats (recurring series) ──
+                          Only for a slot-list time on an open day (ruling 3). A
+                          disclosure: it opens the options below; the choice
+                          itself lives in the options. */}
+                      {repeatOffered && (
+                        <button
+                          type="button"
+                          onClick={() => setRepeatOpen((o) => !o)}
+                          aria-expanded={repeatOpen}
+                          aria-controls="walkin-repeat-panel"
+                          aria-label={`${t("seriesRepeatLabel")}: ${seriesActive
+                            ? t("seriesRepeatWeeklyValue").replace("{n}", String(repeatCount))
+                            : t("seriesRepeatNo")}`}
+                          className="-me-2 flex min-h-11 min-w-0 items-center gap-1.5 rounded-xl px-2 text-sm font-medium transition-colors active:bg-muted/60"
+                        >
+                          <Repeat className={cn("h-4 w-4 shrink-0", seriesActive ? "text-accent" : "text-muted-foreground")} />
                           <span className={cn("truncate", seriesActive && "text-accent")}>
                             {seriesActive
                               ? t("seriesRepeatWeeklyValue").replace("{n}", String(repeatCount))
-                              : t("seriesRepeatNo")}
+                              : t("seriesRepeatLabel")}
                           </span>
                           <ChevronDown
                             className={cn(
@@ -1191,9 +1112,12 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                               repeatOpen && "rotate-180",
                             )}
                           />
-                        </span>
-                      </button>
-
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {repeatOffered && (
+                    <div className="-mx-1 pb-1">
                       {repeatOpen && (
                         <div id="walkin-repeat-panel" className="space-y-3 px-1 pb-1 pt-2">
                           {/* None / weekly */}
@@ -1302,14 +1226,106 @@ export function NewBookingSheet({ selectedDate }: { selectedDate: Date }) {
                       )}
                     </div>
                   )}
-                  {!!service && service.price > 0 && (
-                    <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-2.5">
-                      <span className="text-xs text-muted-foreground">{t("total")}</span>
-                      <span className="text-lg font-bold text-accent tabular-nums">₪{service.price}</span>
+                </div>
+
+                {/* ── 2. Customer: search (nothing listed until typing) + "New
+                    customer", or the card once set; then WhatsApp consent.
+                    New / edit open the new-customer view. Same name/phone
+                    state and payload. ── */}
+                <div className="space-y-2">
+                  <CustomerPicker
+                    name={name}
+                    phone={phone}
+                    initialQuery={customerQuery}
+                    onPick={(n, p) => {
+                      // Same fill as the old autocomplete's pick.
+                      setName(n);
+                      setPhone(p);
+                      setCustomerQuery("");
+                    }}
+                    onClear={() => {
+                      setName("");
+                      setPhone("");
+                      setCustomerQuery("");
+                    }}
+                    onNew={(q) => {
+                      // What was typed carries over: a phone if it looks like
+                      // one (kept exactly as typed), otherwise the name.
+                      setCustomerQuery(q);
+                      setCustomerView(
+                        q && looksLikePhone(q)
+                          ? { kind: "new", name: "", phone: q }
+                          : { kind: "new", name: q, phone: "" },
+                      );
+                    }}
+                    onEdit={() => setCustomerView({ kind: "edit", name, phone })}
+                    onIncomplete={(n, p, q) => {
+                      setCustomerQuery(q);
+                      setCustomerView({ kind: "complete", name: n, phone: p });
+                    }}
+                  />
+                  {whatsappConsentOffered && (
+                    <div className="space-y-1">
+                      {/* The whole row is the label, so the tap target is the
+                          full width at 44px min height, not the 20px box. A
+                          click on the box itself is not re-dispatched by the
+                          label (interactive descendant), so it toggles once.
+                          Never disabled: the provider may ask before typing
+                          the number, and an invalid one is reported below. */}
+                      <Label className="flex min-h-11 cursor-pointer items-center gap-3 py-2 text-sm font-normal leading-snug">
+                        <Checkbox
+                          checked={whatsappConsent}
+                          onCheckedChange={(v) => setWhatsappConsent(v === true)}
+                          aria-invalid={consentPhoneInvalid || undefined}
+                          aria-describedby={consentPhoneInvalid ? "walkin-whatsapp-consent-error" : undefined}
+                          className="h-5 w-5 rounded-[6px]"
+                        />
+                        <span className="flex-1 text-start">{t("walkInWhatsappConsent")}</span>
+                      </Label>
+                      {consentPhoneInvalid && (
+                        <p
+                          id="walkin-whatsapp-consent-error"
+                          aria-live="polite"
+                          className="ps-8 text-xs text-destructive"
+                        >
+                          {t("walkInWhatsappPhoneInvalid")}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
 
+                {/* ── 3. Notes, collapsed to a link; open while it has text. ── */}
+                {notesOpen || notes.trim() ? (
+                  <Textarea
+                    ref={notesRef}
+                    id="walkin-notes"
+                    aria-label={t("walkInNotes")}
+                    // Done closes the keyboard (Shift+Enter still adds a line
+                    // on a hardware keyboard), bringing the footer back.
+                    enterKeyHint="done"
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                      e.preventDefault();
+                      e.currentTarget.blur();
+                    }}
+                    // Left empty: fold back to the link.
+                    onBlur={() => { if (!notes.trim()) setNotesOpen(false); }}
+                    rows={2}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder={t("walkInNotesPlaceholder")}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setNotesOpen(true)}
+                    className="-ms-1 inline-flex min-h-11 items-center gap-1.5 rounded-xl px-1 text-sm font-semibold text-accent transition-colors active:bg-accent/10"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {t("nbAddNote")}
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
