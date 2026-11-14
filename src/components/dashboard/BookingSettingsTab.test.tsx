@@ -36,7 +36,15 @@ const renderTab = () =>
       <BookingSettingsTab />
     </MemoryRouter>,
   );
-const sw = (name: string) => screen.getByRole("switch", { name: new RegExp(name) });
+// By label, not role: getByRole computes accessible names for the whole tab on
+// every call, which made this file the slowest in the suite and let the switch
+// test approach the 5s timeout under full-suite load. The label (htmlFor) points
+// at the same role="switch" element, asserted below.
+const sw = (name: string) => {
+  const el = screen.getByLabelText(new RegExp(name));
+  expect(el).toHaveAttribute("role", "switch");
+  return el;
+};
 
 beforeEach(() => {
   m = Object.fromEntries(
