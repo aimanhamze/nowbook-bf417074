@@ -18,6 +18,7 @@ const Index = lazy(() => import("./pages/Index"));
 const Explore = lazy(() => import("./pages/Explore"));
 const ProviderDetail = lazy(() => import("./pages/ProviderDetail"));
 const BookAppointment = lazy(() => import("./pages/BookAppointment"));
+const CoursePage = lazy(() => import("./pages/CoursePage"));
 const BookingConfirmed = lazy(() => import("./pages/BookingConfirmed"));
 const Bookings = lazy(() => import("./pages/Bookings"));
 const Favorites = lazy(() => import("./pages/Favorites"));
@@ -103,6 +104,8 @@ const App = () => (
                   <Route path="/nearby" element={<ErrorBoundary><Nearby /></ErrorBoundary>} />
                   <Route path="/provider/:id" element={<ProviderIdGuard><ErrorBoundary><ProviderDetail /></ErrorBoundary></ProviderIdGuard>} />
                   <Route path="/provider/:id/book" element={<ProviderIdGuard subpath="/book"><ProtectedRoute><ErrorBoundary><BookAppointment /></ErrorBoundary></ProtectedRoute></ProviderIdGuard>} />
+                  {/* An academy course, public like the provider page itself. */}
+                  <Route path="/provider/:id/course/:courseId" element={<ProviderIdGuard subpath={(p) => `/course/${p.courseId ?? ""}`}><ErrorBoundary><CoursePage /></ErrorBoundary></ProviderIdGuard>} />
                   <Route path="/booking-confirmed" element={<ProtectedRoute><ErrorBoundary><BookingConfirmed /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/bookings" element={<ProtectedRoute><ErrorBoundary><Bookings /></ErrorBoundary></ProtectedRoute>} />
                   <Route path="/favorites" element={<ProtectedRoute><ErrorBoundary><Favorites /></ErrorBoundary></ProtectedRoute>} />

@@ -2,8 +2,9 @@ import { Navigate, useLocation, useParams } from "react-router-dom";
 import { resolveProviderRouteId } from "@/lib/providerRouteId";
 
 interface ProviderIdGuardProps {
-  /** What follows /provider/:id in this route, e.g. "/book". */
-  subpath?: string;
+  /** What follows /provider/:id in this route, e.g. "/book" — or a function of
+   *  the route params when that part has params of its own ("/course/:courseId"). */
+  subpath?: string | ((params: Readonly<Record<string, string | undefined>>) => string);
   children: React.ReactNode;
 }
 
@@ -13,14 +14,15 @@ interface ProviderIdGuardProps {
  * which shows "not available" for an id it cannot find.
  */
 export function ProviderIdGuard({ subpath = "", children }: ProviderIdGuardProps) {
-  const { id } = useParams();
+  const params = useParams();
+  const { id } = params;
   const location = useLocation();
   const resolved = resolveProviderRouteId(id);
 
   if (resolved.kind === "redirect") {
     return (
       <Navigate
-        to={`/provider/${resolved.id}${subpath}${location.search}${location.hash}`}
+        to={`/provider/${resolved.id}${typeof subpath === "function" ? subpath(params) : subpath}${location.search}${location.hash}`}
         state={location.state}
         replace
       />

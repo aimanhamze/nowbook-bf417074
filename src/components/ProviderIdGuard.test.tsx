@@ -17,6 +17,10 @@ function renderAt(url: string) {
       <Routes>
         <Route path="/provider/:id" element={<ProviderIdGuard><Page name="detail" /></ProviderIdGuard>} />
         <Route path="/provider/:id/book" element={<ProviderIdGuard subpath="/book"><Page name="book" /></ProviderIdGuard>} />
+        <Route
+          path="/provider/:id/course/:courseId"
+          element={<ProviderIdGuard subpath={(p) => `/course/${p.courseId ?? ""}`}><Page name="course" /></ProviderIdGuard>}
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -30,6 +34,10 @@ describe("ProviderIdGuard", () => {
 
   it("keeps /book and the query string", () => {
     expect(renderAt(`/provider/%7B%7B1%7D%7D${ID}/book?service=x`)).toBe(`book id=${ID} at=/provider/${ID}/book?service=x`);
+  });
+
+  it("keeps a sub-route's own param (a course page)", () => {
+    expect(renderAt(`/provider/%7B%7B1%7D%7D${ID}/course/abc`)).toBe(`course id=${ID} at=/provider/${ID}/course/abc`);
   });
 
   it("a clean id renders untouched", () => {

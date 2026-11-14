@@ -1,66 +1,33 @@
-import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import { BookOpen } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { sectionTransition } from "@/components/dashboard/sectionTransition";
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import {
-  useCourseSeatCounts,
-  useMyCourseRegistrations,
-  usePublicCourses,
-  type PublicCourse,
-} from "@/hooks/usePublicCourses";
-import { courseCta, seatsState, type CourseCta as CourseCtaState } from "@/lib/academyCustomer";
-import { jerusalemNow } from "@/lib/academySessions";
 import { CourseCard } from "./CourseCard";
-import { CourseDetailSheet } from "./CourseDetailSheet";
-import { useCourseRegisterAction } from "./useCourseRegisterAction";
+import { useCourseCatalogue } from "./useCourseCatalogue";
+import { coursePageUrl } from "./useCourseRegisterAction";
 
 /**
  * The academy provider page's main section: the courses open to customers,
- * one large card each (see CourseCard). The selected course lives in the URL
- * (?course=<id>) so the detail sheet survives a reload and the post-login
- * redirect lands on it.
+ * one large card each (see CourseCard). A card opens the course's own page.
+ *
+ * A course used to open in a sheet on this page, addressed as ?course=<id>;
+ * links of that shape (shared earlier, or saved for the post-login return)
+ * are sent on to the course page.
  */
 export function ProviderCourses({ providerId }: { providerId: string }) {
   const { t } = useLang();
+  const navigate = useNavigate();
+  const location = useLocation();
   const reduceMotion = useReducedMotion();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get("course");
+  const [searchParams] = useSearchParams();
+  const legacyCourseId = searchParams.get("course");
+  const { courses, isLoading, seats, ctaFor } = useCourseCatalogue(providerId);
 
-  const { courses, isLoading } = usePublicCourses(providerId, true);
-  const courseIds = useMemo(() => courses.map((c) => c.course.id), [courses]);
-  const { seats } = useCourseSeatCounts(courseIds);
-  const { registrations } = useMyCourseRegistrations();
-  const { register, pendingCourseId, signedIn } = useCourseRegisterAction(providerId);
-  const now = jerusalemNow();
-
-  // The customer's latest registration per course (rows come newest first).
-  const myStatusByCourse = useMemo(() => {
-    const map = new Map<string, PublicCourseStatus>();
-    for (const r of registrations) {
-      if (!map.has(r.registration.course_id)) map.set(r.registration.course_id, r.registration.status);
-    }
-    return map;
-  }, [registrations]);
-
-  const ctaFor = (item: PublicCourse): CourseCtaState =>
-    courseCta({
-      myStatus: myStatusByCourse.get(item.course.id) ?? null,
-      firstSession: item.sessions[0] ?? null,
-      seats: seatsState(seats.get(item.course.id)),
-      now,
-    });
-
-  const select = (id: string | null) => {
-    const next = new URLSearchParams(searchParams);
-    if (id) next.set("course", id);
-    else next.delete("course");
-    setSearchParams(next, { replace: true });
-  };
-
-  const selected = courses.find((c) => c.course.id === selectedId) ?? null;
+  if (legacyCourseId) {
+    return <Navigate to={coursePageUrl(providerId, legacyCourseId)} state={location.state} replace />;
+  }
 
   return (
     <section className="mt-8 px-5">
@@ -94,28 +61,11 @@ export function ProviderCourses({ providerId }: { providerId: string }) {
               item={item}
               counts={seats.get(item.course.id)}
               cta={ctaFor(item)}
-              onOpen={() => select(item.course.id)}
+              onOpen={() => navigate(coursePageUrl(providerId, item.course.id))}
             />
           ))}
         </motion.div>
       )}
-
-      <CourseDetailSheet
-        open={!!selected}
-        onOpenChange={(open) => {
-          if (!open) select(null);
-        }}
-        item={selected}
-        seats={selected ? seatsState(seats.get(selected.course.id)) : { kind: "unknown" }}
-        cta={selected ? ctaFor(selected) : null}
-        signedIn={signedIn}
-        pending={!!selected && pendingCourseId === selected.course.id}
-        onRegister={() => {
-          if (selected) void register(selected.course);
-        }}
-      />
     </section>
   );
 }
-
-type PublicCourseStatus = "pending" | "confirmed" | "rejected" | "cancelled";
