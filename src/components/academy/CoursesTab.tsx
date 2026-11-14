@@ -209,6 +209,10 @@ export function CoursesTab() {
   );
 }
 
+// " · " with no-break spaces, so a separator never ends a truncated segment.
+const NBSP = String.fromCharCode(0xa0);
+const SEP = NBSP + "·" + NBSP;
+
 /** "12–30 Nov", or null when the course has no sessions yet. */
 function useDates(sessions: AcademyCourseSessionRow[]): string | null {
   const { lang } = useLang();
@@ -284,7 +288,9 @@ function CourseRow({
   const { t } = useLang();
   const dates = useDates(sessions);
   const location = course.location_type === "online" ? t("academyCourseOnline") : course.address;
-  const line = [instructor, location, dates ?? t("academyCourseNoSessions")].filter(Boolean).join(" · ");
+  // Order: instructor · dates · location (ruling). The dates never shrink.
+  // The location takes only the space left over (flex 1 1 0), so a long
+  // address is cut first; the instructor shrinks only once that is gone.
   return (
     <button type="button" onClick={onClick} className={cn(ROW, "items-start")}>
       <CourseTile course={course} />
@@ -297,7 +303,29 @@ function CourseRow({
             <span className="ms-auto shrink-0 text-sm font-medium text-foreground/70">₪{course.price}</span>
           )}
         </span>
-        <span className="mt-0.5 block truncate text-xs leading-snug text-foreground/70">{line}</span>
+        <span className="mt-0.5 flex min-w-0 text-xs leading-snug text-foreground/70">
+          {/* Each text carries its own direction (dir="auto") so a Latin name
+              in an RTL row truncates at its end, not its start. The
+              location's separator lives in the location's clipped box, so
+              when there is no room left both go together. */}
+          {instructor && (
+            <span dir="auto" className="min-w-0 truncate rtl:text-right">
+              {instructor}
+            </span>
+          )}
+          <span className="shrink-0 whitespace-pre">
+            {instructor ? SEP : ""}
+            {dates ?? t("academyCourseNoSessions")}
+          </span>
+          {location && (
+            <span className="flex min-w-0 flex-1 basis-0 overflow-hidden">
+              <span className="shrink-0 whitespace-pre">{SEP}</span>
+              <span dir="auto" className="min-w-0 truncate rtl:text-right">
+                {location}
+              </span>
+            </span>
+          )}
+        </span>
         <SeatsBar taken={taken} max={course.max_seats} />
       </span>
       <ForwardArrow className="mt-0.5 h-4 w-4 shrink-0 self-center text-foreground/40" />
