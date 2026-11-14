@@ -1,4 +1,5 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Navigate } from "react-router-dom";
+import { isAcademyCategory } from "@/lib/academyCategory";
 import { useProviderById, useRealAvailability, usePublicProviderSchedule } from "@/hooks/useAllProviders";
 import { useProviderActiveStaff, useProviderStaffAssignments } from "@/hooks/useProviderStaff";
 import { eligibleStaffForService } from "@/lib/staffServices";
@@ -299,6 +300,13 @@ const BookAppointment = () => {
     }
     setPendingDraft(draft);
   }, [user, provider, isFitnessStudio, scheduleLoading, sessionsLoading, classSchedule, t]);
+
+  // An academy has no appointment wizard: its courses (and the Register
+  // button) live on the provider page. Checked before the sign-in and
+  // provider-role gates so a deep link to /book always lands there.
+  if (provider && isAcademyCategory(provider.category)) {
+    return <Navigate to={`/provider/${provider.id}`} replace />;
+  }
 
   if (!user) {
     return (

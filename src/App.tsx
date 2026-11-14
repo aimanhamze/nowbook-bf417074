@@ -38,6 +38,8 @@ const ProviderQrCode = lazy(() => import("./pages/ProviderQrCode"));
 const ProviderCustomers = lazy(() => import("./pages/ProviderCustomers"));
 // One chunk for both staff pages: the slide between them must never suspend.
 const StaffRoutes = lazy(() => import("./pages/StaffRoutes"));
+// Academy instructors: same one-chunk-for-both-pages reason as StaffRoutes.
+const InstructorRoutes = lazy(() => import("./pages/InstructorRoutes"));
 const ProviderNotifications = lazy(() => import("./pages/ProviderNotifications"));
 const Statistics = lazy(() => import("./pages/Statistics"));
 const MonthlyReport = lazy(() => import("./pages/MonthlyReport"));
@@ -116,6 +118,8 @@ const App = () => (
                   {/* Provider team: /staff (roster) and /staff/:id ("new" creates),
                       routed inside StaffRoutes so the two slide over each other. */}
                   <Route path="/staff/*" element={<ProtectedRoute><ErrorBoundary><BranchScope><StaffRoutes /></BranchScope></ErrorBoundary></ProtectedRoute>} />
+                  {/* Academy branches: /instructors (roster) and /instructors/:id ("new" creates). */}
+                  <Route path="/instructors/*" element={<ProtectedRoute><ErrorBoundary><BranchScope><InstructorRoutes /></BranchScope></ErrorBoundary></ProtectedRoute>} />
                   {/* Provider WhatsApp settings. Distinct from /notifications,
                       which is the customer's notification feed. */}
                   <Route path="/notification-settings" element={<ProtectedRoute><ErrorBoundary><BranchScope><ProviderNotifications /></BranchScope></ErrorBoundary></ProtectedRoute>} />

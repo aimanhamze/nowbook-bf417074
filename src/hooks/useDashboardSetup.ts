@@ -5,6 +5,10 @@ import { useProviderAvailability } from "@/hooks/useProviderAvailability";
 import { useProviderPhotos } from "@/hooks/useProviderPhotos";
 import { useProviderClassSchedule } from "@/hooks/useProviderClassSchedule";
 import { usePackageTemplates } from "@/hooks/usePackageTemplates";
+import { useAcademyCourses } from "@/hooks/useAcademyCourses";
+import { useAcademyInstructors } from "@/hooks/useAcademyInstructors";
+import { useAcademyRegistrations } from "@/hooks/useAcademyRegistrations";
+import { isAcademyCategory } from "@/lib/academyCategory";
 import {
   getSetupSteps,
   summarizeWeeklyHours,
@@ -28,6 +32,11 @@ export type HoursFact =
 
 export interface DashboardSetup {
   isFitnessStudio: boolean;
+  isAcademy: boolean;
+  /** Academy only: active courses, active instructors, pending requests. */
+  courses: Fact<number>;
+  instructors: Fact<number>;
+  pendingRegistrations: Fact<number>;
   services: Fact<number>;
   hours: Fact<HoursFact>;
   profile: { hasAvatar: boolean; hasCover: boolean; hasAbout: boolean };
@@ -46,18 +55,24 @@ export interface DashboardSetup {
  * active branch (they key on useProviderProfile().profile.id), so the hub
  * re-reads when a multi-branch owner switches. Studio-only and
  * non-studio-only queries are gated with the hooks' `enabled` flag so no
- * provider fetches rows the hub will not show.
+ * provider fetches rows the hub will not show. Same for academy: its course,
+ * instructor and registration queries run only for an academy branch, which
+ * in turn skips services and hours (it has neither).
  */
 export function useDashboardSetup(): DashboardSetup | null {
   const { profile } = useProviderProfile();
   const ready = !!profile;
   const isFitnessStudio = profile?.category === "fitness_studio";
+  const isAcademy = isAcademyCategory(profile?.category);
 
-  const services = useProviderServices(ready && !isFitnessStudio);
-  const availability = useProviderAvailability(ready);
+  const services = useProviderServices(ready && !isFitnessStudio && !isAcademy);
+  const availability = useProviderAvailability(ready && !isAcademy);
   const photos = useProviderPhotos();
   const classes = useProviderClassSchedule(ready && isFitnessStudio);
   const packages = usePackageTemplates(ready && isFitnessStudio);
+  const academyCourses = useAcademyCourses(ready && isAcademy);
+  const academyInstructors = useAcademyInstructors(ready && isAcademy);
+  const academyRegistrations = useAcademyRegistrations({ enabled: ready && isAcademy });
 
   if (!profile) return null;
 
@@ -94,8 +109,19 @@ export function useDashboardSetup(): DashboardSetup | null {
 
   // Steps only once their inputs are known, so the progress card never shows
   // a false 25% while the services or hours query is still in flight.
+  const coursesFact = fact(academyCourses.isLoading, academyCourses.error, () =>
+    academyCourses.courses.filter((c) => c.is_active).length,
+  );
+
   let steps: SetupStep[] | null = null;
-  if (isFitnessStudio) {
+  if (isAcademy) {
+    if (coursesFact.state === "ok") {
+      steps = getSetupSteps({
+        isFitnessStudio: false, activeServiceCount: 0, hasOpenDay: false, classCount: 0,
+        isAcademy, activeCourseCount: coursesFact.value, ...profileFacts,
+      });
+    }
+  } else if (isFitnessStudio) {
     if (classesFact.state === "ok") {
       steps = getSetupSteps({
         isFitnessStudio, activeServiceCount: 0, hasOpenDay: false,
@@ -114,6 +140,12 @@ export function useDashboardSetup(): DashboardSetup | null {
 
   return {
     isFitnessStudio,
+    isAcademy,
+    courses: coursesFact,
+    instructors: fact(academyInstructors.isLoading, academyInstructors.error, () =>
+      academyInstructors.activeInstructors.length,
+    ),
+    pendingRegistrations: fact(academyRegistrations.isLoading, null, () => academyRegistrations.counts.pending),
     services: servicesFact,
     hours,
     profile: profileFacts,

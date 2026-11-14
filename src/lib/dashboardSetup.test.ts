@@ -6,6 +6,7 @@ import {
   isSectionVisible,
   joinList,
   plural,
+  SECTION_IDS,
   setupPercent,
   stepTarget,
   summarizeWeeklyHours,
@@ -42,6 +43,20 @@ describe("isSectionVisible", () => {
     expect(isSectionVisible("packages", false)).toBe(false);
     expect(isSectionVisible("hours", true)).toBe(true);
   });
+
+  it("academy: courses + registrations instead of services, hours and packages", () => {
+    const visible = (studio: boolean, academy: boolean) =>
+      SECTION_IDS.filter((id) => isSectionVisible(id, studio, academy));
+    expect(visible(false, true)).toEqual(["profile", "photos", "booking", "courses", "registrations"]);
+    // Nobody else gets the academy sections; the other types are unchanged.
+    expect(visible(false, false)).toEqual(["services", "hours", "profile", "photos", "booking"]);
+    expect(visible(true, false)).toEqual(["hours", "profile", "photos", "booking", "packages"]);
+  });
+
+  it("keeps the old academy tab ids working as deep links", () => {
+    expect(toSectionId("courses")).toBe("courses");
+    expect(toSectionId("registrations")).toBe("registrations");
+  });
 });
 
 describe("getSetupSteps / setupPercent", () => {
@@ -69,6 +84,19 @@ describe("getSetupSteps / setupPercent", () => {
     expect(stepTarget("services")).toEqual({ kind: "section", section: "services" });
     expect(stepTarget("about")).toEqual({ kind: "section", section: "profile" });
     expect(stepTarget("classes")).toEqual({ kind: "classSchedule" });
+    expect(stepTarget("courses")).toEqual({ kind: "section", section: "courses" });
+  });
+
+  it("an academy has three steps: an active course, photo, description", () => {
+    const steps = getSetupSteps({ ...base, isAcademy: true, activeServiceCount: 4, activeCourseCount: 0, hasAvatar: true });
+    expect(steps.map((s) => s.id)).toEqual(["courses", "avatar", "about"]);
+    expect(setupPercent(steps)).toBe(33);
+    expect(getSetupSteps({ ...base, isAcademy: true, activeCourseCount: 2 }).find((s) => s.id === "courses")?.done).toBe(true);
+  });
+
+  it("an academy with no course is named as the blocking step", () => {
+    const steps = getSetupSteps({ ...base, isAcademy: true, activeCourseCount: 0, hasAvatar: true, hasAbout: true });
+    expect(progressMessage(steps)).toEqual({ kind: "booking", step: "courses" });
   });
 });
 

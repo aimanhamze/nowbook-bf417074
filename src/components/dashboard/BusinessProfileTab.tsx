@@ -16,8 +16,12 @@ import { categories, categoryNames } from "@/lib/mock-data";
 import { buildSocialLinks, type SocialLinks } from "@/lib/socialLinks";
 import type { TranslationKey } from "@/lib/translations";
 import { cn } from "@/lib/utils";
+import { isAcademyCategory } from "@/lib/academyCategory";
+import { academyErrorMessage } from "@/lib/academyErrors";
+import { supabaseErrorMessage } from "@/lib/supabaseError";
 import { toast } from "sonner";
-import { EditSheet, Field, NavRow, SettingsGroup } from "./SettingsRows";
+import { EditSheet, Field, IconTile, NavRow, RowText, SettingsGroup } from "./SettingsRows";
+import { ROW } from "./settingsList";
 
 export const DEFAULT_DEPOSIT_TEMPLATE = `שלום {customer_name} 😊
 קיבלנו את בקשת התור שלך ל{service_name} בתאריך {date} בשעה {time}.
@@ -131,6 +135,7 @@ export function BusinessProfileTab() {
   const { t, lang } = useLang();
   const pl = usePlural();
   const { profile, upsertProfile, updateWhatsAppTemplates, uploadCoverImage, uploadAvatarImage } = useProviderProfile();
+  const isAcademy = isAcademyCategory(profile?.category);
 
   const [sheet, setSheet] = useState<SheetId | null>(null);
   const [draft, setDraft] = useState<FormValues | null>(null);
@@ -221,7 +226,14 @@ export function BusinessProfileTab() {
       await upsertProfile.mutateAsync(toPayload(parsed.data));
       toast.success(t("profileSaved"));
       setSheet(null);
-    } catch {
+    } catch (err) {
+      // The category guard is the one DB refusal this form can hit that needs
+      // words (main, academy): leaving "academy" while course registrations
+      // are live. Everything else: the translated "couldn't save".
+      if (supabaseErrorMessage(err, "").includes("CATEGORY_CHANGE_BLOCKED")) {
+        toast.error(academyErrorMessage(err, t));
+        return;
+      }
       toast.error(t("bsSaveError"));
     }
   };
@@ -333,8 +345,19 @@ export function BusinessProfileTab() {
       <SettingsGroup title={t("pfGroupDetails")}>
         <NavRow icon={Store} title={t("pfNameTitle")} description={stored.business_name || t("pfNotSet")}
           muted={!stored.business_name} onClick={() => openSheet("name")} />
-        <NavRow icon={Tag} title={t("pfCategoryTitle")} description={categoryLabel(stored.category)}
-          onClick={() => openSheet("category")} />
+        {/* An academy cannot pick its category here: "academy" is not in the
+            customer list yet, and the DB refuses leaving academy while course
+            registrations are live (CATEGORY_CHANGE_BLOCKED). A plain row, no
+            sheet; every Save still sends category = 'academy' unchanged. */}
+        {isAcademy ? (
+          <div className={ROW}>
+            <IconTile icon={Tag} />
+            <RowText title={t("pfCategoryTitle")} description={t("academyCategoryLocked")} lines={2} />
+          </div>
+        ) : (
+          <NavRow icon={Tag} title={t("pfCategoryTitle")} description={categoryLabel(stored.category)}
+            onClick={() => openSheet("category")} />
+        )}
         <NavRow icon={AlignLeft} title={t("pfAboutTitle")} description={stored.about?.trim() || t("pfAboutEmpty")}
           muted={!stored.about?.trim()} lines={2} onClick={() => openSheet("about")} />
       </SettingsGroup>
@@ -379,7 +402,9 @@ export function BusinessProfileTab() {
         onSave={saveSheet} saving={upsertProfile.isPending}>
         {draft && (
           <ul className="space-y-1" role="radiogroup" aria-label={t("pfCategoryTitle")}>
-            {categories.map((c) => {
+            {/* Becoming an academy is an admin decision (it swaps the whole
+                dashboard to courses), so it is not self-service. */}
+            {categories.filter((c) => !isAcademyCategory(c.id)).map((c) => {
               const selected = draft.category === c.id;
               return (
                 <li key={c.id}>

@@ -8,9 +8,13 @@ import type { Lang } from "@/lib/translations";
 // ── Sections ────────────────────────────────────────────────────────────────
 
 /** A section the hub can open in place, addressed by `/dashboard?section=<id>`. */
-export type SectionId = "services" | "hours" | "profile" | "photos" | "booking" | "packages";
+export type SectionId =
+  | "services" | "hours" | "profile" | "photos" | "booking" | "packages"
+  | "courses" | "registrations";
 
-export const SECTION_IDS: readonly SectionId[] = ["services", "hours", "profile", "photos", "booking", "packages"];
+export const SECTION_IDS: readonly SectionId[] = [
+  "services", "hours", "profile", "photos", "booking", "packages", "courses", "registrations",
+];
 
 // The old tab ids, still sent as navigate("/dashboard", { state: { tab } }) —
 // CalendarTab's "no services" card does exactly that. Mapped onto sections so
@@ -22,6 +26,8 @@ const LEGACY_TAB_TO_SECTION: Record<string, SectionId> = {
   gallery: "photos",
   booking: "booking",
   packages: "packages",
+  courses: "courses",
+  registrations: "registrations",
 };
 
 /** Parses a `?section=` value or a legacy `state.tab` id. Unknown → null (hub). */
@@ -36,8 +42,14 @@ export function toSectionId(value: string | null | undefined): SectionId | null 
  * services section (its classes live in provider_class_schedule, edited from
  * /calendar) and is the only type with packages. `hours` stays for a studio:
  * AvailabilityTab shows it only the blocked-dates card, its one way to close a day.
+ *
+ * An academy runs on courses (academy_courses + sessions), not on services,
+ * weekly hours or packages: it has "courses" and "registrations" instead, and
+ * is the only type that has them.
  */
-export function isSectionVisible(section: SectionId, isFitnessStudio: boolean): boolean {
+export function isSectionVisible(section: SectionId, isFitnessStudio: boolean, isAcademy = false): boolean {
+  if (section === "courses" || section === "registrations") return isAcademy;
+  if (isAcademy) return section !== "services" && section !== "hours" && section !== "packages";
   if (section === "services") return !isFitnessStudio;
   if (section === "packages") return isFitnessStudio;
   return true;
@@ -49,9 +61,11 @@ export function isSectionVisible(section: SectionId, isFitnessStudio: boolean): 
  * The required steps, in hub order. A regular provider needs an active
  * service, an open day, a profile photo and a description. For a fitness
  * studio the weekly class schedule is both its services and its hours, so it
- * counts once: classes, profile photo, description.
+ * counts once: classes, profile photo, description. An academy needs an
+ * active course (customers register for courses), a profile photo and a
+ * description.
  */
-export type SetupStepId = "services" | "hours" | "classes" | "avatar" | "about";
+export type SetupStepId = "services" | "hours" | "classes" | "courses" | "avatar" | "about";
 
 export interface SetupInputs {
   isFitnessStudio: boolean;
@@ -60,6 +74,9 @@ export interface SetupInputs {
   classCount: number;
   hasAvatar: boolean;
   hasAbout: boolean;
+  /** Academy branch; takes precedence over the other provider types. */
+  isAcademy?: boolean;
+  activeCourseCount?: number;
 }
 
 export interface SetupStep {
@@ -72,6 +89,9 @@ export function getSetupSteps(i: SetupInputs): SetupStep[] {
     { id: "avatar", done: i.hasAvatar },
     { id: "about", done: i.hasAbout },
   ];
+  if (i.isAcademy) {
+    return [{ id: "courses", done: (i.activeCourseCount ?? 0) > 0 }, ...profileSteps];
+  }
   if (i.isFitnessStudio) {
     return [{ id: "classes", done: i.classCount > 0 }, ...profileSteps];
   }
@@ -93,7 +113,7 @@ export function setupPercent(steps: SetupStep[]): number {
  * Profile photo and description only make the page complete; a provider
  * missing just those is already bookable.
  */
-const BOOKING_STEPS: readonly SetupStepId[] = ["services", "hours", "classes"];
+const BOOKING_STEPS: readonly SetupStepId[] = ["services", "hours", "classes", "courses"];
 
 export function blocksBooking(step: SetupStepId): boolean {
   return BOOKING_STEPS.includes(step);
@@ -116,14 +136,19 @@ export function progressMessage(steps: SetupStep[]): ProgressMessage | null {
   return { kind: "profile", remaining: missing.length, step: missing[0].id };
 }
 
-/** Where a missing step is fixed: a dashboard section, or /calendar for classes. */
-export type StepTarget = { kind: "section"; section: SectionId } | { kind: "classSchedule" };
+/** Where a hub row or a missing step leads: a dashboard section, /calendar
+ *  for a studio's classes, or the academy's /instructors roster. */
+export type StepTarget =
+  | { kind: "section"; section: SectionId }
+  | { kind: "classSchedule" }
+  | { kind: "instructors" };
 
 export function stepTarget(step: SetupStepId): StepTarget {
   switch (step) {
     case "services": return { kind: "section", section: "services" };
     case "hours": return { kind: "section", section: "hours" };
     case "classes": return { kind: "classSchedule" };
+    case "courses": return { kind: "section", section: "courses" };
     case "avatar":
     case "about": return { kind: "section", section: "profile" };
   }

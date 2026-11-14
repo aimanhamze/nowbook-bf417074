@@ -20,8 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
-import { categories } from "@/lib/mock-data";
-import { categoryLabels } from "./categoryLabels";
+import { ADMIN_CATEGORY_IDS, categoryLabels } from "./categoryLabels";
 
 type CreatedCredentials = { email: string; password: string; businessName: string };
 
@@ -170,9 +169,9 @@ export function CreateProviderDialog() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {categoryLabels[c.id] || c.id}
+                  {ADMIN_CATEGORY_IDS.map((id) => (
+                    <SelectItem key={id} value={id}>
+                      {categoryLabels[id]}
                     </SelectItem>
                   ))}
                 </SelectContent>

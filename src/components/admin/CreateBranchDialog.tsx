@@ -18,8 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { categories } from "@/lib/mock-data";
-import { categoryLabels } from "./categoryLabels";
+import { ADMIN_CATEGORY_IDS, categoryLabels } from "./categoryLabels";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Provider = Tables<"provider_profiles">;
@@ -117,9 +116,9 @@ export function CreateBranchDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {categoryLabels[c.id] || c.id}
+                {ADMIN_CATEGORY_IDS.map((id) => (
+                  <SelectItem key={id} value={id}>
+                    {categoryLabels[id]}
                   </SelectItem>
                 ))}
               </SelectContent>

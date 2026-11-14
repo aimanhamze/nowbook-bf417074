@@ -41,6 +41,8 @@ export function BranchChip() {
     if (branchId === profile.id) return;
     const target = branches.find((b) => b.id === branchId);
     if (/^\/staff\/[^/]+/.test(pathname)) navigate("/staff", { replace: true });
+    // Same for an instructor page: the id belongs to the branch being left.
+    if (/^\/instructors\/[^/]+/.test(pathname)) navigate("/instructors", { replace: true });
     setActiveBranchId(user.id, branchId);
     if (target) toast(t("switchedToBranch").replace("{name}", isolate(target.business_name)));
   };

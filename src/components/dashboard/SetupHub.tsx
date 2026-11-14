@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import {
-  Briefcase, CalendarDays, CalendarOff, Check, Clock, Images, SlidersHorizontal, Store, Ticket,
+  BookOpen, Briefcase, CalendarDays, CalendarOff, Check, ClipboardList, Clock, GraduationCap, Images,
+  SlidersHorizontal, Store, Ticket,
 } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { ForwardArrow } from "@/components/ui/directional-icon";
@@ -39,11 +40,13 @@ const BOOKING_STEP_LINE: Partial<Record<SetupStepId, TranslationKey>> = {
   services: "setupBookingStepServices",
   hours: "setupBookingStepHours",
   classes: "setupBookingStepClasses",
+  courses: "setupBookingStepCourses",
 };
 
 const capitalize =(s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
-function buildRows(
+/** Exported for tests (SetupHub.rows.test.ts); pure apart from the passed-in `t`/`pl`. */
+export function buildRows(
   s: DashboardSetup,
   t: (k: TranslationKey) => string,
   pl: (base: string, n: number) => string,
@@ -112,6 +115,30 @@ function buildRows(
   };
 
   const section = (id: SectionId): StepTarget => ({ kind: "section", section: id });
+
+  if (s.isAcademy) {
+    // Pending requests wait on the provider, so a non-zero count is shown in
+    // the "missing" ink (no mark: it is not a setup step).
+    const pending: Status = s.pendingRegistrations.state !== "ok"
+      ? s.pendingRegistrations.state
+      : s.pendingRegistrations.value > 0
+        ? { text: pl("setupRegistrationsPending", s.pendingRegistrations.value), tone: "missing" }
+        : { text: t("setupRegistrationsNonePending"), tone: "plain" };
+    return [
+      { key: "courses", icon: BookOpen, label: "setupRowCourses", target: section("courses"),
+        ...count(s.courses, "setupCourses", "setupCoursesNone", true) },
+      { key: "registrations", icon: ClipboardList, label: "setupRowRegistrations", target: section("registrations"),
+        status: pending, mark: "none" },
+      { key: "instructors", icon: GraduationCap, label: "setupRowInstructors", target: { kind: "instructors" },
+        ...count(s.instructors, "setupInstructors", "setupInstructorsNone", false) },
+      { key: "profile", icon: Store, label: "setupRowProfile", target: section("profile"), ...profile },
+      { key: "photos", icon: Images, label: "setupRowPhotos", target: section("photos"),
+        ...count(s.photos, "setupPhotos", "setupPhotosNone", false) },
+      // No "booking" row: its status line (instant/manual confirmation, a
+      // booking window) does not describe courses — every registration starts
+      // pending and there is no window.
+    ];
+  }
 
   if (s.isFitnessStudio) {
     return [

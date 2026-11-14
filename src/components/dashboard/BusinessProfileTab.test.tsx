@@ -119,4 +119,23 @@ describe("BusinessProfileTab", () => {
     );
     expect(m.upsertProfile.mutateAsync).not.toHaveBeenCalled();
   });
+
+  it("academy: the category row is locked (no picker), as on main", () => {
+    profile = { ...profile, category: "academy" };
+    render(<BusinessProfileTab />);
+    expect(screen.queryByRole("button", { name: /pfCategoryTitle/ })).toBeNull();
+    expect(screen.getByText("academyCategoryLocked")).toBeInTheDocument();
+  });
+
+  it("the picker never offers 'academy'; CATEGORY_CHANGE_BLOCKED gets its own message", async () => {
+    m.upsertProfile.mutateAsync.mockRejectedValueOnce({ message: "CATEGORY_CHANGE_BLOCKED: live registrations" });
+    render(<BusinessProfileTab />);
+    openRow("pfCategoryTitle");
+    const radios = within(dialog()).getAllByRole("radio");
+    expect(radios.some((r) => /academy/i.test(r.textContent || ""))).toBe(false);
+    fireEvent.click(radios.find((r) => r.getAttribute("aria-checked") === "false")!);
+    save();
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(toast.error).toHaveBeenCalledWith("academyErrCategoryBlocked");
+  });
 });

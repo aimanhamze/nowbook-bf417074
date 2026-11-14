@@ -10,6 +10,8 @@ import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { AvailabilityModeSection } from "@/components/settings/AvailabilityModeSection";
 import { StaffPageLink } from "@/components/settings/StaffPageLink";
+import { InstructorsPageLink } from "@/components/academy/InstructorsPageLink";
+import { isAcademyCategory } from "@/lib/academyCategory";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
@@ -136,8 +138,13 @@ const Settings = () => {
                 {t("settingsGroupBusiness")}
               </h2>
               <AvailabilityModeSection delay={0} />
-              {/* Team management lives on its own page (/staff); this row is the way in. */}
-              <StaffPageLink delay={0.06} />
+              {/* Team management lives on its own page (/staff); this row is the way in.
+                  An academy branch manages instructors (/instructors) instead. */}
+              {isAcademyCategory(profile?.category) ? (
+                <InstructorsPageLink delay={0.06} />
+              ) : (
+                <StaffPageLink delay={0.06} />
+              )}
             </div>
 
             <div className="space-y-3">

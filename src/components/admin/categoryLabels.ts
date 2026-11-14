@@ -1,6 +1,11 @@
 // Hebrew category labels for the admin dialogs, as CreateProviderDialog
 // always had them. Shared by CreateProviderDialog, CreateBranchDialog and
 // EditProviderDialog.
+//
+// This map is ALSO the admin's list of categories (ADMIN_CATEGORY_IDS below).
+// It may run ahead of the customer-facing `categories` in mock-data (that is
+// how academy was introduced: admin-only first, customer-visible in Phase 3);
+// today the two lists hold the same ids.
 export const categoryLabels: Record<string, string> = {
   barber: "💈 ספר",
   salon: "💇 מספרה",
@@ -21,4 +26,8 @@ export const categoryLabels: Record<string, string> = {
   counseling: "💬 ייעוץ והדרכות",
   piercing: "💎 פירסינג",
   therapy: "💗 טיפול רגשי",
+  academy: "🎓 אקדמיה וקורסים",
 };
+
+/** Category ids offered in the admin dialogs, in label order. */
+export const ADMIN_CATEGORY_IDS: readonly string[] = Object.keys(categoryLabels);

@@ -12,6 +12,8 @@ import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight
 import { BackOrHomeIcon } from "@/components/ui/directional-icon";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { ProviderCourses } from "@/components/academy/customer/ProviderCourses";
+import { isAcademyCategory } from "@/lib/academyCategory";
 import { FaWhatsapp, FaInstagram, FaTiktok, FaFacebook, FaWaze } from "react-icons/fa6";
 import { motion } from "framer-motion";
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -149,6 +151,9 @@ const ProviderDetail = () => {
   // Packages are a fitness_studio feature (group classes only), so the section
   // simply does not exist for any other provider type.
   const showsPackages = provider?.category === "fitness_studio";
+  // An academy runs on dated courses: its page shows courses + Register in
+  // place of services, weekly hours, the open/closed pill and the Book button.
+  const isAcademy = isAcademyCategory(provider?.category);
   const { data: packageOffers = [] } = useProviderPackages(showsPackages ? id : undefined);
   const { data: myPackages = [] } = useMyPackagesAt(showsPackages ? id : undefined);
   const requestPackage = useRequestPackage();
@@ -183,16 +188,16 @@ const ProviderDetail = () => {
   const liked = id ? isFavorite(id) : false;
 
   const [status, setStatus] = useState<ProviderStatus>(() =>
-    getProviderStatus(availability, blockedDates, new Date()),
+    getProviderStatus(availability, blockedDates, new Date(), overrides),
   );
 
   useEffect(() => {
-    setStatus(getProviderStatus(availability, blockedDates, new Date()));
+    setStatus(getProviderStatus(availability, blockedDates, new Date(), overrides));
     const intervalId = setInterval(() => {
-      setStatus(getProviderStatus(availability, blockedDates, new Date()));
+      setStatus(getProviderStatus(availability, blockedDates, new Date(), overrides));
     }, 60_000);
     return () => clearInterval(intervalId);
-  }, [availability, blockedDates]);
+  }, [availability, blockedDates, overrides]);
 
   const reviewCount = dbReviews?.length || 0;
   const avgRating = dbReviews && dbReviews.length > 0
@@ -435,7 +440,7 @@ const ProviderDetail = () => {
             )}
           </div>
 
-          {status.hasSchedule && (
+          {status.hasSchedule && !isAcademy && (
             <div className="mt-3 flex justify-center">
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
@@ -504,6 +509,8 @@ const ProviderDetail = () => {
           </div>
         </section>
       )}
+
+      {isAcademy && <ProviderCourses providerId={provider.id} />}
 
       {/* Photo Gallery — static collage (Google-Business style): a featured
           tile plus a grid of smaller ones, layout adapting to photo count.
@@ -733,7 +740,7 @@ const ProviderDetail = () => {
           date via the shared resolver); WEEKLY providers keep the weekday list
           UNCHANGED. Monthly gates on mode (a monthly provider may have no weekly
           rows, so status.hasSchedule can't gate it). */}
-      {isMonthly ? (
+      {isAcademy ? null : isMonthly ? (
         <section className="mt-8 px-5">
           <SectionLabel className="mb-3">{t("workingHoursLabel")}</SectionLabel>
           <MonthlyHoursTable
@@ -763,7 +770,7 @@ const ProviderDetail = () => {
       )}
 
       {/* Services */}
-      {provider.services.length > 0 && (
+      {provider.services.length > 0 && !isAcademy && (
         <section className="mt-8 px-5">
           <SectionLabel className="mb-3">{t("services")}</SectionLabel>
           <div className="flex flex-col gap-2">
@@ -917,7 +924,9 @@ const ProviderDetail = () => {
           database refuses the insert anyway (NO_ACTIVE_PACKAGE), so offering
           the CTA promises something that cannot happen. The packages section
           above is their path instead. */}
-      {canBook && !keyboardOpen && (
+      {/* Also hidden for an academy (courses, no booking flow — main) and
+          while the keyboard is up (it would ride over it — this branch). */}
+      {canBook && !isAcademy && !keyboardOpen && (
       <div className="fixed inset-x-0 bottom-0 z-50">
         <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[hsl(40_30%_96%)] to-transparent" />
         <div className="border-t border-white/40 bg-white/70 p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] backdrop-blur-xl">

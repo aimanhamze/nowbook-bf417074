@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { LayoutGrid, Search, SlidersHorizontal } from "lucide-react";
-import { categories, categoryNames, beautyCategories, healthCategories, fitnessCategories } from "@/lib/mock-data";
+import { categories, categoryNames, beautyCategories, healthCategories, fitnessCategories, learningCategories } from "@/lib/mock-data";
 import { categoryIcons } from "@/lib/categoryIcons";
 import { CategoryChip } from "@/components/CategoryChip";
 import { useAllProviders, useAllProviderSchedules } from "@/hooks/useAllProviders";
@@ -49,6 +49,8 @@ const Explore = () => {
     ? [...healthCategories]
     : group === "fitness"
     ? [...fitnessCategories]
+    : group === "learning"
+    ? [...learningCategories]
     : null;
 
   const PAGE_SIZE = 12;
