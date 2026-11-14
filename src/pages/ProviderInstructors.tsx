@@ -1,17 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { GraduationCap, Plus } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useAcademyInstructors } from "@/hooks/useAcademyInstructors";
+import { useAcademyCourses } from "@/hooks/useAcademyCourses";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 import { InstructorRoster } from "@/components/academy/InstructorRoster";
 import { isAcademyCategory } from "@/lib/academyCategory";
+import { LIST } from "@/components/dashboard/settingsList";
+import { cn } from "@/lib/utils";
 
 /**
  * /instructors — an academy branch's instructor roster. The academy twin of
@@ -23,7 +25,15 @@ export default function ProviderInstructors() {
   const { user, isProvider } = useAuth();
   const navigate = useNavigate();
   const { profile, isLoading: profileLoading } = useProviderProfile();
-  const { instructors, isLoading } = useAcademyInstructors();
+  const { instructors, activeInstructors, isLoading } = useAcademyInstructors();
+  const { courses } = useAcademyCourses();
+  // "Active courses" = academy_courses.is_active, the same rule as the setup
+  // hub, so the numbers match everywhere (ticket: ended-but-active courses).
+  const activeCourses = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of courses) if (c.is_active) map.set(c.instructor_id, (map.get(c.instructor_id) ?? 0) + 1);
+    return map;
+  }, [courses]);
 
   useEffect(() => {
     if (user && !isProvider) navigate("/", { replace: true });
@@ -59,43 +69,42 @@ export default function ProviderInstructors() {
 
       <div className={`relative ${providerDesktopColumn}`}>
         <header className="flex items-center gap-3 px-5 pt-12 pb-4">
-          <button onClick={() => navigate("/profile")} className="-ms-1.5 rounded-xl p-1.5 active:scale-95" aria-label={t("profile")}>
+          <button onClick={() => navigate("/profile")} className="-ms-3 flex h-11 w-11 items-center justify-center rounded-xl active:scale-95" aria-label={t("profile")}>
             <BackArrow className="h-5 w-5" />
           </button>
           <ProviderPageTitle className="flex-1 text-xl font-bold">{t("academyInstructorsTitle")}</ProviderPageTitle>
-          {hasInstructors && (
+          {/* Active only: matches the list above the fold; inactive ones are
+              counted in their own "Inactive (n)" group. */}
+          {activeInstructors.length > 0 && (
             <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
-              <bdi>{instructors.length}</bdi>
+              <bdi>{activeInstructors.length}</bdi>
             </span>
           )}
-          <Button size="sm" variant="outline" onClick={() => navigate("/instructors/new")} className="gap-1.5">
+          <Button size="sm" variant="outline" onClick={() => navigate("/instructors/new")} className="h-11 gap-1.5 rounded-2xl">
             <Plus className="h-4 w-4" />
             {t("academyInstructorAdd")}
           </Button>
         </header>
 
-        <div className="flex flex-col gap-3.5 px-5">
+        <div className="px-5">
           {isLoading || profileLoading ? (
-            [0, 1, 2].map((i) => <div key={i} className="h-[72px] rounded-2xl bg-secondary animate-pulse" />)
+            <div className={cn(LIST, "space-y-px")}>
+              {[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse bg-foreground/[0.04]" />)}
+            </div>
           ) : !hasInstructors ? (
-            <motion.section
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              className="glass-card rounded-3xl px-6 py-8 text-center"
-            >
-              <span className="mx-auto mb-5 flex h-24 w-24 items-center justify-center rounded-[2rem] bg-accent/10 text-accent">
-                <GraduationCap className="h-11 w-11" strokeWidth={1.5} />
+            <section className={cn(LIST, "flex flex-col items-center px-6 py-10 text-center")}>
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                <GraduationCap className="h-6 w-6" />
               </span>
-              <h2 className="mb-2 text-xl font-bold">{t("academyInstructorsEmptyTitle")}</h2>
-              <p className="mb-6 text-sm leading-relaxed text-muted-foreground">{t("academyInstructorsEmptyBody")}</p>
-              <Button onClick={() => navigate("/instructors/new")} className="h-12 w-full gap-2 text-base">
-                <Plus className="h-5 w-5" />
-                {t("academyInstructorAdd")}
-              </Button>
-            </motion.section>
+              <p className="mt-3 font-semibold">{t("academyInstructorsEmptyTitle")}</p>
+              <p className="mt-1 text-sm text-foreground/60">{t("academyInstructorsEmptyBody")}</p>
+            </section>
           ) : (
-            <InstructorRoster instructors={instructors} onOpen={(id) => navigate(`/instructors/${id}`)} />
+            <InstructorRoster
+              instructors={instructors}
+              activeCourses={activeCourses}
+              onOpen={(id) => navigate(`/instructors/${id}`)}
+            />
           )}
         </div>
       </div>

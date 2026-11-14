@@ -10,7 +10,8 @@ export function InstructorsPageLink({ delay = 0 }: { delay?: number }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
-  const { instructors } = useAcademyInstructors();
+  // Active only, like the /instructors header and the setup hub.
+  const { activeInstructors } = useAcademyInstructors();
 
   return (
     <motion.button
@@ -28,9 +29,9 @@ export function InstructorsPageLink({ delay = 0 }: { delay?: number }) {
         <span className="block text-sm font-semibold leading-snug">{t("academyInstructorsTitle")}</span>
         <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{t("academyInstructorsDesc")}</span>
       </span>
-      {instructors.length > 0 && (
+      {activeInstructors.length > 0 && (
         <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
-          <bdi>{instructors.length}</bdi>
+          <bdi>{activeInstructors.length}</bdi>
         </span>
       )}
       <ForwardArrow className="h-4 w-4 shrink-0 text-muted-foreground" />
