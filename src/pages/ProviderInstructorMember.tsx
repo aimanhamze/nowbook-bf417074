@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Camera, Check, Pencil, Trash2, UserPlus, X } from "lucide-react";
+import { AlignLeft, Camera, Loader2, Trash2, User, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,17 +9,18 @@ import { useAcademyInstructors } from "@/hooks/useAcademyInstructors";
 import { BackArrow } from "@/components/ui/directional-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/providerDesktop";
 import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 import { BranchSuffix } from "@/components/branch/BranchSuffix";
+import { EditSheet, Field, NavRow, SettingsGroup, SwitchRow } from "@/components/dashboard/SettingsRows";
+import { LIST } from "@/components/dashboard/settingsList";
 import { InstructorAvatar } from "@/components/academy/InstructorAvatar";
 import { InstructorDeactivateDialog } from "@/components/academy/InstructorDeactivateDialog";
 import { academyErrorMessage } from "@/lib/academyErrors";
 import { validateAcademyImage } from "@/lib/academyImage";
 import { isAcademyCategory } from "@/lib/academyCategory";
+import { cn } from "@/lib/utils";
 
 const NAME_MAX = 120;
 const BIO_MAX = 2000;
@@ -28,9 +29,10 @@ const BIO_MAX = 2000;
  * /instructors/:id and /instructors/new — the academy twin of /staff/:id.
  *
  * /new is a name and a button (the photo path needs the row id first). The
- * member view has the photo (upload / replace / remove), inline rename, the
- * active switch (turning OFF is confirmed), and the bio with its own Save.
- * Every write is independent and reports its own failure.
+ * member view is rows, like the business profile: the photo (upload /
+ * replace / remove), name and about — each opens a sheet with its own Save —
+ * and the active switch (turning OFF is confirmed). Every write is the same
+ * single-column update as before and reports its own failure.
  */
 export default function ProviderInstructorMember() {
   const { t } = useLang();
@@ -52,7 +54,7 @@ export default function ProviderInstructorMember() {
   const instructor = useMemo(() => instructors.find((i) => i.id === id), [instructors, id]);
 
   const [newName, setNewName] = useState("");
-  const [editingName, setEditingName] = useState(false);
+  const [sheet, setSheet] = useState<"name" | "bio" | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [bioDraft, setBioDraft] = useState("");
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
@@ -65,15 +67,6 @@ export default function ProviderInstructorMember() {
   useEffect(() => {
     if (profile && !isAcademyCategory(profile.category)) navigate("/profile", { replace: true });
   }, [profile, navigate]);
-
-  useEffect(() => {
-    if (instructor) {
-      if (!editingName) setNameDraft(instructor.name);
-      setBioDraft(instructor.bio ?? "");
-    }
-    // Re-seed only when the row itself changes, not on every keystroke.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instructor?.id, instructor?.name, instructor?.bio]);
 
   const fail = (err: unknown) => toast.error(academyErrorMessage(err, t));
 
@@ -92,13 +85,23 @@ export default function ProviderInstructorMember() {
     }
   };
 
-  const commitName = async () => {
+  // Each sheet starts from the stored value.
+  const openSheet = (which: "name" | "bio") => {
+    if (!instructor) return;
+    setNameDraft(instructor.name);
+    setBioDraft(instructor.bio ?? "");
+    setSheet(which);
+  };
+  const closeSheet = () => setSheet(null);
+
+  const saveName = async () => {
     if (!instructor) return;
     const name = nameDraft.trim();
     if (!name || name.length > NAME_MAX) {
       toast.error(t("academyErrName"));
       return;
     }
+    // An unchanged Save writes nothing.
     if (name !== instructor.name) {
       try {
         await updateInstructor.mutateAsync({ id: instructor.id, patch: { name } });
@@ -108,7 +111,7 @@ export default function ProviderInstructorMember() {
         return;
       }
     }
-    setEditingName(false);
+    closeSheet();
   };
 
   const saveBio = async () => {
@@ -117,6 +120,7 @@ export default function ProviderInstructorMember() {
     try {
       await updateInstructor.mutateAsync({ id: instructor.id, patch: { bio: bio === "" ? null : bio } });
       toast.success(t("academyInstructorSaved"));
+      closeSheet();
     } catch (err) {
       fail(err);
     }
@@ -165,6 +169,7 @@ export default function ProviderInstructorMember() {
 
   const photoBusy = setInstructorPhoto.isPending || removeInstructorPhoto.isPending;
   const bioDirty = instructor ? bioDraft.trim() !== (instructor.bio ?? "") : false;
+  const bio = instructor?.bio?.trim() ?? "";
 
   return (
     <div
@@ -178,10 +183,10 @@ export default function ProviderInstructorMember() {
       />
 
       <div className={`relative ${providerDesktopColumn}`}>
-        <header className="flex items-center gap-3 px-5 pt-12 pb-3">
+        <header className="flex items-center gap-1 px-5 pt-12 pb-3">
           <button
             onClick={() => navigate("/instructors")}
-            className="-ms-1.5 rounded-xl p-1.5 active:scale-95"
+            className="-ms-3 flex h-11 w-11 items-center justify-center rounded-xl active:scale-95"
             aria-label={t("academyInstructorsTitle")}
           >
             <BackArrow className="h-5 w-5" />
@@ -191,10 +196,10 @@ export default function ProviderInstructorMember() {
           </ProviderPageTitle>
         </header>
 
-        <div className="flex flex-col gap-3.5 px-5">
+        <div className="space-y-6 px-5">
           {isNew ? (
-            <section className="glass-card rounded-3xl p-5">
-              <div className="mb-4 flex items-center gap-3">
+            <section className={cn(LIST, "space-y-4 p-5")}>
+              <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
                   <UserPlus className="h-5 w-5" />
                 </span>
@@ -203,168 +208,149 @@ export default function ProviderInstructorMember() {
                   <BranchSuffix />
                 </h1>
               </div>
-              <Label htmlFor="instructor-name">{t("academyInstructorName")}</Label>
-              <Input
-                id="instructor-name"
-                value={newName}
-                autoFocus
-                maxLength={NAME_MAX}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void create();
-                }}
-                className="mt-1.5 h-12 text-base"
-              />
-              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{t("academyInstructorNewHelp")}</p>
+              <Field label={t("academyInstructorName")} htmlFor="instructor-name" help={t("academyInstructorNewHelp")}>
+                <Input
+                  id="instructor-name"
+                  value={newName}
+                  autoFocus
+                  maxLength={NAME_MAX}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void create();
+                  }}
+                  className="h-12 rounded-xl text-base"
+                />
+              </Field>
               <Button
                 onClick={() => void create()}
                 disabled={createInstructor.isPending || !newName.trim()}
-                className="mt-4 h-12 w-full text-base font-semibold"
+                className="h-12 w-full rounded-2xl text-base font-semibold"
               >
                 {t("academyInstructorAdd")}
               </Button>
             </section>
           ) : isLoading ? (
             <>
-              <div className="h-40 rounded-3xl bg-secondary animate-pulse" />
-              <div className="h-40 rounded-3xl bg-secondary animate-pulse" />
+              <div className={cn(LIST, "h-36 animate-pulse")} />
+              <div className={cn(LIST, "h-32 animate-pulse")} />
             </>
           ) : !instructor ? (
-            <div className="glass-card rounded-2xl p-6 text-center">
-              <p className="text-sm text-muted-foreground">{t("academyInstructorNotFound")}</p>
-              <Button variant="outline" className="mt-4" onClick={() => navigate("/instructors")}>
+            <section className={cn(LIST, "flex flex-col items-center px-6 py-10 text-center")}>
+              <p className="text-sm text-foreground/60">{t("academyInstructorNotFound")}</p>
+              <Button variant="outline" className="mt-5 h-11 rounded-2xl px-5" onClick={() => navigate("/instructors")}>
                 {t("academyInstructorsTitle")}
               </Button>
-            </div>
+            </section>
           ) : (
             <>
-              <section className="glass-card rounded-3xl p-5">
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <InstructorAvatar
-                      id={instructor.id}
-                      name={instructor.name}
-                      photoUrl={instructor.photo_url}
-                      size="lg"
-                      muted={!instructor.is_active}
-                      className="ring-2 ring-accent/30 ring-offset-2 ring-offset-white/40"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileRef.current?.click()}
-                      disabled={photoBusy}
-                      aria-label={t("academyInstructorPhotoChange")}
-                      className="absolute -bottom-1 -end-1 flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground shadow active:scale-95 disabled:opacity-50"
-                    >
-                      <Camera className="h-4 w-4" />
-                    </button>
-                    <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickPhoto} />
-                  </div>
-
-                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                    {editingName ? (
-                      <div className="flex items-center gap-1.5">
-                        <Input
-                          value={nameDraft}
-                          autoFocus
-                          maxLength={NAME_MAX}
-                          aria-label={t("academyInstructorName")}
-                          onChange={(e) => setNameDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void commitName();
-                            if (e.key === "Escape") setEditingName(false);
-                          }}
-                          className="h-11 text-base font-semibold"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void commitName()}
-                          disabled={updateInstructor.isPending}
-                          aria-label={t("save")}
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground active:scale-95 disabled:opacity-50"
-                        >
-                          <Check className="h-5 w-5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNameDraft(instructor.name);
-                            setEditingName(false);
-                          }}
-                          aria-label={t("cancel")}
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground active:scale-95"
-                        >
-                          <X className="h-5 w-5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <h1
-                          className={`truncate text-xl font-bold ${instructor.is_active ? "" : "text-muted-foreground line-through"}`}
-                        >
-                          {instructor.name}
-                        </h1>
-                        <button
-                          type="button"
-                          onClick={() => setEditingName(true)}
-                          aria-label={t("academyInstructorRename")}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary active:scale-95"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      </div>
-                    )}
-                    {instructor.photo_url && (
-                      <button
-                        type="button"
-                        onClick={() => void removePhoto()}
-                        disabled={photoBusy}
-                        className="flex items-center gap-1 self-start text-xs font-medium text-muted-foreground hover:text-destructive disabled:opacity-50"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        {t("academyInstructorPhotoRemove")}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center gap-3 border-t border-border/60 pt-3.5">
-                  <Switch
-                    checked={instructor.is_active}
-                    onCheckedChange={(next) => (next ? void setActive(true) : setConfirmDeactivate(true))}
-                    disabled={updateInstructor.isPending}
-                    aria-label={t("academyInstructorActive")}
+              {/* Photo row: the picture and its actions. Name and status are
+                  the rows below, so they are not repeated here. */}
+              <section className={cn(LIST, "flex items-center gap-4 p-4")}>
+                <div className="relative shrink-0">
+                  <InstructorAvatar
+                    id={instructor.id}
+                    name={instructor.name}
+                    photoUrl={instructor.photo_url}
+                    size="lg"
+                    muted={!instructor.is_active}
                   />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">
-                      {instructor.is_active ? t("academyInstructorActive") : t("academyInstructorInactive")}
-                    </p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                      {instructor.is_active ? t("academyInstructorActiveHelp") : t("academyInstructorInactiveHelp")}
-                    </p>
-                  </div>
+                  {photoBusy && (
+                    <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    </span>
+                  )}
                 </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <PhotoButton icon={Camera} disabled={photoBusy} onClick={() => fileRef.current?.click()}>
+                    {instructor.photo_url ? t("academyInstructorPhotoChange") : t("acPhotoAdd")}
+                  </PhotoButton>
+                  {instructor.photo_url && (
+                    <PhotoButton icon={Trash2} disabled={photoBusy} onClick={() => void removePhoto()}>
+                      {t("academyInstructorPhotoRemove")}
+                    </PhotoButton>
+                  )}
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={onPickPhoto}
+                  aria-label={t("academyInstructorPhoto")}
+                />
               </section>
 
-              <section className="glass-card rounded-3xl p-5">
-                <Label htmlFor="instructor-bio">{t("academyInstructorBio")}</Label>
-                <Textarea
-                  id="instructor-bio"
-                  value={bioDraft}
-                  maxLength={BIO_MAX}
-                  rows={5}
-                  placeholder={t("academyInstructorBioPlaceholder")}
-                  onChange={(e) => setBioDraft(e.target.value)}
-                  className="mt-1.5"
+              <SettingsGroup>
+                <NavRow
+                  icon={User}
+                  title={t("academyInstructorName")}
+                  description={<bdi>{instructor.name}</bdi>}
+                  onClick={() => openSheet("name")}
                 />
-                <Button
-                  onClick={() => void saveBio()}
-                  disabled={!bioDirty || updateInstructor.isPending}
-                  className="mt-3 w-full"
-                >
-                  {t("save")}
-                </Button>
-              </section>
+                <NavRow
+                  icon={AlignLeft}
+                  title={t("academyInstructorBio")}
+                  description={bio || t("acNotWritten")}
+                  muted={!bio}
+                  lines={2}
+                  onClick={() => openSheet("bio")}
+                />
+              </SettingsGroup>
+
+              <SettingsGroup>
+                <SwitchRow
+                  title={t("academyInstructorActive")}
+                  description={instructor.is_active ? t("academyInstructorActiveHelp") : t("academyInstructorInactiveHelp")}
+                  checked={instructor.is_active}
+                  onChange={(next) => (next ? void setActive(true) : setConfirmDeactivate(true))}
+                  disabled={updateInstructor.isPending}
+                />
+              </SettingsGroup>
+
+              <EditSheet
+                open={sheet === "name"}
+                onClose={closeSheet}
+                icon={User}
+                title={t("academyInstructorName")}
+                onSave={() => void saveName()}
+                saving={updateInstructor.isPending}
+                saveDisabled={!nameDraft.trim()}
+              >
+                <Field label={t("academyInstructorName")} htmlFor="instructor-name-edit">
+                  <Input
+                    id="instructor-name-edit"
+                    value={nameDraft}
+                    maxLength={NAME_MAX}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void saveName();
+                    }}
+                    className="h-12 rounded-xl text-base"
+                  />
+                </Field>
+              </EditSheet>
+
+              <EditSheet
+                open={sheet === "bio"}
+                onClose={closeSheet}
+                icon={AlignLeft}
+                title={t("academyInstructorBio")}
+                onSave={() => void saveBio()}
+                saving={updateInstructor.isPending}
+                saveDisabled={!bioDirty}
+              >
+                <Field label={t("academyInstructorBio")} htmlFor="instructor-bio">
+                  <Textarea
+                    id="instructor-bio"
+                    value={bioDraft}
+                    maxLength={BIO_MAX}
+                    rows={6}
+                    placeholder={t("academyInstructorBioPlaceholder")}
+                    onChange={(e) => setBioDraft(e.target.value)}
+                    className="rounded-xl text-base"
+                  />
+                </Field>
+              </EditSheet>
 
               <InstructorDeactivateDialog
                 open={confirmDeactivate}
@@ -377,5 +363,29 @@ export default function ProviderInstructorMember() {
         </div>
       </div>
     </div>
+  );
+}
+
+function PhotoButton({
+  icon: Icon,
+  disabled,
+  onClick,
+  children,
+}: {
+  icon: typeof Camera;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-2xl border border-foreground/10 bg-white/70 px-3 text-sm font-medium transition-colors active:bg-foreground/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+    >
+      <Icon className="h-4 w-4 shrink-0 text-accent" />
+      <span className="truncate">{children}</span>
+    </button>
   );
 }
