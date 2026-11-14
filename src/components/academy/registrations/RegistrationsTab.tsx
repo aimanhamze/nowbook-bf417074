@@ -1,29 +1,23 @@
-import { useMemo, useState } from "react";
-import { format, parseISO } from "date-fns";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { BookOpen, CalendarDays, CheckCircle2, ClipboardList, Clock, XCircle } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ClipboardList } from "lucide-react";
+import { SettingsGroup } from "@/components/dashboard/SettingsRows";
+import { GROUP_HEADING, LIST } from "@/components/dashboard/settingsList";
 import { useLang } from "@/contexts/LangContext";
 import { useAcademyCourses } from "@/hooks/useAcademyCourses";
-import { useAcademyRegistrations, type ProviderRegistration } from "@/hooks/useAcademyRegistrations";
-import { filterRegistrations, type RegistrationFilter } from "@/lib/academyRegistrations";
+import { useAcademyRegistrations } from "@/hooks/useAcademyRegistrations";
+import {
+  filterRegistrations,
+  groupByCourse,
+  initialRegistrationFilter,
+  type RegistrationFilter,
+} from "@/lib/academyRegistrations";
 import { courseSpan } from "@/lib/academyCustomer";
-import { academyErrorMessage } from "@/lib/academyErrors";
+import { compactDateRange } from "@/lib/compactDateRange";
 import { dateFnsLocaleFor } from "@/lib/dateFnsLocale";
-import { RegistrationStatusBadge } from "@/components/academy/customer/RegistrationStatusBadge";
-import { formatCourseDate } from "@/components/academy/customer/courseFormat";
-import { CustomerContact } from "./CustomerContact";
+import { cn } from "@/lib/utils";
+import { RegistrantRow } from "./RegistrantRow";
+import { RegistrationSheet } from "./RegistrationSheet";
 
 const FILTERS: { id: RegistrationFilter; key: "academyFilterPending" | "academyFilterConfirmed" | "academyFilterAll" }[] = [
   { id: "pending", key: "academyFilterPending" },
@@ -32,52 +26,49 @@ const FILTERS: { id: RegistrationFilter; key: "academyFilterPending" | "academyF
 ];
 
 /**
- * Dashboard "Registrations" tab (academy): every course registration of the
- * branch, filtered Pending / Confirmed / All with counts. Pending rows can be
- * approved, or rejected after a confirm. Both go through
- * decide_course_registration and update the list optimistically.
+ * Dashboard "Registrations" section (academy): every course registration of
+ * the branch, filtered Pending / Confirmed / All (each tab shows its count,
+ * 0 included). Rows are grouped by course — the course name and dates appear
+ * once as the group heading — and tapping a row opens RegistrationSheet with
+ * the details and the actions.
+ *
+ * Opens on Pending when someone is waiting, otherwise on the first tab with
+ * rows. Decided once, when the list first loads, so approving the last
+ * pending request never moves the provider to another tab.
  */
 export function RegistrationsTab() {
   const { t, lang } = useLang();
   const locale = dateFnsLocaleFor(lang);
-  const { registrations, counts, isLoading, decide } = useAcademyRegistrations();
+  const { registrations, counts, isLoading } = useAcademyRegistrations();
   const { courses, sessionsByCourse } = useAcademyCourses();
-  const [filter, setFilter] = useState<RegistrationFilter>("pending");
-  const [rejecting, setRejecting] = useState<ProviderRegistration | null>(null);
+  const [filter, setFilter] = useState<RegistrationFilter | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoading && filter === null) setFilter(initialRegistrationFilter(counts));
+  }, [isLoading, filter, counts]);
 
   const courseById = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
-  const rows = filterRegistrations(registrations, filter);
+  const active = filter ?? "pending";
+  const groups = useMemo(() => groupByCourse(filterRegistrations(registrations, active)), [registrations, active]);
 
   const courseDates = (courseId: string) => {
     const span = courseSpan(sessionsByCourse.get(courseId) ?? []);
     if (!span.first || !span.last) return null;
-    return span.first.session_date === span.last.session_date
-      ? formatCourseDate(span.first.session_date, locale)
-      : `${formatCourseDate(span.first.session_date, locale)} – ${formatCourseDate(span.last.session_date, locale)}`;
+    return compactDateRange(span.first.session_date, span.last.session_date, locale);
   };
 
-  const run = async (registration: ProviderRegistration, decision: "confirmed" | "rejected") => {
-    try {
-      await decide.mutateAsync({
-        registration,
-        decision,
-        courseName: courseById.get(registration.course_id)?.name ?? "",
-      });
-      toast.success(decision === "confirmed" ? t("academyApprovedToast") : t("academyRejectedToast"));
-    } catch (err) {
-      toast.error(academyErrorMessage(err, t));
-    }
-  };
-
-  const busyId = decide.isPending ? decide.variables?.registration.id : null;
+  const openReg = openId ? registrations.find((r) => r.id === openId) : undefined;
+  const openCourse = openReg ? courseById.get(openReg.course_id) ?? null : null;
 
   return (
-    <div className="flex flex-col gap-3 pb-6">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5 pb-6">
       {/* The dashboard's section header is only a back control; each section names itself. */}
       <h2 className="text-lg font-semibold">{t("academyRegistrationsTab")}</h2>
-      <div className="flex gap-1 rounded-2xl border border-border/40 bg-secondary/80 p-1" role="tablist">
+
+      <div className="flex gap-1 rounded-2xl bg-foreground/[0.05] p-1" role="tablist">
         {FILTERS.map((f) => {
-          const on = filter === f.id;
+          const on = active === f.id;
           const n = counts[f.id];
           return (
             <button
@@ -86,121 +77,66 @@ export function RegistrationsTab() {
               role="tab"
               aria-selected={on}
               onClick={() => setFilter(f.id)}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors ${
-                on ? "bg-card text-accent shadow-sm" : "text-muted-foreground"
-              }`}
+              className={cn(
+                "flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                on ? "bg-white text-accent shadow-sm" : "text-foreground/60",
+              )}
             >
               {t(f.key)}
-              {n > 0 && (
-                <span
-                  className={`inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-bold ${
-                    f.id === "pending" ? "bg-amber-500 text-white" : "bg-muted-foreground/15 text-muted-foreground"
-                  }`}
-                >
-                  {n}
-                </span>
-              )}
+              <span
+                className={cn(
+                  "inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums",
+                  f.id === "pending" && n > 0 ? "bg-amber-500 text-white" : "bg-foreground/[0.08] text-foreground/60",
+                )}
+              >
+                {n}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {isLoading ? (
-        [0, 1].map((i) => <div key={i} className="h-36 rounded-2xl bg-secondary animate-pulse" />)
-      ) : rows.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border py-14 text-center">
-          <ClipboardList className="mx-auto mb-2 h-10 w-10 text-muted-foreground/30" />
-          <p className="text-sm text-muted-foreground">{t("academyRegistrationsEmpty")}</p>
-        </div>
+      {isLoading || filter === null ? (
+        <section className="space-y-2">
+          <div className="h-4 w-40 animate-pulse rounded bg-foreground/[0.06]" />
+          <div className={cn(LIST, "space-y-px")}>
+            {[1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse bg-foreground/[0.04]" />)}
+          </div>
+        </section>
+      ) : groups.length === 0 ? (
+        <section className={cn(LIST, "flex flex-col items-center px-6 py-10 text-center")}>
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+            <ClipboardList className="h-6 w-6" />
+          </span>
+          <p className="mt-3 text-sm text-foreground/60">{t("academyRegistrationsEmpty")}</p>
+        </section>
       ) : (
-        rows.map((r, i) => {
-          const course = courseById.get(r.course_id);
-          const dates = courseDates(r.course_id);
-          const busy = busyId === r.id;
+        groups.map((g) => {
+          const course = courseById.get(g.courseId);
+          const dates = courseDates(g.courseId);
           return (
-            <motion.article
-              key={r.id}
-              layout
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(i, 8) * 0.03 }}
-              className={`space-y-3 rounded-2xl border p-4 ${
-                r.status === "pending" ? "border-amber-200 bg-amber-50/60" : "border-border bg-card"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <CustomerContact name={r.customer_name} phone={r.customer_phone} />
-                <RegistrationStatusBadge status={r.status} className="shrink-0" />
-              </div>
-
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <p className="flex items-center gap-1.5 font-medium text-foreground">
-                  <BookOpen className="h-3.5 w-3.5 shrink-0 text-accent" />
-                  <span className="truncate">{course?.name ?? "—"}</span>
-                </p>
-                {dates && (
-                  <p className="flex items-center gap-1.5">
-                    <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                    {dates}
-                  </p>
-                )}
-                <p className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 shrink-0" />
-                  {t("academyRegisteredAt").replace("{d}", format(parseISO(r.created_at), "d MMM, HH:mm", { locale }))}
-                </p>
-              </div>
-
-              {r.status === "pending" && (
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 flex-1 gap-1 border-emerald-300 bg-white text-xs text-emerald-700 hover:bg-emerald-50"
-                    onClick={() => void run(r, "confirmed")}
-                    disabled={busy}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    {t("academyApprove")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 flex-1 gap-1 border-red-200 bg-white text-xs text-red-600 hover:bg-red-50"
-                    onClick={() => setRejecting(r)}
-                    disabled={busy}
-                  >
-                    <XCircle className="h-3.5 w-3.5" />
-                    {t("academyReject")}
-                  </Button>
-                </div>
-              )}
-            </motion.article>
+            <section key={g.courseId} className="space-y-2">
+              <h3 className={cn(GROUP_HEADING, "flex min-w-0 items-baseline gap-1.5")}>
+                <bdi className="truncate">{course?.name ?? "—"}</bdi>
+                {dates && <span className="shrink-0 font-medium text-foreground/50">· {dates}</span>}
+              </h3>
+              <SettingsGroup>
+                {g.rows.map((r) => (
+                  <RegistrantRow key={r.id} registration={r} onOpen={() => setOpenId(r.id)} />
+                ))}
+              </SettingsGroup>
+            </section>
           );
         })
       )}
 
-      <AlertDialog open={rejecting !== null} onOpenChange={(open) => !open && setRejecting(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("academyRejectConfirmTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("academyRejectConfirmBody")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => {
-                e.preventDefault();
-                const target = rejecting;
-                setRejecting(null);
-                if (target) void run(target, "rejected");
-              }}
-            >
-              {t("academyReject")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+      <RegistrationSheet
+        registrationId={openId}
+        onClose={() => setOpenId(null)}
+        course={openCourse}
+        courseDates={openReg ? courseDates(openReg.course_id) : null}
+      />
+    </motion.div>
   );
 }
