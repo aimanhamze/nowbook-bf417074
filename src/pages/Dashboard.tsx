@@ -17,6 +17,7 @@ import { PhotosTab } from "@/components/dashboard/PhotosTab";
 import { PackagesTab } from "@/components/dashboard/PackagesTab";
 import { CoursesTab } from "@/components/academy/CoursesTab";
 import { RegistrationsTab } from "@/components/academy/registrations/RegistrationsTab";
+import { useCourseScreen } from "@/components/academy/courseScreen";
 import { isAcademyCategory } from "@/lib/academyCategory";
 import { SetupHub } from "@/components/dashboard/SetupHub";
 import { isSectionVisible, toSectionId, type SectionId, type StepTarget } from "@/lib/dashboardSetup";
@@ -94,6 +95,11 @@ export default function Dashboard() {
     else navigate("/dashboard", { replace: true });
   };
 
+  // An academy course screen (?section=courses&course=<id>) sits one level
+  // below the course list, so its back control returns to the list.
+  const course = useCourseScreen();
+  const inCourse = section === "courses" && course.courseId !== null;
+
   const { isSupported, isSubscribed, loading: pushLoading, subscribe, unsubscribe } = usePushSubscription();
 
   if (!user || !isProvider) {
@@ -139,11 +145,11 @@ export default function Dashboard() {
           <header className="px-5 pt-12">
             <button
               type="button"
-              onClick={backToHub}
+              onClick={inCourse ? course.back : backToHub}
               className="-ms-2 inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-semibold text-foreground/80 transition-colors hover:bg-secondary/60 active:scale-95"
             >
               <BackArrow className="h-5 w-5" />
-              {t("dashboard")}
+              {inCourse ? t("academyCoursesTab") : t("dashboard")}
             </button>
             {branches.length > 1 && (
               <div className="mt-1">

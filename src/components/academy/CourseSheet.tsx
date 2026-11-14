@@ -1,29 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ImagePlus, Trash2 } from "lucide-react";
+import { BookOpen, Camera, ImagePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { providerDesktopSheet } from "@/components/layout/providerDesktop";
-import { BranchSuffix } from "@/components/branch/BranchSuffix";
+import { EditSheet, Field, SettingsGroup, SwitchRow } from "@/components/dashboard/SettingsRows";
 import { useLang } from "@/contexts/LangContext";
+import { cn } from "@/lib/utils";
 import type { TranslationKey } from "@/lib/translations";
 import { useAcademyCourses } from "@/hooks/useAcademyCourses";
 import type { AcademyCourseRow, AcademyInstructorRow } from "@/integrations/supabase/academyTypes";
@@ -97,7 +83,7 @@ function defaultsFor(course: AcademyCourseRow | null, firstInstructorId: string)
 
 export function CourseSheet({ open, onOpenChange, course, instructors, onSaved }: Props) {
   const { t } = useLang();
-  const { saveCourse, deleteCourse } = useAcademyCourses();
+  const { saveCourse } = useAcademyCourses();
   const schema = useMemo(() => buildSchema(t), [t]);
 
   // Active instructors, plus the course's current one even if it was
@@ -123,7 +109,6 @@ export function CourseSheet({ open, onOpenChange, course, instructors, onSaved }
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Fresh form on every open.
@@ -188,226 +173,169 @@ export function CourseSheet({ open, onOpenChange, course, instructors, onSaved }
     }
   };
 
-  const onDelete = async () => {
-    if (!course) return;
-    try {
-      await deleteCourse.mutateAsync({ id: course.id });
-      toast.success(t("academyCourseDeleted"));
-      setConfirmDelete(false);
-      onOpenChange(false);
-    } catch (err) {
-      toast.error(academyErrorMessage(err, t));
-    }
-  };
-
-  const fieldError = (name: keyof FormValues) =>
-    errors[name]?.message ? <p className="mt-1 text-xs text-destructive">{errors[name]?.message}</p> : null;
+  const err = (name: keyof FormValues) => errors[name]?.message ?? null;
+  const inputCls = (name: keyof FormValues) => cn("h-12 rounded-xl", errors[name] && "border-red-600");
+  const saving = isSubmitting || saveCourse.isPending;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className={`max-h-[calc(var(--vvh,100dvh)*0.92)] overflow-y-auto rounded-t-3xl ${providerDesktopSheet}`}>
-        <SheetHeader>
-          <SheetTitle>
-            {course ? t("academyCourseEdit") : t("academyCourseAdd")}
-            <BranchSuffix />
-          </SheetTitle>
-        </SheetHeader>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4" noValidate>
-          {/* Image */}
-          <div>
-            <Label>{t("academyCourseImage")}</Label>
-            <div className="mt-1.5 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="flex h-20 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-secondary/40 text-muted-foreground"
-                aria-label={t("academyCourseImage")}
-              >
-                {shownImage ? (
-                  <img src={shownImage} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <ImagePlus className="h-6 w-6" />
-                )}
-              </button>
-              {shownImage && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 text-muted-foreground"
-                  onClick={() => {
-                    setImageFile(null);
-                    setImagePreview(null);
-                    setRemoveImage(true);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {t("academyInstructorPhotoRemove")}
-                </Button>
-              )}
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="course-name">{t("academyCourseName")}</Label>
-            <Input id="course-name" maxLength={120} {...register("name")} className="mt-1.5" />
-            {fieldError("name")}
-          </div>
-
-          <div>
-            <Label htmlFor="course-description">{t("academyCourseDescription")}</Label>
-            <Textarea id="course-description" rows={3} maxLength={4000} {...register("description")} className="mt-1.5" />
-            {fieldError("description")}
-          </div>
-
-          <div>
-            <Label>{t("academyCourseInstructor")}</Label>
-            <Controller
-              name="instructor_id"
-              control={control}
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className="mt-1.5">
-                    <SelectValue placeholder={t("academyCourseInstructorPick")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {choices.map((i) => (
-                      <SelectItem key={i.id} value={i.id}>
-                        {i.name}
-                        {!i.is_active && ` ${t("academyCourseInstructorInactiveTag")}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            {fieldError("instructor_id")}
-          </div>
-
-          <div>
-            <Label>{t("academyCourseLocation")}</Label>
-            <Controller
-              name="location_type"
-              control={control}
-              render={({ field }) => (
-                <div className="mt-1.5 grid grid-cols-2 gap-1 rounded-xl bg-secondary/80 p-1" role="radiogroup">
-                  {(["physical", "online"] as const).map((kind) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      role="radio"
-                      aria-checked={field.value === kind}
-                      onClick={() => field.onChange(kind)}
-                      className={`rounded-lg py-2 text-sm font-semibold transition-colors ${
-                        field.value === kind ? "bg-card text-accent shadow-sm" : "text-muted-foreground"
-                      }`}
-                    >
-                      {kind === "physical" ? t("academyCoursePhysical") : t("academyCourseOnline")}
-                    </button>
-                  ))}
-                </div>
-              )}
-            />
-          </div>
-
-          {locationType === "physical" ? (
-            <div>
-              <Label htmlFor="course-address">{t("academyCourseAddress")}</Label>
-              <Input id="course-address" maxLength={300} {...register("address")} className="mt-1.5" />
-              {fieldError("address")}
-            </div>
-          ) : (
-            <div>
-              <Label htmlFor="course-url">{t("academyCourseOnlineUrl")}</Label>
-              <Input
-                id="course-url"
-                type="url"
-                dir="ltr"
-                inputMode="url"
-                placeholder="https://"
-                maxLength={500}
-                {...register("online_url")}
-                className="mt-1.5"
-              />
-              {fieldError("online_url")}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="course-seats">{t("academyCourseSeats")}</Label>
-              <Input id="course-seats" inputMode="numeric" {...register("max_seats")} className="mt-1.5" />
-              {fieldError("max_seats")}
-            </div>
-            <div>
-              <Label htmlFor="course-price">{t("academyCoursePrice")}</Label>
-              <Input id="course-price" inputMode="decimal" placeholder="₪" {...register("price")} className="mt-1.5" />
-              {fieldError("price")}
-            </div>
-          </div>
-          <p className="-mt-2 text-xs text-muted-foreground">{t("academyCoursePriceHelp")}</p>
-
-          <div>
-            <Label htmlFor="course-cancel">{t("academyCourseCancelHours")}</Label>
-            <Input id="course-cancel" inputMode="numeric" {...register("cancellation_hours")} className="mt-1.5" />
-            {fieldError("cancellation_hours")}
-          </div>
-
-          <Controller
-            name="is_active"
-            control={control}
-            render={({ field }) => (
-              <div className="flex items-center gap-3 rounded-xl border border-border p-3">
-                <Switch checked={field.value} onCheckedChange={field.onChange} aria-label={t("academyCourseActive")} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">{t("academyCourseActive")}</p>
-                  <p className="text-xs text-muted-foreground">{t("academyCourseActiveHelp")}</p>
-                </div>
-              </div>
-            )}
-          />
-
-          <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={isSubmitting || saveCourse.isPending}>
-            {t("save")}
-          </Button>
-
-          {course && (
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full gap-1.5 text-destructive hover:text-destructive"
-              onClick={() => setConfirmDelete(true)}
+    <EditSheet
+      open={open}
+      onClose={() => onOpenChange(false)}
+      icon={BookOpen}
+      title={course ? t("academyCourseEdit") : t("academyCourseAdd")}
+      onSave={() => void handleSubmit(onSubmit)()}
+      saving={saving}
+    >
+      {/* Image */}
+      <div className="flex items-center gap-3">
+        <span className="flex h-20 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-foreground/15 bg-foreground/[0.03] text-foreground/40">
+          {shownImage ? <img src={shownImage} alt="" className="h-full w-full object-cover" /> : <ImagePlus className="h-6 w-6" />}
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <SheetButton icon={Camera} onClick={() => fileRef.current?.click()}>
+            {shownImage ? t("academyInstructorPhotoChange") : t("academyCourseImage")}
+          </SheetButton>
+          {shownImage && (
+            <SheetButton
+              icon={Trash2}
+              onClick={() => {
+                setImageFile(null);
+                setImagePreview(null);
+                setRemoveImage(true);
+              }}
             >
-              <Trash2 className="h-4 w-4" />
-              {t("academyCourseDelete")}
-            </Button>
+              {t("academyInstructorPhotoRemove")}
+            </SheetButton>
           )}
-        </form>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} aria-label={t("academyCourseImage")} />
+      </div>
 
-        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("academyCourseDeleteTitle")}</AlertDialogTitle>
-              <AlertDialogDescription>{t("academyCourseDeleteBody")}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                disabled={deleteCourse.isPending}
-                onClick={(e) => {
-                  e.preventDefault();
-                  void onDelete();
-                }}
-              >
-                {t("academyDelete")}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </SheetContent>
-    </Sheet>
+      <Field label={t("academyCourseName")} htmlFor="course-name" error={err("name")}>
+        <Input id="course-name" maxLength={120} {...register("name")} className={inputCls("name")} />
+      </Field>
+
+      <Field label={t("academyCourseDescription")} htmlFor="course-description" error={err("description")}>
+        <Textarea id="course-description" rows={3} maxLength={4000} {...register("description")} className="rounded-xl" />
+      </Field>
+
+      <Field label={t("academyCourseInstructor")} error={err("instructor_id")}>
+        <Controller
+          name="instructor_id"
+          control={control}
+          render={({ field }) => (
+            <Select value={field.value} onValueChange={field.onChange}>
+              <SelectTrigger className="h-12 rounded-xl" aria-label={t("academyCourseInstructor")}>
+                <SelectValue placeholder={t("academyCourseInstructorPick")} />
+              </SelectTrigger>
+              <SelectContent>
+                {choices.map((i) => (
+                  <SelectItem key={i.id} value={i.id}>
+                    {i.name}
+                    {!i.is_active && ` ${t("academyCourseInstructorInactiveTag")}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </Field>
+
+      <Field label={t("academyCourseLocation")}>
+        <Controller
+          name="location_type"
+          control={control}
+          render={({ field }) => (
+            <div
+              className="grid grid-cols-2 gap-1 rounded-2xl bg-foreground/[0.05] p-1"
+              role="radiogroup"
+              aria-label={t("academyCourseLocation")}
+            >
+              {(["physical", "online"] as const).map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  role="radio"
+                  aria-checked={field.value === kind}
+                  onClick={() => field.onChange(kind)}
+                  className={cn(
+                    "h-11 rounded-xl text-sm font-semibold transition-colors",
+                    field.value === kind ? "bg-white text-accent shadow-sm" : "text-foreground/60",
+                  )}
+                >
+                  {kind === "physical" ? t("academyCoursePhysical") : t("academyCourseOnline")}
+                </button>
+              ))}
+            </div>
+          )}
+        />
+      </Field>
+
+      {locationType === "physical" ? (
+        <Field label={t("academyCourseAddress")} htmlFor="course-address" error={err("address")}>
+          <Input id="course-address" maxLength={300} {...register("address")} className={inputCls("address")} />
+        </Field>
+      ) : (
+        <Field label={t("academyCourseOnlineUrl")} htmlFor="course-url" error={err("online_url")}>
+          <Input
+            id="course-url"
+            type="url"
+            dir="ltr"
+            inputMode="url"
+            placeholder="https://"
+            maxLength={500}
+            {...register("online_url")}
+            className={cn(inputCls("online_url"), "text-start")}
+          />
+        </Field>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label={t("academyCourseSeats")} htmlFor="course-seats" error={err("max_seats")}>
+          <Input id="course-seats" inputMode="numeric" {...register("max_seats")} className={inputCls("max_seats")} />
+        </Field>
+        <Field label={t("academyCoursePrice")} htmlFor="course-price" error={err("price")}>
+          <Input id="course-price" inputMode="decimal" placeholder="₪" {...register("price")} className={inputCls("price")} />
+        </Field>
+      </div>
+      <p className="-mt-2 text-xs leading-snug text-foreground/60">{t("academyCoursePriceHelp")}</p>
+
+      <Field label={t("academyCourseCancelHours")} htmlFor="course-cancel" error={err("cancellation_hours")}>
+        <Input
+          id="course-cancel"
+          inputMode="numeric"
+          {...register("cancellation_hours")}
+          className={inputCls("cancellation_hours")}
+        />
+      </Field>
+
+      <Controller
+        name="is_active"
+        control={control}
+        render={({ field }) => (
+          <SettingsGroup plain>
+            <SwitchRow
+              title={t("academyCourseActive")}
+              description={t("academyCourseActiveHelp")}
+              checked={field.value}
+              onChange={field.onChange}
+            />
+          </SettingsGroup>
+        )}
+      />
+    </EditSheet>
+  );
+}
+
+function SheetButton({ icon: Icon, onClick, children }: { icon: typeof Camera; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-11 min-w-0 items-center gap-2 rounded-2xl border border-foreground/10 bg-white px-3 text-sm font-medium transition-colors active:bg-foreground/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <Icon className="h-4 w-4 shrink-0 text-accent" />
+      <span className="truncate">{children}</span>
+    </button>
   );
 }
