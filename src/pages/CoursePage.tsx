@@ -1,7 +1,7 @@
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { Share2 } from "lucide-react";
+import { CheckCircle2, Clock, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { InstructorAvatar } from "@/components/academy/InstructorAvatar";
 import { CourseImage } from "@/components/academy/customer/CourseCard";
@@ -16,7 +16,9 @@ import {
   type ChipTone,
 } from "@/components/academy/customer/course/CourseParts";
 import { RegisterBar } from "@/components/academy/customer/course/RegisterBar";
+import { CourseProgress, NextSessionCard, RegistrationCard } from "@/components/academy/customer/course/RegisteredParts";
 import { SessionSchedule } from "@/components/academy/customer/course/SessionSchedule";
+import { useCancelRegistration } from "@/components/academy/customer/useCancelRegistration";
 import { useCourseCatalogue } from "@/components/academy/customer/useCourseCatalogue";
 import { useCourseRegisterAction } from "@/components/academy/customer/useCourseRegisterAction";
 import { sectionTransition } from "@/components/dashboard/sectionTransition";
@@ -26,9 +28,9 @@ import { useProviderById } from "@/hooks/useAllProviders";
 import { useKeyboardOpen } from "@/hooks/useKeyboardOpen";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { isAcademyCategory } from "@/lib/academyCategory";
-import { courseDirectionsUrl } from "@/lib/academyCourseLinks";
-import { seatsMeter } from "@/lib/academyCourseView";
-import type { CourseCta } from "@/lib/academyCustomer";
+import { academyWhatsAppUrl, courseDirectionsUrl } from "@/lib/academyCourseLinks";
+import { endedSessionCount, nextSession, seatsMeter } from "@/lib/academyCourseView";
+import { courseCancelState, type CourseCta } from "@/lib/academyCustomer";
 import { looksLikeEmail } from "@/lib/customerLabel";
 import type { TranslationKey } from "@/lib/translations";
 
@@ -43,7 +45,14 @@ function registrationChip(cta: CourseCta): { key: TranslationKey; tone: ChipTone
  * One course, as a page of its own (/provider/:id/course/:courseId) — so it
  * can be shared, reloaded and left with Back. It reads the same cached
  * queries as the academy page (courses, seat counts, the visitor's own
- * registrations) and writes nothing on load; Register runs the existing flow.
+ * registrations) and writes nothing on load; Register and Cancel run the
+ * existing flows.
+ *
+ * Two states on the one route. A visitor sees the course as an offer: facts,
+ * seats, description, schedule, instructor, and a pinned Register bar. A
+ * customer holding a seat (pending or confirmed) sees their course instead:
+ * the next session first, how far the course has run, every session, and
+ * what they can still do about the registration — with no bar.
  */
 export default function CoursePage() {
   const { id: providerId, courseId } = useParams();
@@ -53,7 +62,9 @@ export default function CoursePage() {
   const keyboardOpen = useKeyboardOpen();
   const { isEntry } = useSmartBack();
   const { provider, isLoading: providerLoading } = useProviderById(providerId);
-  const { courses, isLoading, error, seats, ctaFor } = useCourseCatalogue(providerId);
+  const { courses, isLoading, error, seats, ctaFor, myLatestByCourse, now } = useCourseCatalogue(providerId);
+  const { requestCancel, dialog: cancelDialog, cancellingId } = useCancelRegistration();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const { register, pendingCourseId, signedIn } = useCourseRegisterAction(providerId ?? "");
 
   const academyUrl = `/provider/${providerId}`;
@@ -129,6 +140,22 @@ export default function CoursePage() {
   const closed = cta.kind === "started" || cta.kind === "no_sessions";
   // Never an email where a person's name goes.
   const instructorName = instructor && !looksLikeEmail(instructor.name) ? instructor.name : null;
+  const registered = cta.kind === "registered";
+  const myRegistration = registered ? (myLatestByCourse.get(course.id) ?? null) : null;
+  const directionsUrl = courseDirectionsUrl(course, provider.socialLinks);
+  const whatsAppUrl = academyWhatsAppUrl(provider.socialLinks, provider.phone);
+
+  const about = course.description?.trim() ? (
+    <CourseSection title={t("academyAboutCourse")}>
+      <CourseAbout text={course.description.trim()} />
+    </CourseSection>
+  ) : null;
+  const whoTeaches =
+    instructor && instructorName ? (
+      <CourseSection title={t("academyWhoTeaches")}>
+        <InstructorCard instructor={instructor} name={instructorName} />
+      </CourseSection>
+    ) : null;
 
   return (
     <Shell
@@ -139,16 +166,27 @@ export default function CoursePage() {
         </HeroButton>
       }
     >
-      <CourseImage url={course.image_url} className="h-[220px]" />
+      <CourseImage url={course.image_url} className={registered ? "h-[150px]" : "h-[220px]"} />
 
       <motion.main
         key={course.id}
         {...sectionTransition(!!reduceMotion)}
-        className="relative -mt-7 rounded-t-[28px] bg-background px-5 pb-36 pt-6"
+        className={`relative -mt-7 rounded-t-[28px] bg-background px-5 pt-6 ${
+          registered ? "pb-[calc(env(safe-area-inset-bottom,0px)+3rem)]" : "pb-36"
+        }`}
       >
         <div className="flex flex-wrap gap-2">
-          <Chip>{t(course.location_type === "online" ? "academyChipOnline" : "academyChipInPerson")}</Chip>
-          {cta.kind !== "registered" && <Chip tone={chip.tone}>{t(chip.key)}</Chip>}
+          {cta.kind === "registered" ? (
+            <Chip tone={cta.status === "confirmed" ? "green" : "amber"}>
+              {cta.status === "confirmed" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+              {t(cta.status === "confirmed" ? "academyStatusConfirmedSeat" : "academyStatusPendingSeat")}
+            </Chip>
+          ) : (
+            <>
+              <Chip>{t(course.location_type === "online" ? "academyChipOnline" : "academyChipInPerson")}</Chip>
+              <Chip tone={chip.tone}>{t(chip.key)}</Chip>
+            </>
+          )}
         </div>
 
         <h1 dir="auto" className="mt-3 text-2xl font-bold leading-tight ltr:text-left rtl:text-right">
@@ -176,40 +214,80 @@ export default function CoursePage() {
           </button>
         </div>
 
-        <FactTiles course={course} sessions={sessions} />
-        {/* Seats matter while a seat can still be taken — not once registration has closed. */}
-        {meter && !closed && <SeatsCard meter={meter} />}
+        {cta.kind === "registered" ? (
+          <>
+            {cta.status === "pending" && (
+              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">{t("academyPendingNote")}</p>
+            )}
 
-        {course.description?.trim() && (
-          <CourseSection title={t("academyAboutCourse")}>
-            <CourseAbout text={course.description.trim()} />
-          </CourseSection>
+            <CourseSection title={t("academyNextSession")} className="mt-6">
+              <NextSessionCard
+                session={nextSession(sessions, now)}
+                course={course}
+                directionsUrl={directionsUrl}
+                whatsAppUrl={whatsAppUrl}
+                canSeeOnlineLink={confirmed}
+              />
+            </CourseSection>
+
+            {sessions.length > 0 && (
+              <>
+                <CourseSection title={t("academyCourseProgress")}>
+                  <CourseProgress total={sessions.length} ended={endedSessionCount(sessions, now)} />
+                </CourseSection>
+                <CourseSection title={t("academyAllSessions")}>
+                  <SessionSchedule sessions={sessions} progressAt={now} />
+                </CourseSection>
+              </>
+            )}
+
+            <CourseSection title={t("academyYourRegistration")}>
+              <RegistrationCard
+                cancelState={courseCancelState(sessions[0] ?? null, course.cancellation_hours, now)}
+                cancelling={!!myRegistration && cancellingId === myRegistration.id}
+                onCancel={() => myRegistration && requestCancel(myRegistration.id)}
+                contactUrl={whatsAppUrl}
+                detailsOpen={detailsOpen}
+                onToggleDetails={() => setDetailsOpen((v) => !v)}
+              />
+            </CourseSection>
+
+            {detailsOpen && (
+              <motion.div {...sectionTransition(!!reduceMotion)}>
+                <FactTiles course={course} sessions={sessions} />
+                {about}
+                {whoTeaches}
+              </motion.div>
+            )}
+          </>
+        ) : (
+          <>
+            <FactTiles course={course} sessions={sessions} />
+            {/* Seats matter while a seat can still be taken — not once registration has closed. */}
+            {meter && !closed && <SeatsCard meter={meter} />}
+
+            {about}
+
+            <CourseSection title={t("academyScheduleTitle")}>
+              {sessions.length > 0 ? (
+                <SessionSchedule sessions={sessions} />
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("academyErrNoSessions")}</p>
+              )}
+            </CourseSection>
+
+            {whoTeaches}
+
+            <CourseSection title={t("academyGoodToKnow")}>
+              <GoodToKnow course={course} directionsUrl={directionsUrl} canSeeOnlineLink={confirmed} />
+            </CourseSection>
+          </>
         )}
-
-        <CourseSection title={t("academyScheduleTitle")}>
-          {sessions.length > 0 ? (
-            <SessionSchedule sessions={sessions} />
-          ) : (
-            <p className="text-sm text-muted-foreground">{t("academyErrNoSessions")}</p>
-          )}
-        </CourseSection>
-
-        {instructor && instructorName && (
-          <CourseSection title={t("academyWhoTeaches")}>
-            <InstructorCard instructor={instructor} name={instructorName} />
-          </CourseSection>
-        )}
-
-        <CourseSection title={t("academyGoodToKnow")}>
-          <GoodToKnow
-            course={course}
-            directionsUrl={courseDirectionsUrl(course, provider.socialLinks)}
-            canSeeOnlineLink={confirmed}
-          />
-        </CourseSection>
       </motion.main>
 
-      {!keyboardOpen && (
+      {cancelDialog}
+
+      {!registered && !keyboardOpen && (
         <RegisterBar
           cta={cta}
           price={course.price}
