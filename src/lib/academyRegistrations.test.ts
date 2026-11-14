@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   courseRegistrants,
   filterRegistrations,
+  groupByCourse,
+  initialRegistrationFilter,
   registrationCounts,
   seatsTakenByCourse,
   type RegistrationLike,
@@ -64,5 +66,24 @@ describe("courseRegistrants (per-course view)", () => {
 describe("seatsTakenByCourse", () => {
   it("pending + confirmed hold a seat; rejected / cancelled do not", () => {
     expect(Object.fromEntries(seatsTakenByCourse(rows))).toEqual({ c1: 3, c2: 1 });
+  });
+});
+
+describe("groupByCourse", () => {
+  it("groups in first-appearance order and keeps row order", () => {
+    const sorted = filterRegistrations(rows, "all"); // f(c1) e(c2) d(c1) a(c1) c(c2) b(c1)
+    const groups = groupByCourse(sorted);
+    expect(groups.map((g) => g.courseId)).toEqual(["c1", "c2"]);
+    expect(groups[0].rows.map((x) => x.id)).toEqual(["f", "d", "a", "b"]);
+    expect(groups[1].rows.map((x) => x.id)).toEqual(["e", "c"]);
+  });
+});
+
+describe("initialRegistrationFilter", () => {
+  it("opens on pending only when it has entries", () => {
+    expect(initialRegistrationFilter({ pending: 2, confirmed: 5, all: 9 })).toBe("pending");
+    expect(initialRegistrationFilter({ pending: 0, confirmed: 5, all: 9 })).toBe("confirmed");
+    expect(initialRegistrationFilter({ pending: 0, confirmed: 0, all: 3 })).toBe("all");
+    expect(initialRegistrationFilter({ pending: 0, confirmed: 0, all: 0 })).toBe("pending");
   });
 });

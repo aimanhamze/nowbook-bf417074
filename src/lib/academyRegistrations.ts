@@ -65,3 +65,29 @@ export function seatsTakenByCourse(rows: readonly RegistrationLike[]): Map<strin
   }
   return map;
 }
+
+/**
+ * Rows grouped by course, for the registrations list's course headings.
+ * Keeps the order of `rows` (already sorted by filterRegistrations): groups
+ * appear in the order of their first row, rows keep their order inside.
+ */
+export function groupByCourse<T extends RegistrationLike>(rows: readonly T[]): { courseId: string; rows: T[] }[] {
+  const groups = new Map<string, T[]>();
+  for (const r of rows) {
+    const list = groups.get(r.course_id);
+    if (list) list.push(r);
+    else groups.set(r.course_id, [r]);
+  }
+  return [...groups].map(([courseId, list]) => ({ courseId, rows: list }));
+}
+
+/**
+ * The tab the registrations list opens on: Pending when someone is waiting,
+ * otherwise the first tab that has rows (Pending when everything is empty).
+ */
+export function initialRegistrationFilter(counts: RegistrationCounts): RegistrationFilter {
+  if (counts.pending > 0) return "pending";
+  if (counts.confirmed > 0) return "confirmed";
+  if (counts.all > 0) return "all";
+  return "pending";
+}
