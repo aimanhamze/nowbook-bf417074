@@ -18,6 +18,7 @@ import { PackagesTab } from "@/components/dashboard/PackagesTab";
 import { CoursesTab } from "@/components/academy/CoursesTab";
 import { RegistrationsTab } from "@/components/academy/registrations/RegistrationsTab";
 import { useCourseScreen } from "@/components/academy/courseScreen";
+import { sectionTransition } from "@/components/dashboard/sectionTransition";
 import { isAcademyCategory } from "@/lib/academyCategory";
 import { SetupHub } from "@/components/dashboard/SetupHub";
 import { isSectionVisible, toSectionId, type SectionId, type StepTarget } from "@/lib/dashboardSetup";
@@ -199,9 +200,7 @@ export default function Dashboard() {
             old branch) or the hub, while the section itself (URL) is kept. */}
         <motion.div
           key={`${activeBranchId ?? ""}:${section ?? "hub"}`}
-          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
-          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
+          {...sectionTransition(!!reduceMotion)}
           className={section ? "px-5 pt-3" : "px-5 pt-5"}
         >
           {section === null && <SetupHub onOpen={openTarget} />}

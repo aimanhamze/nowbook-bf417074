@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { BookOpen, CalendarDays, FileText, GraduationCap, Plus, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import { CourseSheet } from "./CourseSheet";
 import { SessionsSheet } from "./SessionsSheet";
 import { CourseRegistrantsSheet } from "./registrations/CourseRegistrantsSheet";
 import { useCourseScreen } from "./courseScreen";
+import { sectionTransition } from "@/components/dashboard/sectionTransition";
 
 /**
  * Dashboard "Courses" section for an academy branch.
@@ -51,6 +52,7 @@ export function CoursesTab() {
   const { t } = useLang();
   const navigate = useNavigate();
   const { courseId, open, back } = useCourseScreen();
+  const reduceMotion = useReducedMotion();
   const { courses, sessionsByCourse, isLoading } = useAcademyCourses();
   const { instructors, activeInstructors, isLoading: instructorsLoading } = useAcademyInstructors();
   const { registrations } = useAcademyRegistrations();
@@ -83,98 +85,103 @@ export function CoursesTab() {
   const current = courseId ? courses.find((c) => c.id === courseId) ?? null : null;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pb-6">
-      {courseId ? (
-        loading ? (
-          <div className={cn(LIST, "h-64 animate-pulse")} />
-        ) : current ? (
-          <CourseScreen
-            course={current}
-            sessions={sessionsByCourse.get(current.id) ?? []}
-            instructor={instructorName.get(current.instructor_id) ?? null}
-            registrations={registrations.filter((r) => r.course_id === current.id)}
-            taken={takenByCourse.get(current.id) ?? 0}
-            onDetails={() => openEdit(current)}
-            onSessions={() => setSessionsFor(current.id)}
-            onRegistrants={() => setRegistrantsFor(current.id)}
-            onDeleted={back}
-          />
-        ) : (
-          <section className={cn(LIST, "flex flex-col items-center px-6 py-10 text-center")}>
-            <p className="font-semibold">{t("acCourseNotFound")}</p>
-            <Button variant="outline" onClick={back} className="mt-5 h-11 rounded-2xl px-5">
-              {t("academyCoursesTab")}
-            </Button>
-          </section>
-        )
-      ) : (
-        <>
-          <h2 className="text-lg font-semibold">{t("academyCoursesTab")}</h2>
-
-          {!loading && !canCreate && (
-            <SettingsGroup>
-              <NavRow
-                icon={GraduationCap}
-                title={t("academyInstructorsTitle")}
-                description={t("academyCoursesNeedInstructor")}
-                lines={2}
-                onClick={() => navigate("/instructors")}
-              />
-            </SettingsGroup>
-          )}
-
-          {loading ? (
-            <section className="space-y-2">
-              <h3 className={GROUP_HEADING}>{t("acCoursesGroup")}</h3>
-              <div className={cn(LIST, "space-y-px")}>
-                {[1, 2, 3].map((i) => <div key={i} className="h-[76px] animate-pulse bg-foreground/[0.04]" />)}
-              </div>
-            </section>
-          ) : courses.length === 0 ? (
-            <section className={cn(LIST, "flex flex-col items-center px-6 py-10 text-center")}>
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent">
-                <BookOpen className="h-6 w-6" />
-              </span>
-              <p className="mt-3 font-semibold">{t("academyCoursesEmptyTitle")}</p>
-              <p className="mt-1 text-sm text-foreground/60">{t("academyCoursesEmptyBody")}</p>
-              {canCreate && (
-                <Button onClick={openNew} className="mt-5 h-11 gap-1.5 rounded-2xl px-5">
-                  <Plus className="h-4 w-4" />
-                  {t("academyCourseAdd")}
-                </Button>
-              )}
-            </section>
+    <div className="pb-6">
+      {/* List <-> course plays the section open/back transition: the key
+          changes with the view. The sheets below stay outside it, so they are
+          not remounted when a new course opens its sessions straight away. */}
+      <motion.div key={courseId ?? "list"} {...sectionTransition(!!reduceMotion)} className="space-y-6">
+        {courseId ? (
+          loading ? (
+            <div className={cn(LIST, "h-64 animate-pulse")} />
+          ) : current ? (
+            <CourseScreen
+              course={current}
+              sessions={sessionsByCourse.get(current.id) ?? []}
+              instructor={instructorName.get(current.instructor_id) ?? null}
+              registrations={registrations.filter((r) => r.course_id === current.id)}
+              taken={takenByCourse.get(current.id) ?? 0}
+              onDetails={() => openEdit(current)}
+              onSessions={() => setSessionsFor(current.id)}
+              onRegistrants={() => setRegistrantsFor(current.id)}
+              onDeleted={back}
+            />
           ) : (
-            <SettingsGroup
-              title={t("acCoursesGroup")}
-              action={
-                canCreate && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={openNew}
-                    className="-me-2 h-11 gap-1.5 rounded-2xl px-3 font-semibold text-accent hover:bg-accent/10 hover:text-accent"
-                  >
+            <section className={cn(LIST, "flex flex-col items-center px-6 py-10 text-center")}>
+              <p className="font-semibold">{t("acCourseNotFound")}</p>
+              <Button variant="outline" onClick={back} className="mt-5 h-11 rounded-2xl px-5">
+                {t("academyCoursesTab")}
+              </Button>
+            </section>
+          )
+        ) : (
+          <>
+            <h2 className="text-lg font-semibold">{t("academyCoursesTab")}</h2>
+
+            {!loading && !canCreate && (
+              <SettingsGroup>
+                <NavRow
+                  icon={GraduationCap}
+                  title={t("academyInstructorsTitle")}
+                  description={t("academyCoursesNeedInstructor")}
+                  lines={2}
+                  onClick={() => navigate("/instructors")}
+                />
+              </SettingsGroup>
+            )}
+
+            {loading ? (
+              <section className="space-y-2">
+                <h3 className={GROUP_HEADING}>{t("acCoursesGroup")}</h3>
+                <div className={cn(LIST, "space-y-px")}>
+                  {[1, 2, 3].map((i) => <div key={i} className="h-[76px] animate-pulse bg-foreground/[0.04]" />)}
+                </div>
+              </section>
+            ) : courses.length === 0 ? (
+              <section className={cn(LIST, "flex flex-col items-center px-6 py-10 text-center")}>
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                  <BookOpen className="h-6 w-6" />
+                </span>
+                <p className="mt-3 font-semibold">{t("academyCoursesEmptyTitle")}</p>
+                <p className="mt-1 text-sm text-foreground/60">{t("academyCoursesEmptyBody")}</p>
+                {canCreate && (
+                  <Button onClick={openNew} className="mt-5 h-11 gap-1.5 rounded-2xl px-5">
                     <Plus className="h-4 w-4" />
                     {t("academyCourseAdd")}
                   </Button>
-                )
-              }
-            >
-              {courses.map((c) => (
-                <CourseRow
-                  key={c.id}
-                  course={c}
-                  sessions={sessionsByCourse.get(c.id) ?? []}
-                  instructor={instructorName.get(c.instructor_id) ?? null}
-                  taken={takenByCourse.get(c.id) ?? 0}
-                  onClick={() => open(c.id)}
-                />
-              ))}
-            </SettingsGroup>
-          )}
-        </>
-      )}
+                )}
+              </section>
+            ) : (
+              <SettingsGroup
+                title={t("acCoursesGroup")}
+                action={
+                  canCreate && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={openNew}
+                      className="-me-2 h-11 gap-1.5 rounded-2xl px-3 font-semibold text-accent hover:bg-accent/10 hover:text-accent"
+                    >
+                      <Plus className="h-4 w-4" />
+                      {t("academyCourseAdd")}
+                    </Button>
+                  )
+                }
+              >
+                {courses.map((c) => (
+                  <CourseRow
+                    key={c.id}
+                    course={c}
+                    sessions={sessionsByCourse.get(c.id) ?? []}
+                    instructor={instructorName.get(c.instructor_id) ?? null}
+                    taken={takenByCourse.get(c.id) ?? 0}
+                    onClick={() => open(c.id)}
+                  />
+                ))}
+              </SettingsGroup>
+            )}
+          </>
+        )}
+      </motion.div>
 
       <CourseSheet
         open={courseSheetOpen}
@@ -205,7 +212,7 @@ export function CoursesTab() {
         course={sessionsCourse}
         sessions={sessionsFor ? sessionsByCourse.get(sessionsFor) ?? [] : []}
       />
-    </motion.div>
+    </div>
   );
 }
 

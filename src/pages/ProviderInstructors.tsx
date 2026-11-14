@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, useReducedMotion } from "framer-motion";
 import { GraduationCap, Plus } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,6 +13,8 @@ import { providerDesktopPage, providerDesktopColumn } from "@/components/layout/
 import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 import { InstructorRoster } from "@/components/academy/InstructorRoster";
 import { isAcademyCategory } from "@/lib/academyCategory";
+import { useInstructorsNav } from "@/components/academy/instructorNav";
+import { sectionTransition } from "@/components/dashboard/sectionTransition";
 import { LIST } from "@/components/dashboard/settingsList";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +27,8 @@ export default function ProviderInstructors() {
   const { t } = useLang();
   const { user, isProvider } = useAuth();
   const navigate = useNavigate();
+  const nav = useInstructorsNav();
+  const reduceMotion = useReducedMotion();
   const { profile, isLoading: profileLoading } = useProviderProfile();
   const { instructors, activeInstructors, isLoading } = useAcademyInstructors();
   const { courses } = useAcademyCourses();
@@ -69,7 +74,7 @@ export default function ProviderInstructors() {
 
       <div className={`relative ${providerDesktopColumn}`}>
         <header className="flex items-center gap-3 px-5 pt-12 pb-4">
-          <button onClick={() => navigate("/profile")} className="-ms-3 flex h-11 w-11 items-center justify-center rounded-xl active:scale-95" aria-label={t("profile")}>
+          <button onClick={nav.backFromList} className="-ms-3 flex h-11 w-11 items-center justify-center rounded-xl active:scale-95" aria-label={t(nav.isEntry ? "dashboard" : "back")}>
             <BackArrow className="h-5 w-5" />
           </button>
           <ProviderPageTitle className="flex-1 text-xl font-bold">{t("academyInstructorsTitle")}</ProviderPageTitle>
@@ -80,13 +85,14 @@ export default function ProviderInstructors() {
               <bdi>{activeInstructors.length}</bdi>
             </span>
           )}
-          <Button size="sm" variant="outline" onClick={() => navigate("/instructors/new")} className="h-11 gap-1.5 rounded-2xl">
+          <Button size="sm" variant="outline" onClick={() => nav.openFromList("new")} className="h-11 gap-1.5 rounded-2xl">
             <Plus className="h-4 w-4" />
             {t("academyInstructorAdd")}
           </Button>
         </header>
 
-        <div className="px-5">
+        {/* The dashboard section's open transition (reduced motion: fade only). */}
+        <motion.div {...sectionTransition(!!reduceMotion)} className="px-5">
           {isLoading || profileLoading ? (
             <div className={cn(LIST, "space-y-px")}>
               {[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse bg-foreground/[0.04]" />)}
@@ -103,10 +109,10 @@ export default function ProviderInstructors() {
             <InstructorRoster
               instructors={instructors}
               activeCourses={activeCourses}
-              onOpen={(id) => navigate(`/instructors/${id}`)}
+              onOpen={nav.openFromList}
             />
           )}
-        </div>
+        </motion.div>
       </div>
     </div>
   );

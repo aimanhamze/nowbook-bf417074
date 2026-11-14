@@ -1,27 +1,31 @@
+import { useLayoutEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
-import { useReducedMotion } from "framer-motion";
-import { useLang } from "@/contexts/LangContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { SlideStack } from "@/components/staff/SlideStack";
 import ProviderInstructors from "./ProviderInstructors";
 import ProviderInstructorMember from "./ProviderInstructorMember";
 
 /**
- * The /instructors/* layout — same pattern and same reason as StaffRoutes:
- * both pages share one SlideStack and one lazily-loaded chunk, so the slide
+ * The /instructors/* layout: both pages in one lazily-loaded chunk, so moving
  * between them never suspends.
+ *
+ * Transitions: each page plays the dashboard section's open transition on
+ * its content (components/dashboard/sectionTransition) — arriving from the
+ * hub or /settings, list ↔ instructor, and back, all look like opening a
+ * dashboard section. (This replaced the staff SlideStack here, which never
+ * animated the first page and so showed nothing when coming from the hub.)
  */
 export default function InstructorRoutes() {
   const location = useLocation();
-  const { isRtl } = useLang();
-  const reduceMotion = useReducedMotion();
+
+  // Each page starts at the top, set before paint so nothing jumps.
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   return (
-    <SlideStack pathname={location.pathname} isRtl={isRtl} reduceMotion={!!reduceMotion}>
-      <Routes location={location}>
-        <Route index element={<ErrorBoundary><ProviderInstructors /></ErrorBoundary>} />
-        <Route path=":id" element={<ErrorBoundary><ProviderInstructorMember /></ErrorBoundary>} />
-      </Routes>
-    </SlideStack>
+    <Routes location={location}>
+      <Route index element={<ErrorBoundary><ProviderInstructors /></ErrorBoundary>} />
+      <Route path=":id" element={<ErrorBoundary><ProviderInstructorMember /></ErrorBoundary>} />
+    </Routes>
   );
 }

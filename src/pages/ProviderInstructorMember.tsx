@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { motion, useReducedMotion } from "framer-motion";
 import { AlignLeft, Camera, Loader2, Trash2, User, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
@@ -21,6 +22,8 @@ import { academyErrorMessage } from "@/lib/academyErrors";
 import { validateAcademyImage } from "@/lib/academyImage";
 import { isAcademyCategory } from "@/lib/academyCategory";
 import { cn } from "@/lib/utils";
+import { useInstructorsNav } from "@/components/academy/instructorNav";
+import { sectionTransition } from "@/components/dashboard/sectionTransition";
 
 const NAME_MAX = 120;
 const BIO_MAX = 2000;
@@ -38,6 +41,8 @@ export default function ProviderInstructorMember() {
   const { t } = useLang();
   const { user, isProvider } = useAuth();
   const navigate = useNavigate();
+  const nav = useInstructorsNav();
+  const reduceMotion = useReducedMotion();
   const { id = "" } = useParams<{ id: string }>();
   const isNew = id === "new";
 
@@ -79,7 +84,7 @@ export default function ProviderInstructorMember() {
     try {
       const newId = await createInstructor.mutateAsync({ name });
       toast.success(t("academyInstructorSaved"));
-      navigate(`/instructors/${newId}`, { replace: true });
+      nav.replaceWithMember(newId);
     } catch (err) {
       fail(err);
     }
@@ -185,7 +190,7 @@ export default function ProviderInstructorMember() {
       <div className={`relative ${providerDesktopColumn}`}>
         <header className="flex items-center gap-1 px-5 pt-12 pb-3">
           <button
-            onClick={() => navigate("/instructors")}
+            onClick={nav.backToList}
             className="-ms-3 flex h-11 w-11 items-center justify-center rounded-xl active:scale-95"
             aria-label={t("academyInstructorsTitle")}
           >
@@ -196,7 +201,9 @@ export default function ProviderInstructorMember() {
           </ProviderPageTitle>
         </header>
 
-        <div className="space-y-6 px-5">
+        {/* The dashboard section's open transition, replayed per instructor
+            (new → created is a new key). Reduced motion: fade only. */}
+        <motion.div key={id} {...sectionTransition(!!reduceMotion)} className="space-y-6 px-5">
           {isNew ? (
             <section className={cn(LIST, "space-y-4 p-5")}>
               <div className="flex items-center gap-3">
@@ -237,7 +244,7 @@ export default function ProviderInstructorMember() {
           ) : !instructor ? (
             <section className={cn(LIST, "flex flex-col items-center px-6 py-10 text-center")}>
               <p className="text-sm text-foreground/60">{t("academyInstructorNotFound")}</p>
-              <Button variant="outline" className="mt-5 h-11 rounded-2xl px-5" onClick={() => navigate("/instructors")}>
+              <Button variant="outline" className="mt-5 h-11 rounded-2xl px-5" onClick={nav.backToList}>
                 {t("academyInstructorsTitle")}
               </Button>
             </section>
@@ -360,7 +367,7 @@ export default function ProviderInstructorMember() {
               />
             </>
           )}
-        </div>
+        </motion.div>
       </div>
     </div>
   );
