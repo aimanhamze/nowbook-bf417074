@@ -672,6 +672,7 @@ export type Database = {
           user_id: string
           whatsapp_confirm_enabled: boolean
           whatsapp_message_language: string
+          whatsapp_reminder_both: boolean
           whatsapp_reminder_enabled: boolean
           whatsapp_reminder_hours: number
         }
@@ -710,6 +711,7 @@ export type Database = {
           user_id: string
           whatsapp_confirm_enabled?: boolean
           whatsapp_message_language?: string
+          whatsapp_reminder_both?: boolean
           whatsapp_reminder_enabled?: boolean
           whatsapp_reminder_hours?: number
         }
@@ -748,6 +750,7 @@ export type Database = {
           user_id?: string
           whatsapp_confirm_enabled?: boolean
           whatsapp_message_language?: string
+          whatsapp_reminder_both?: boolean
           whatsapp_reminder_enabled?: boolean
           whatsapp_reminder_hours?: number
         }
