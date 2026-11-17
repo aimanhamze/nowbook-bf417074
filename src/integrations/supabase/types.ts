@@ -14,6 +14,167 @@ export type Database = {
   }
   public: {
     Tables: {
+      academy_course_sessions: {
+        Row: {
+          course_id: string
+          created_at: string
+          end_time: string
+          id: string
+          instructor_id: string
+          period: unknown
+          provider_id: string
+          session_date: string
+          start_time: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          end_time: string
+          id?: string
+          instructor_id: string
+          period?: unknown
+          provider_id: string
+          session_date: string
+          start_time: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          end_time?: string
+          id?: string
+          instructor_id?: string
+          period?: unknown
+          provider_id?: string
+          session_date?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_course_sessions_course_instructor_fkey"
+            columns: ["course_id", "instructor_id"]
+            isOneToOne: false
+            referencedRelation: "academy_courses"
+            referencedColumns: ["id", "instructor_id"]
+          },
+          {
+            foreignKeyName: "academy_course_sessions_course_provider_fkey"
+            columns: ["course_id", "provider_id"]
+            isOneToOne: false
+            referencedRelation: "academy_courses"
+            referencedColumns: ["id", "provider_id"]
+          },
+        ]
+      }
+      academy_courses: {
+        Row: {
+          address: string | null
+          cancellation_hours: number
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          instructor_id: string
+          is_active: boolean
+          location_type: string
+          max_seats: number
+          name: string
+          online_url: string | null
+          price: number | null
+          provider_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          cancellation_hours?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          instructor_id: string
+          is_active?: boolean
+          location_type: string
+          max_seats: number
+          name: string
+          online_url?: string | null
+          price?: number | null
+          provider_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          cancellation_hours?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          instructor_id?: string
+          is_active?: boolean
+          location_type?: string
+          max_seats?: number
+          name?: string
+          online_url?: string | null
+          price?: number | null
+          provider_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_courses_instructor_same_branch_fkey"
+            columns: ["instructor_id", "provider_id"]
+            isOneToOne: false
+            referencedRelation: "academy_instructors"
+            referencedColumns: ["id", "provider_id"]
+          },
+          {
+            foreignKeyName: "academy_courses_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academy_instructors: {
+        Row: {
+          bio: string | null
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          name: string
+          photo_url: string | null
+          provider_id: string
+        }
+        Insert: {
+          bio?: string | null
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          photo_url?: string | null
+          provider_id: string
+        }
+        Update: {
+          bio?: string | null
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          photo_url?: string | null
+          provider_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academy_instructors_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           booking_date: string
@@ -30,6 +191,7 @@ export type Database = {
           id: string
           linked_user_id: string | null
           provider_id: string
+          series_id: string | null
           service_ids: string[]
           staff_id: string | null
           status: string
@@ -54,6 +216,7 @@ export type Database = {
           id?: string
           linked_user_id?: string | null
           provider_id: string
+          series_id?: string | null
           service_ids: string[]
           staff_id?: string | null
           status?: string
@@ -78,6 +241,7 @@ export type Database = {
           id?: string
           linked_user_id?: string | null
           provider_id?: string
+          series_id?: string | null
           service_ids?: string[]
           staff_id?: string | null
           status?: string
@@ -110,10 +274,90 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bookings_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_series"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bookings_staff_id_provider_id_fkey"
             columns: ["staff_id", "provider_id"]
             isOneToOne: false
             referencedRelation: "provider_staff"
+            referencedColumns: ["id", "provider_id"]
+          },
+        ]
+      }
+      course_push_log: {
+        Row: {
+          created_at: string
+          event: string
+          notification_id: string | null
+          registration_id: string
+        }
+        Insert: {
+          created_at?: string
+          event: string
+          notification_id?: string | null
+          registration_id: string
+        }
+        Update: {
+          created_at?: string
+          event?: string
+          notification_id?: string | null
+          registration_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_push_log_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "course_registrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_registrations: {
+        Row: {
+          cancelled_by: string | null
+          course_id: string
+          created_at: string
+          decided_at: string | null
+          id: string
+          provider_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancelled_by?: string | null
+          course_id: string
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          provider_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancelled_by?: string | null
+          course_id?: string
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          provider_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_registrations_course_provider_fkey"
+            columns: ["course_id", "provider_id"]
+            isOneToOne: false
+            referencedRelation: "academy_courses"
             referencedColumns: ["id", "provider_id"]
           },
         ]
@@ -640,6 +884,7 @@ export type Database = {
         Row: {
           about: string | null
           address: string | null
+          allow_customer_reschedule: boolean
           availability_mode: string
           avatar_image: string | null
           average_rating: number | null
@@ -670,6 +915,7 @@ export type Database = {
           treatment_notes_enabled: boolean
           updated_at: string
           user_id: string
+          waitlist_enabled: boolean
           whatsapp_confirm_enabled: boolean
           whatsapp_message_language: string
           whatsapp_reminder_both: boolean
@@ -679,6 +925,7 @@ export type Database = {
         Insert: {
           about?: string | null
           address?: string | null
+          allow_customer_reschedule?: boolean
           availability_mode?: string
           avatar_image?: string | null
           average_rating?: number | null
@@ -709,6 +956,7 @@ export type Database = {
           treatment_notes_enabled?: boolean
           updated_at?: string
           user_id: string
+          waitlist_enabled?: boolean
           whatsapp_confirm_enabled?: boolean
           whatsapp_message_language?: string
           whatsapp_reminder_both?: boolean
@@ -718,6 +966,7 @@ export type Database = {
         Update: {
           about?: string | null
           address?: string | null
+          allow_customer_reschedule?: boolean
           availability_mode?: string
           avatar_image?: string | null
           average_rating?: number | null
@@ -748,6 +997,7 @@ export type Database = {
           treatment_notes_enabled?: boolean
           updated_at?: string
           user_id?: string
+          waitlist_enabled?: boolean
           whatsapp_confirm_enabled?: boolean
           whatsapp_message_language?: string
           whatsapp_reminder_both?: boolean
@@ -764,6 +1014,7 @@ export type Database = {
           customer_notes_placeholder: string | null
           duration: number
           id: string
+          image_url: string | null
           is_active: boolean
           is_parallel: boolean
           latest_start_time: string | null
@@ -783,6 +1034,7 @@ export type Database = {
           customer_notes_placeholder?: string | null
           duration?: number
           id?: string
+          image_url?: string | null
           is_active?: boolean
           is_parallel?: boolean
           latest_start_time?: string | null
@@ -802,6 +1054,7 @@ export type Database = {
           customer_notes_placeholder?: string | null
           duration?: number
           id?: string
+          image_url?: string | null
           is_active?: boolean
           is_parallel?: boolean
           latest_start_time?: string | null
@@ -1031,6 +1284,122 @@ export type Database = {
         }
         Relationships: []
       }
+      recurring_series: {
+        Row: {
+          booking_time: string
+          created_at: string
+          created_by: string
+          id: string
+          provider_id: string
+          requested_count: number
+          service_id: string | null
+          staff_id: string | null
+          weekday: number
+        }
+        Insert: {
+          booking_time: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          provider_id: string
+          requested_count: number
+          service_id?: string | null
+          staff_id?: string | null
+          weekday: number
+        }
+        Update: {
+          booking_time?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          provider_id?: string
+          requested_count?: number
+          service_id?: string | null
+          staff_id?: string | null
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_series_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_series_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "provider_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_series_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "provider_staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recurring_series_cancellations: {
+        Row: {
+          cancelled_count: number
+          created_at: string
+          created_by: string
+          first_booking_id: string
+          first_date: string
+          id: string
+          provider_id: string
+          scope: string
+          series_id: string
+        }
+        Insert: {
+          cancelled_count: number
+          created_at?: string
+          created_by: string
+          first_booking_id: string
+          first_date: string
+          id?: string
+          provider_id: string
+          scope: string
+          series_id: string
+        }
+        Update: {
+          cancelled_count?: number
+          created_at?: string
+          created_by?: string
+          first_booking_id?: string
+          first_date?: string
+          id?: string
+          provider_id?: string
+          scope?: string
+          series_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_series_cancellations_first_booking_id_fkey"
+            columns: ["first_booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_series_cancellations_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_series_cancellations_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_series"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           booking_id: string | null
@@ -1117,6 +1486,220 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      waitlist_entries: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          entry_date: string
+          id: string
+          last_notified_at: string | null
+          notify_count: number
+          notify_lang: string | null
+          provider_id: string
+          service_id: string
+          staff_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          wants_afternoon: boolean
+          wants_evening: boolean
+          wants_morning: boolean
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          entry_date: string
+          id?: string
+          last_notified_at?: string | null
+          notify_count?: number
+          notify_lang?: string | null
+          provider_id: string
+          service_id: string
+          staff_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          wants_afternoon?: boolean
+          wants_evening?: boolean
+          wants_morning?: boolean
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          entry_date?: string
+          id?: string
+          last_notified_at?: string | null
+          notify_count?: number
+          notify_lang?: string | null
+          provider_id?: string
+          service_id?: string
+          staff_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          wants_afternoon?: boolean
+          wants_evening?: boolean
+          wants_morning?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waitlist_entries_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waitlist_entries_service_fk"
+            columns: ["service_id", "provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_services"
+            referencedColumns: ["id", "provider_id"]
+          },
+          {
+            foreignKeyName: "waitlist_entries_staff_fk"
+            columns: ["staff_id", "provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_staff"
+            referencedColumns: ["id", "provider_id"]
+          },
+        ]
+      }
+      waitlist_events: {
+        Row: {
+          attempts: number
+          booking_date: string | null
+          booking_id: string | null
+          booking_time: string | null
+          change_kind: string | null
+          claimed_at: string | null
+          created_at: string
+          duration_override: number | null
+          id: number
+          last_error: string | null
+          new_status: string | null
+          old_status: string | null
+          outcome: string | null
+          processed_at: string | null
+          provider_id: string | null
+          service_ids: string[] | null
+          staff_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          booking_date?: string | null
+          booking_id?: string | null
+          booking_time?: string | null
+          change_kind?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          duration_override?: number | null
+          id?: never
+          last_error?: string | null
+          new_status?: string | null
+          old_status?: string | null
+          outcome?: string | null
+          processed_at?: string | null
+          provider_id?: string | null
+          service_ids?: string[] | null
+          staff_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          booking_date?: string | null
+          booking_id?: string | null
+          booking_time?: string | null
+          change_kind?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          duration_override?: number | null
+          id?: never
+          last_error?: string | null
+          new_status?: string | null
+          old_status?: string | null
+          outcome?: string | null
+          processed_at?: string | null
+          provider_id?: string | null
+          service_ids?: string[] | null
+          staff_id?: string | null
+        }
+        Relationships: []
+      }
+      waitlist_send_log: {
+        Row: {
+          created_at: string
+          error_code: string | null
+          event_id: number | null
+          freed_booking_id: string | null
+          id: string
+          language_code: string | null
+          message_kind: string
+          missing_message_id: boolean
+          phone_digits: string | null
+          provider_id: string | null
+          sendpulse_message_id: string | null
+          slot_date: string | null
+          slot_time: string | null
+          status: string
+          template_name: string | null
+          updated_at: string
+          waitlist_entry_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_code?: string | null
+          event_id?: number | null
+          freed_booking_id?: string | null
+          id?: string
+          language_code?: string | null
+          message_kind: string
+          missing_message_id?: boolean
+          phone_digits?: string | null
+          provider_id?: string | null
+          sendpulse_message_id?: string | null
+          slot_date?: string | null
+          slot_time?: string | null
+          status?: string
+          template_name?: string | null
+          updated_at?: string
+          waitlist_entry_id: string
+        }
+        Update: {
+          created_at?: string
+          error_code?: string | null
+          event_id?: number | null
+          freed_booking_id?: string | null
+          id?: string
+          language_code?: string | null
+          message_kind?: string
+          missing_message_id?: boolean
+          phone_digits?: string | null
+          provider_id?: string | null
+          sendpulse_message_id?: string | null
+          slot_date?: string | null
+          slot_time?: string | null
+          status?: string
+          template_name?: string | null
+          updated_at?: string
+          waitlist_entry_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waitlist_send_log_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "provider_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waitlist_send_log_waitlist_entry_id_fkey"
+            columns: ["waitlist_entry_id"]
+            isOneToOne: false
+            referencedRelation: "waitlist_entries"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_send_log: {
         Row: {
@@ -1258,12 +1841,60 @@ export type Database = {
         }[]
       }
       booking_time_to_minutes: { Args: { _time: string }; Returns: number }
+      cancel_course_registration: {
+        Args: { p_registration_id: string }
+        Returns: undefined
+      }
+      cancel_recurring_series: {
+        Args: { p_booking_id: string; p_scope: string }
+        Returns: {
+          r_cancellation_id: string
+          r_cancelled_count: number
+          r_code: string
+          r_first_booking_id: string
+          r_first_date: string
+        }[]
+      }
+      create_recurring_series: {
+        Args: {
+          p_booking_time: string
+          p_customer_name: string
+          p_customer_phone: string
+          p_dates: string[]
+          p_guest_notes: string
+          p_provider_id: string
+          p_requested_count: number
+          p_service_id: string
+          p_staff_id: string
+          p_whatsapp_consent: boolean
+        }
+        Returns: {
+          r_booking_id: string
+          r_code: string
+          r_date: string
+          r_outcome: string
+          r_series_id: string
+        }[]
+      }
+      decide_course_registration: {
+        Args: { p_decision: string; p_registration_id: string }
+        Returns: undefined
+      }
       get_class_booking_counts: {
         Args: { p_class_ids: string[]; p_dates: string[] }
         Returns: {
           booked_count: number
           booking_date: string
           class_schedule_id: string
+        }[]
+      }
+      get_course_seat_counts: {
+        Args: { p_course_ids: string[] }
+        Returns: {
+          course_id: string
+          free: number
+          max_seats: number
+          taken: number
         }[]
       }
       get_display_name: { Args: { _user_id: string }; Returns: string }
@@ -1473,6 +2104,174 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      provider_customers: { Args: { p_provider_id: string }; Returns: Json }
+      recurring_series_service_eligible: {
+        Args: { p_provider_id: string; p_service_id: string; p_today: string }
+        Returns: boolean
+      }
+      register_for_course: { Args: { p_course_id: string }; Returns: string }
+      save_date_openings: {
+        Args: {
+          p_break_end?: string
+          p_break_start?: string
+          p_dates: string[]
+          p_end: string
+          p_provider_id: string
+          p_replace_blocks?: boolean
+          p_start: string
+        }
+        Returns: number
+      }
+      unread_notification_count: { Args: never; Returns: number }
+      waitlist_candidates: {
+        Args: { p_event_ids: number[] }
+        Returns: {
+          entry_id: string
+          event_id: number
+          freed_booking_id: string
+          latest_start_time: string
+          next_round: number
+          notify_lang: string
+          provider_id: string
+          service_duration: number
+          service_id: string
+          slot_date: string
+          slot_time: string
+          staff_lane: string
+          user_id: string
+        }[]
+      }
+      waitlist_claim_events: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          booking_date: string | null
+          booking_id: string | null
+          booking_time: string | null
+          change_kind: string | null
+          claimed_at: string | null
+          created_at: string
+          duration_override: number | null
+          id: number
+          last_error: string | null
+          new_status: string | null
+          old_status: string | null
+          outcome: string | null
+          processed_at: string | null
+          provider_id: string | null
+          service_ids: string[] | null
+          staff_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "waitlist_events"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      waitlist_claim_round: {
+        Args: {
+          p_entry_id: string
+          p_event_id: number
+          p_freed_booking_id: string
+          p_language_code: string
+          p_phone_digits: string
+          p_round: number
+          p_slot_time: string
+          p_staff_lane: string
+          p_template_name: string
+          p_whatsapp_skip?: string
+        }
+        Returns: {
+          log_id: string
+          reason: string
+        }[]
+      }
+      waitlist_customer_has_booking: {
+        Args: { p_date: string; p_provider_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      waitlist_event_age_anchor: {
+        Args: { p_created_at: string; p_now?: string }
+        Returns: string
+      }
+      waitlist_housekeeping: {
+        Args: never
+        Returns: {
+          expired: number
+          fulfilled: number
+          purged: number
+        }[]
+      }
+      waitlist_is_private_service: {
+        Args: { p_provider_id: string; p_service_id: string; p_today: string }
+        Returns: boolean
+      }
+      waitlist_is_quiet_hours: { Args: { p_now?: string }; Returns: boolean }
+      waitlist_join: {
+        Args: {
+          p_afternoon: boolean
+          p_entry_date: string
+          p_evening: boolean
+          p_lang: string
+          p_morning: boolean
+          p_provider_id: string
+          p_service_id: string
+          p_staff_id: string
+        }
+        Returns: {
+          code: string
+          entry_id: string
+        }[]
+      }
+      waitlist_leave: { Args: { p_entry_id: string }; Returns: string }
+      waitlist_provider_counts: {
+        Args: { p_provider_id: string }
+        Returns: {
+          entry_date: string
+          waiting: number
+        }[]
+      }
+      waitlist_provider_day: {
+        Args: { p_date: string; p_provider_id: string }
+        Returns: {
+          created_at: string
+          customer_name: string
+          customer_phone: string
+          entry_id: string
+          service_name: string
+          staff_name: string
+          wants_afternoon: boolean
+          wants_evening: boolean
+          wants_morning: boolean
+        }[]
+      }
+      waitlist_quiet_window: {
+        Args: { p_now?: string }
+        Returns: {
+          is_quiet: boolean
+          quiet_ends_at: string
+          quiet_started_at: string
+        }[]
+      }
+      waitlist_slot_is_open: {
+        Args: {
+          p_date: string
+          p_provider_id: string
+          p_service_id: string
+          p_staff_id: string
+          p_time: string
+        }
+        Returns: boolean
+      }
+      waitlist_staff_performs: {
+        Args: {
+          p_provider_id: string
+          p_service_id: string
+          p_staff_id: string
+        }
+        Returns: boolean
       }
     }
     Enums: {
