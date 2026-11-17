@@ -210,7 +210,6 @@ Three tabs:
 
 **Edge Functions** (in `supabase/functions/`):
 - `send-push`: sends Web Push to a provider's subscriptions
-- `notify-user`: sends notification to a specific user
 - `booking-reminder`: scheduled reminders (cron)
 - `create-provider`: creates provider account from admin panel
 

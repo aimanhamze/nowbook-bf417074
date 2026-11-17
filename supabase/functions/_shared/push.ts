@@ -1,9 +1,10 @@
 // _shared/push.ts — server-side Web Push to every subscription one user has.
 //
-// The webpush loop from notify-user, lifted into a module so a cron-driven
-// function can push to a CUSTOMER without a caller JWT. notify-user and
-// send-push are deliberately NOT changed to use it: both are live and ship on
-// their own.
+// The webpush loop copied from the former notify-user function (deleted
+// 2026-11-17: it let any signed-in caller write a bell row and push free text
+// to any user), kept as a module so a cron-driven function can push to a
+// CUSTOMER without a caller JWT. send-push is deliberately NOT changed to use
+// it: it is live and ships on its own.
 //
 // Delivery only. It never writes a notifications (bell) row — the caller owns
 // that, exactly as send-push leaves the bell to BookAppointment.
@@ -38,7 +39,7 @@ export interface PushResult {
 // deno-lint-ignore no-explicit-any
 type AdminLike = { from: (table: string) => any };
 
-const CONTACT = "mailto:push@nowbook.lovable.app"; // same as notify-user / send-push
+const CONTACT = "mailto:push@nowbook.lovable.app"; // same as send-push
 
 // One ApplicationServer per Edge Function instance, rebuilt only if the keys
 // change. Importing VAPID keys is the expensive step; a dispatch run may push
@@ -72,7 +73,7 @@ function endpointHost(endpoint: string): string {
  *
  * Never throws for a delivery problem: a failed push is a count in the result,
  * and a subscription the push service reports as gone (404/410) is deleted,
- * as notify-user does. It throws only if the VAPID keys are present but
+ * as send-push does. It throws only if the VAPID keys are present but
  * unusable — a configuration error the caller should log once and survive.
  *
  * `ttlSeconds` is how long the push service may hold the message for an

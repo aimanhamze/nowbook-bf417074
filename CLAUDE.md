@@ -49,7 +49,7 @@ DB → UI conversion is done with `dbProviderToProvider()` transformer functions
 ### Supabase (`src/integrations/supabase/`)
 - `client.ts` — singleton Supabase client (localStorage persistence)
 - `types.ts` — **auto-generated** — do not edit manually; regenerate with `supabase gen types`
-- Edge Functions: `send-push`, `notify-user`, `booking-reminder`, `create-provider`
+- Edge Functions: `send-push`, `booking-reminder`, `create-provider`
 
 Key tables: `profiles`, `user_roles`, `provider_profiles`, `provider_services`, `provider_availability`, `provider_blocked_dates`, `bookings`, `reviews`, `favorites`, `notifications`, `push_subscriptions`
 
