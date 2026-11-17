@@ -394,7 +394,36 @@ export function useProviderProfile() {
     },
   });
 
-  // 1 or 24 only — the DB CHECK constraint rejects anything else.
+  // Reminder lead mode — 24h, 1h, or "both" (24h AND 1h).
+  //
+  // ONE update per choice, so the two columns can never be half-written:
+  //   "both"  -> whatsapp_reminder_both = true; hours left as stored (the RPC
+  //              ignores it in "both" mode, and it is the value restored when
+  //              the provider switches back).
+  //   1 | 24  -> whatsapp_reminder_hours = value AND whatsapp_reminder_both = false.
+  // Hours stay 1 or 24 only — the DB CHECK constraint rejects anything else.
+  const updateWhatsAppReminderMode = useMutation({
+    mutationFn: async (value: 1 | 24 | "both") => {
+      if (!user) throw new Error("Not authenticated");
+      if (!profileId) throw new Error("No provider profile");
+      const patch = value === "both"
+        ? { whatsapp_reminder_both: true }
+        : { whatsapp_reminder_hours: value, whatsapp_reminder_both: false };
+      const { error } = await supabase
+        .from("provider_profiles")
+        .update(patch)
+        .eq("id", profileId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-profile", user?.id] });
+    },
+  });
+
+  // NO LONGER CALLED by /notification-settings (it uses
+  // updateWhatsAppReminderMode, which also clears whatsapp_reminder_both).
+  // Kept rather than deleted; calling it alone while "both" is on would leave
+  // "both" on. 1 or 24 only — the DB CHECK constraint rejects anything else.
   const updateWhatsAppReminderHours = useMutation({
     mutationFn: async (value: 1 | 24) => {
       if (!user) throw new Error("Not authenticated");
@@ -499,6 +528,7 @@ export function useProviderProfile() {
     updateWhatsAppMessageLanguage,
     updateWhatsAppReminderEnabled,
     updateWhatsAppReminderHours,
+    updateWhatsAppReminderMode,
     uploadCoverImage,
     uploadAvatarImage,
   };

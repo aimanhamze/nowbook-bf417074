@@ -19,10 +19,11 @@ import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
 const MESSAGE_LANGUAGES = ["he", "ar"] as const;
 type MessageLanguage = typeof MESSAGE_LANGUAGES[number];
 
-// Two lead times only, matching the CHECK constraint on
-// provider_profiles.whatsapp_reminder_hours.
-const REMINDER_LEAD_HOURS = [24, 1] as const;
-type ReminderLeadHours = typeof REMINDER_LEAD_HOURS[number];
+// Three lead modes. 24 and 1 map to provider_profiles.whatsapp_reminder_hours
+// (CHECK 1|24); "both" maps to whatsapp_reminder_both and sends at 24h AND 1h —
+// two messages per appointment instead of one.
+const REMINDER_LEAD_MODES = ["24", "1", "both"] as const;
+type ReminderLeadMode = typeof REMINDER_LEAD_MODES[number];
 
 // Standalone provider settings page, reached from /profile. Deliberately NOT a
 // sixth Dashboard tab: that tab bar is five flex-1 items whose labels are
@@ -41,7 +42,7 @@ export default function ProviderNotifications() {
     updateWhatsAppConfirmEnabled,
     updateWhatsAppMessageLanguage,
     updateWhatsAppReminderEnabled,
-    updateWhatsAppReminderHours,
+    updateWhatsAppReminderMode,
   } = useProviderProfile();
 
   useEffect(() => {
@@ -69,14 +70,18 @@ export default function ProviderNotifications() {
     profile?.whatsapp_message_language === "ar" ? "ar" : "he";
 
   const reminderEnabled = profile?.whatsapp_reminder_enabled ?? false;
-  const reminderHours: ReminderLeadHours =
-    profile?.whatsapp_reminder_hours === 1 ? 1 : 24;
+  // "both" wins over the stored hours — the RPC ignores hours in that mode.
+  const reminderMode: ReminderLeadMode = profile?.whatsapp_reminder_both
+    ? "both"
+    : profile?.whatsapp_reminder_hours === 1 ? "1" : "24";
 
   const languageLabel = (lang: MessageLanguage) =>
     lang === "ar" ? t("whatsappLanguageAr") : t("whatsappLanguageHe");
 
-  const leadLabel = (hours: ReminderLeadHours) =>
-    hours === 1 ? t("whatsappReminderLead1") : t("whatsappReminderLead24");
+  const leadLabel = (mode: ReminderLeadMode) =>
+    mode === "both"
+      ? t("whatsappReminderLeadBoth")
+      : mode === "1" ? t("whatsappReminderLead1") : t("whatsappReminderLead24");
 
   return (
     <div className={`min-h-screen pb-24 ${providerDesktopPage}`}>
@@ -151,27 +156,35 @@ export default function ProviderNotifications() {
               <div className="pt-3 border-t border-border">
                 <Label>{t("whatsappReminderLeadLabel")}</Label>
                 <Select
-                  value={String(reminderHours)}
+                  value={reminderMode}
                   onValueChange={async (v) => {
+                    const mode = v as ReminderLeadMode;
                     try {
-                      await updateWhatsAppReminderHours.mutateAsync(Number(v) as ReminderLeadHours);
+                      await updateWhatsAppReminderMode.mutateAsync(
+                        mode === "both" ? "both" : mode === "1" ? 1 : 24,
+                      );
                       toast.success(t("profileSaved"));
                     } catch {
                       toast.error(t("bsSaveError"));
                     }
                   }}
-                  disabled={updateWhatsAppReminderHours.isPending}
+                  disabled={updateWhatsAppReminderMode.isPending}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {REMINDER_LEAD_HOURS.map((hours) => (
-                      <SelectItem key={hours} value={String(hours)}>
-                        {leadLabel(hours)}
+                    {REMINDER_LEAD_MODES.map((mode) => (
+                      <SelectItem key={mode} value={mode}>
+                        {leadLabel(mode)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">{t("whatsappReminderLeadHelp")}</p>
+                {/* "Both" doubles the reminders per appointment — said plainly,
+                    only when it is the selected mode. */}
+                {reminderMode === "both" && (
+                  <p className="text-xs text-muted-foreground mt-1">{t("whatsappReminderBothHelp")}</p>
+                )}
               </div>
             )}
           </div>
