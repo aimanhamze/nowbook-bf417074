@@ -90,6 +90,7 @@ vi.mock("@/lib/whatsappConfirm", () => ({
 const {
   useProviderBookingsRange,
   useProviderBookingsAhead,
+  useProviderBookingsHistory,
   useProviderPendingBookings,
   usePendingCount,
 } = await import("./useProviderBookings");
@@ -262,5 +263,22 @@ describe("pending bookings — their own query", () => {
     state.bookings = Array.from({ length: 1500 }, (_, i) => row(i));
     const { result } = renderHook(() => usePendingCount(), { wrapper });
     await waitFor(() => expect(result.current).toBe(1));
+  });
+});
+
+describe("useProviderBookingsHistory — statistics and the monthly report", () => {
+  it("returns the whole history past the row cap, narrow columns, no lookups", async () => {
+    state.bookings = Array.from({ length: 1500 }, (_, i) =>
+      row(i, { booking_date: i < 750 ? "2025-03-01" : "2026-10-15", status: i % 3 === 0 ? "cancelled" : "confirmed" }),
+    );
+    const { result } = renderHook(() => useProviderBookingsHistory(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(1500);
+    expect(result.current.data!.filter((b) => b.status === "cancelled")).toHaveLength(500);
+    expect(state.requests.every((r) => r.table === "bookings" && r.columns !== "*")).toBe(true);
+    // Every field lib/providerStats reads is requested.
+    for (const col of ["id", "user_id", "linked_user_id", "customer_phone", "booking_date", "booking_time", "total_price", "status", "service_ids", "created_at"]) {
+      expect(state.requests[0].columns.split(", ")).toContain(col);
+    }
   });
 });

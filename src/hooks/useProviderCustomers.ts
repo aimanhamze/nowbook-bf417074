@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
-import { customerKey, isRegisteredKey } from "@/lib/customerKey";
-import { fetchAllPages, inBatches } from "@/lib/fetchAll";
+import { isRegisteredKey } from "@/lib/customerKey";
+import { BOOKINGS_KEY, BOOKINGS_STALE_MS } from "@/lib/providerBookingsKey";
 
 export interface ProviderCustomer {
   /** Stable React key + dedupe identity — see lib/customerKey. */
@@ -21,104 +21,81 @@ export interface ProviderCustomer {
   registered: boolean;
 }
 
+/** One customer as provider_customers() returns it. */
+interface ProviderCustomerRow {
+  key: string;
+  name: string | null;
+  phone: string | null;
+  booking_count: number;
+  last_visit: string | null;
+}
+
+// provider_customers is not in the generated types.ts yet (repo convention:
+// cast until types are regenerated).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 /**
  * SINGLE source of customer PII for the provider's "My Customers" view.
  *
- * ⚠️ ALL reads of customer name/phone (the `profiles` join included) are
- * intentionally isolated here so the data path can later be swapped to a
- * SECURITY DEFINER RPC (e.g. `provider_customers()`) WITHOUT touching any UI.
- * Do not replicate the profiles read elsewhere.
+ * ⚠️ ALL reads of customer name/phone are intentionally isolated here. Do not
+ * replicate them elsewhere.
  *
- * Scope: strictly THIS provider's own bookings (`provider_id = <my provider id>`),
- * which the bookings SELECT RLS already restricts to the calling provider.
+ * The grouping runs in the database: provider_customers(provider) (migration
+ * 20261117000001) returns one row per customer in ONE request. This hook used
+ * to download every booking the provider ever had, plus every registered
+ * customer's profile, and group them in the browser.
  *
- * Dedupe / counting: delegated ENTIRELY to lib/customerKey — account
- * (user_id, else linked_user_id) -> digit-normalized phone -> booking id.
- * This hook and useProviderStats previously keyed walk-ins differently and
- * returned different unique-customer counts for the same provider; they now
- * share one implementation. Two consequences vs. the old local logic:
- *   - phone formats ("050-1234567" / "+972501234567") now collapse to ONE
- *     customer instead of counting separately;
- *   - a walk-in the link_walkin_to_account trigger matched to an account now
- *     merges with that person's own app bookings instead of showing twice.
- * Both reduce the customer count — the previous numbers were over-counted.
+ * The function is a line-for-line port of that grouping, so the list is the
+ * same — and it must stay in step with lib/customerKey, which the statistics
+ * still use client-side:
+ *   - identity: account (user_id, else linked_user_id) -> the phone's last 9
+ *     digits -> the booking id;
+ *   - bookingCount: every booking, EVERY status (cancelled included);
+ *   - lastVisit: the latest booking_date;
+ *   - name / phone: the account's profile for an app booking, else what the
+ *     provider typed on the booking.
  *
- * PII surface is UNCHANGED: profiles are still read for user_id only. A linked
- * walk-in keeps showing the name/phone the provider typed on the booking; we
- * deliberately do not resolve the matched account's profile, which would expose
- * a display name the provider never had.
+ * Scope and PII surface are UNCHANGED. The function is SECURITY INVOKER: it
+ * reads bookings and profiles under this provider's own row-level security,
+ * exactly as the two client queries did, and profiles are still read for
+ * user_id only — a linked walk-in keeps showing the name/phone the provider
+ * typed, never the matched account's profile.
  *
  * Sort: most bookings first (desc), tie-broken by name for stable ordering.
+ * Done here rather than in SQL so the order cannot change with the database's
+ * collation.
  */
 export function useProviderCustomers() {
   const { profile } = useProviderProfile();
 
   return useQuery({
-    queryKey: ["provider-customers", profile?.id],
+    // Under the bookings prefix: every booking mutation (a new walk-in, a
+    // cancellation, a series) refreshes the list through the invalidation it
+    // already issues.
+    queryKey: [BOOKINGS_KEY, profile?.id, "customers"],
     enabled: !!profile,
+    staleTime: BOOKINGS_STALE_MS,
     queryFn: async (): Promise<ProviderCustomer[]> => {
       if (!profile) return [];
 
-      // This provider's own bookings only. Select the minimum needed to group
-      // and identify customers — no service/price/notes columns. Paged (see
-      // lib/fetchAll): unpaged, a provider past 1000 bookings silently lost
-      // whole customers and under-counted the rest.
-      const bookings = await fetchAllPages((from, to) =>
-        supabase
-          .from("bookings")
-          .select("id, user_id, linked_user_id, customer_name, customer_phone, booking_date")
-          .eq("provider_id", profile.id)
-          .order("id", { ascending: true })
-          .range(from, to),
-      );
-      if (bookings.length === 0) return [];
+      const { data, error } = await db.rpc("provider_customers", { p_provider_id: profile.id });
+      if (error) throw error;
 
-      // Resolve registered customers' name + phone from profiles.
-      // Select ONLY display_name + phone (never `*`) — minimum PII for the view.
-      const userIds = [...new Set(bookings.map((b) => b.user_id).filter(Boolean))] as string[];
-      const profiles = await inBatches<{ user_id: string; display_name: string | null; phone: string | null }>(
-        userIds,
-        (batch) => supabase.from("profiles").select("user_id, display_name, phone").in("user_id", batch),
+      const customers = ((data ?? []) as ProviderCustomerRow[]).map(
+        (row): ProviderCustomer => ({
+          key: row.key,
+          name: row.name ?? null,
+          phone: row.phone ?? null,
+          bookingCount: row.booking_count,
+          lastVisit: row.last_visit ?? null,
+          // Derived from the KEY, as before: a person with both an app booking
+          // and a linked walk-in resolves to one "u:" key and is registered.
+          registered: isRegisteredKey(row.key),
+        }),
       );
 
-      const profileMap = new Map(
-        profiles.map((p) => [p.user_id, p])
-      );
-
-      // Group bookings into unique customers + count.
-      const customers = new Map<string, ProviderCustomer>();
-
-      for (const b of bookings) {
-        const key = customerKey(b);
-        // `registered` is derived from the KEY, not from this row, so it cannot
-        // flip with iteration order: a person with both an app booking and a
-        // linked walk-in resolves to one "u:" key and is registered either way.
-        const registered = isRegisteredKey(key);
-
-        // Registered: prefer the account's profile details over typed-in text.
-        // A linked walk-in has no user_id, so it falls back to the booking row
-        // and any app booking of the same person backfills the profile name.
-        const p = b.user_id ? profileMap.get(b.user_id) : undefined;
-        const name = p?.display_name ?? b.customer_name ?? null;
-        const phone = p?.phone ?? b.customer_phone ?? null;
-
-        const existing = customers.get(key);
-        if (existing) {
-          existing.bookingCount += 1;
-          // Backfill any missing name/phone from a later row of the same customer.
-          if (!existing.name && name) existing.name = name;
-          if (!existing.phone && phone) existing.phone = phone;
-          // Plain string compare is safe: booking_date is a zero-padded
-          // YYYY-MM-DD, so lexical order is chronological order.
-          if (b.booking_date && (!existing.lastVisit || b.booking_date > existing.lastVisit)) {
-            existing.lastVisit = b.booking_date;
-          }
-        } else {
-          customers.set(key, { key, name, phone, bookingCount: 1, registered, lastVisit: b.booking_date ?? null });
-        }
-      }
-
-      return [...customers.values()].sort(
+      return customers.sort(
         (a, b) =>
           b.bookingCount - a.bookingCount ||
           (a.name || a.phone || "").localeCompare(b.name || b.phone || "")

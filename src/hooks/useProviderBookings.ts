@@ -5,6 +5,7 @@ import { useProviderProfile } from "./useProviderProfile";
 import { pkgFrom, type CustomerPackageRow } from "@/integrations/supabase/packageTypes";
 import type { ClassScheduleEntry } from "./useProviderClassSchedule";
 import { fetchAllPages, inBatches } from "@/lib/fetchAll";
+import { BOOKINGS_KEY, BOOKINGS_STALE_MS, HISTORY_STALE_MS } from "@/lib/providerBookingsKey";
 import {
   notifyBookingConfirmed,
   notifyBookingCancelled,
@@ -98,34 +99,10 @@ export interface SeriesMemberRow {
 
 const BOOKING_STATUSES = ["confirmed", "pending", "cancelled"];
 
-/**
- * Every bookings query of the signed-in provider lives under this prefix, so
- * one `invalidateQueries({ queryKey: ["provider-bookings-enriched"] })` — what
- * every mutation already does — refreshes all of them.
- */
-const BOOKINGS_KEY = "provider-bookings-enriched";
-
-/**
- * Bookings are polled every 30s; a query younger than that is not refetched
- * merely because a screen mounted or the window regained focus.
- */
-const BOOKINGS_STALE_MS = 30 * 1000;
-
-// Paged (see lib/fetchAll): a single unpaged select returned only a busy
-// provider's OLDEST 1000 bookings, so their current and upcoming bookings —
-// every pending one included — never reached the calendar or the pending tab.
-function fetchAllProviderBookings(providerId: string): Promise<Tables<"bookings">[]> {
-  return fetchAllPages((from, to) =>
-    supabase
-      .from("bookings")
-      .select("*")
-      .eq("provider_id", providerId)
-      .in("status", BOOKING_STATUSES)
-      .order("booking_date", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, to),
-  );
-}
+// Every read below is paged (see lib/fetchAll): a single unpaged select
+// returned only a busy provider's OLDEST 1000 bookings, so their current and
+// upcoming bookings — every pending one included — never reached the calendar
+// or the pending tab.
 
 /** One date range of the branch's bookings, inclusive "yyyy-MM-dd" bounds. */
 function fetchProviderBookingsInRange(
@@ -320,17 +297,57 @@ async function enrichBookings(
   });
 }
 
-export function useProviderBookings() {
+/**
+ * A booking as the statistics need it — lib/providerStats' StatsBooking and
+ * nothing more. No customer names, notes or enrichment.
+ */
+export interface HistoryBooking {
+  id: string;
+  user_id: string | null;
+  linked_user_id: string | null;
+  customer_phone: string | null;
+  booking_date: string;
+  booking_time: string;
+  total_price: number;
+  status: string;
+  service_ids: string[];
+  created_at: string;
+}
+
+/**
+ * The active branch's FULL booking history, narrow columns only — for the
+ * Statistics page and the monthly report, whose numbers genuinely need all of
+ * it (new vs returning is decided by each customer's first-ever booking;
+ * "upcoming" revenue is every future booking). Feeds the same
+ * computeProviderStats as before, so the numbers are computed by the same code
+ * from the same rows.
+ *
+ * NOT polled and not mounted anywhere else: it refetches when a booking
+ * mutation invalidates it, or when a screen that needs it opens after the
+ * data has gone stale.
+ */
+export function useProviderBookingsHistory() {
   const { profile } = useProviderProfile();
 
   return useQuery({
-    queryKey: [BOOKINGS_KEY, profile?.id],
-    queryFn: async () => {
+    queryKey: [BOOKINGS_KEY, profile?.id, "history"],
+    queryFn: async (): Promise<HistoryBooking[]> => {
       if (!profile) return [];
-      return enrichBookings(profile.id, await fetchAllProviderBookings(profile.id));
+      return fetchAllPages((from, to) =>
+        supabase
+          .from("bookings")
+          .select(
+            "id, user_id, linked_user_id, customer_phone, booking_date, booking_time, total_price, status, service_ids, created_at",
+          )
+          .eq("provider_id", profile.id)
+          .in("status", BOOKING_STATUSES)
+          .order("booking_date", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      );
     },
     enabled: !!profile,
-    refetchInterval: 30000,
+    staleTime: HISTORY_STALE_MS,
   });
 }
 

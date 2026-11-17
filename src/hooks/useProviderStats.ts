@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { StatsPeriod } from "@/pages/Statistics";
 import { useProviderProfile } from "./useProviderProfile";
-import { useProviderBookings } from "./useProviderBookings";
+import { useProviderBookingsHistory } from "./useProviderBookings";
 import { useProviderServices } from "./useProviderServices";
 import { useProviderReviews } from "./useReviews";
 import {
@@ -39,7 +39,7 @@ function windowDays(period: StatsPeriod): number {
 
 export function useProviderStats(period: StatsPeriod) {
   const { profile } = useProviderProfile();
-  const { data: bookings = [], isLoading: bookingsLoading } = useProviderBookings();
+  const { data: bookings = [], isLoading: bookingsLoading } = useProviderBookingsHistory();
   const { services, isLoading: servicesLoading } = useProviderServices();
   const { data: reviews = [], isLoading: reviewsLoading } = useProviderReviews(profile?.id);
 

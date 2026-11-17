@@ -1,45 +1,41 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 /**
- * useProviderCustomers used one unpaged select, so a provider past PostgREST's
- * silent 1000-row cap lost whole customers from "My Customers", the booking
- * customer search and the sell-package sheet, and under-counted the rest.
+ * useProviderCustomers used to page through every booking of the provider and
+ * group them in the browser (and before that, one unpaged select silently lost
+ * whole customers past PostgREST's 1000-row cap).
+ *
+ * The grouping now runs in provider_customers(), which returns the whole list
+ * as ONE jsonb value — a single request, and no row cap to page around. These
+ * tests pin the client half: one request, nothing dropped, same shape and
+ * order as before. The SQL half is checked by the migration's VERIFY file.
  */
 
-const SERVER_MAX_ROWS = 1000;
-const state: { bookings: Record<string, unknown>[] } = { bookings: [] };
+type RpcRow = {
+  key: string;
+  name: string | null;
+  phone: string | null;
+  booking_count: number;
+  last_visit: string | null;
+};
+const state: { rows: RpcRow[] | null; error: { message: string } | null } = { rows: [], error: null };
+const calls: { fn: string; args: unknown }[] = [];
 
-function builder(table: string) {
-  let range: [number, number] | null = null;
-  let inIds: string[] = [];
-  const q = {
-    select: () => q,
-    eq: () => q,
-    order: () => q,
-    in: (_col: string, ids: string[]) => {
-      inIds = ids;
-      return q;
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    rpc: (fn: string, args: unknown) => {
+      calls.push({ fn, args });
+      return Promise.resolve({ data: state.rows, error: state.error });
     },
-    range: (from: number, to: number) => {
-      range = [from, to];
-      return q;
+    from: (table: string) => {
+      throw new Error(`useProviderCustomers must not query ${table} directly`);
     },
-    then: (resolve: (r: { data: unknown[]; error: null }) => unknown) => {
-      const rows =
-        table === "bookings"
-          ? range ? state.bookings.slice(range[0], range[1] + 1) : state.bookings
-          : inIds.map((id) => ({ user_id: id, display_name: `name-${id}`, phone: null }));
-      return Promise.resolve({ data: rows.slice(0, SERVER_MAX_ROWS), error: null }).then(resolve);
-    },
-  };
-  return q;
-}
-
-vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: (t: string) => builder(t) } }));
+  },
+}));
 vi.mock("@/hooks/useProviderProfile", () => ({ useProviderProfile: () => ({ profile: { id: "pp" } }) }));
 
 const { useProviderCustomers } = await import("./useProviderCustomers");
@@ -50,23 +46,67 @@ const wrapper = ({ children }: { children: ReactNode }) => (
   </QueryClientProvider>
 );
 
-describe("useProviderCustomers — row cap", () => {
-  it("counts every customer and every visit past the 1000-row cap", async () => {
-    // 300 customers x 4 bookings = 1,200 rows. The LAST customer's bookings
-    // all sit past row 1000 and used to vanish entirely.
-    state.bookings = Array.from({ length: 1200 }, (_, i) => ({
-      id: `b-${String(i).padStart(5, "0")}`,
-      user_id: `u-${Math.floor(i / 4)}`,
-      linked_user_id: null,
-      customer_name: null,
-      customer_phone: null,
-      booking_date: "2026-10-15",
+beforeEach(() => {
+  calls.length = 0;
+  state.rows = [];
+  state.error = null;
+});
+
+describe("useProviderCustomers", () => {
+  it("one request for the active branch, and every customer past 1000 comes back", async () => {
+    state.rows = Array.from({ length: 1200 }, (_, i) => ({
+      key: `u:u-${i}`,
+      name: `name-u-${i}`,
+      phone: null,
+      booking_count: 4,
+      last_visit: "2026-10-15",
     }));
     const { result } = renderHook(() => useProviderCustomers(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(calls).toEqual([{ fn: "provider_customers", args: { p_provider_id: "pp" } }]);
     const customers = result.current.data!;
-    expect(customers).toHaveLength(300);
+    expect(customers).toHaveLength(1200);
     expect(customers.every((c) => c.bookingCount === 4)).toBe(true);
-    expect(customers.find((c) => c.name === "name-u-299")).toBeDefined();
+    expect(customers.find((c) => c.name === "name-u-1199")).toBeDefined();
+  });
+
+  it("maps a row to the customer shape; registered comes from the key", async () => {
+    state.rows = [
+      { key: "u:acc-1", name: "Dana", phone: "0501234567", booking_count: 3, last_visit: "2026-11-02" },
+      { key: "p:501234568", name: "Walk In", phone: "050-1234568", booking_count: 2, last_visit: "2026-10-01" },
+      { key: "w:b-9", name: null, phone: null, booking_count: 1, last_visit: "2026-09-09" },
+    ];
+    const { result } = renderHook(() => useProviderCustomers(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([
+      { key: "u:acc-1", name: "Dana", phone: "0501234567", bookingCount: 3, lastVisit: "2026-11-02", registered: true },
+      { key: "p:501234568", name: "Walk In", phone: "050-1234568", bookingCount: 2, lastVisit: "2026-10-01", registered: false },
+      { key: "w:b-9", name: null, phone: null, bookingCount: 1, lastVisit: "2026-09-09", registered: false },
+    ]);
+  });
+
+  it("sorts most bookings first, then by name, falling back to phone", async () => {
+    state.rows = [
+      { key: "u:1", name: "Zed", phone: null, booking_count: 2, last_visit: null },
+      { key: "u:2", name: "Adam", phone: null, booking_count: 2, last_visit: null },
+      { key: "p:3", name: null, phone: "0500000000", booking_count: 2, last_visit: null },
+      { key: "u:4", name: "Top", phone: null, booking_count: 9, last_visit: null },
+    ];
+    const { result } = renderHook(() => useProviderCustomers(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.map((c) => c.key)).toEqual(["u:4", "p:3", "u:2", "u:1"]);
+  });
+
+  it("no customers yet → an empty list", async () => {
+    state.rows = null;
+    const { result } = renderHook(() => useProviderCustomers(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([]);
+  });
+
+  it("a failed request is an error, not an empty customer list", async () => {
+    state.error = { message: "function public.provider_customers(uuid) does not exist" };
+    const { result } = renderHook(() => useProviderCustomers(), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });

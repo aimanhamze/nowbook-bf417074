@@ -1,6 +1,10 @@
 import { useMemo } from "react";
 import { useProviderProfile } from "./useProviderProfile";
-import { useProviderBookings, type EnrichedBooking } from "./useProviderBookings";
+import {
+  useProviderBookingsHistory,
+  useProviderBookingsRange,
+  type EnrichedBooking,
+} from "./useProviderBookings";
 import { useProviderServices } from "./useProviderServices";
 import { useProviderReviews } from "./useReviews";
 import {
@@ -34,6 +38,13 @@ import {
 //     definition outside a past month's range.
 // The range is applied INSIDE the function; filtering before the call is the bug.
 //
+// TWO SOURCES, both cached:
+//   • the slim full history (useProviderBookingsHistory) for every NUMBER and
+//     for the list of selectable months;
+//   • the selected month's bookings with names and services
+//     (useProviderBookingsRange) for the daily appointment LOG, which prints
+//     only that month. Not polled — a report is a snapshot.
+//
 // computeProviderStats is called TWICE — the selected month and the one before
 // it — which is what makes month-over-month deltas possible without a second
 // implementation of any metric.
@@ -55,9 +66,17 @@ export interface MonthlyReportData {
   isLoading: boolean;
 }
 
+const NO_BOOKINGS: EnrichedBooking[] = [];
+
 export function useMonthlyReport(selected: MonthRef): MonthlyReportData {
   const { profile } = useProviderProfile();
-  const { data: bookings = [], isLoading: bookingsLoading } = useProviderBookings();
+  const { data: bookings = [], isLoading: bookingsLoading } = useProviderBookingsHistory();
+  const selectedRange = monthRange(selected);
+  const { data: monthBookings = NO_BOOKINGS, isLoading: logLoading } = useProviderBookingsRange(
+    selectedRange.start,
+    selectedRange.end,
+    { poll: false },
+  );
   const { services, isLoading: servicesLoading } = useProviderServices();
   const { data: reviews = [], isLoading: reviewsLoading } = useProviderReviews(profile?.id);
 
@@ -79,15 +98,15 @@ export function useMonthlyReport(selected: MonthRef): MonthlyReportData {
     return {
       stats,
       prevStats,
-      days: groupByDay(bookings, range.start, range.end),
+      days: groupByDay(monthBookings, range.start, range.end),
       months: availableMonths(bookings),
       generatedOn: todayStr,
     };
-  }, [bookings, services, reviews, selected]);
+  }, [bookings, monthBookings, services, reviews, selected]);
 
   return {
     profile,
     ...value,
-    isLoading: bookingsLoading || servicesLoading || reviewsLoading,
+    isLoading: bookingsLoading || logLoading || servicesLoading || reviewsLoading,
   };
 }
