@@ -252,10 +252,11 @@ Three tabs:
 | `push_subscriptions` | Web Push subscription endpoints |
 
 **DB Functions**:
-- `get_display_name(user_id)` — returns user's display name
+- `get_display_name(user_id)` — returns user's display name. Not called by the app; service_role only since 2026-11-17
 - `has_role(role, user_id)` — role check
 - `booking_time_to_minutes(time)` — converts HH:MM to minutes
-- `get_slot_capacity(provider_id, date, time, service_id)` — returns capacity info for a group slot
+- `get_slot_capacity(provider_id, date, time, service_id)` — returns capacity info for a group slot. Not called by the app (group capacity is computed in the client); service_role only since 2026-11-17
+- `update_provider_average_rating()` — trigger function behind `trg_update_provider_rating` on `reviews`; keeps `provider_profiles.average_rating` current. PROD only — DEV lacks both (parity ticket)
 
 ---
 

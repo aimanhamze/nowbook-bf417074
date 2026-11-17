@@ -53,6 +53,13 @@ DB → UI conversion is done with `dbProviderToProvider()` transformer functions
 
 Key tables: `profiles`, `user_roles`, `provider_profiles`, `provider_services`, `provider_availability`, `provider_blocked_dates`, `bookings`, `reviews`, `favorites`, `notifications`, `push_subscriptions`
 
+### Database permissions — rules for every new migration
+Supabase's default privileges grant new objects in `public` to `anon` and `authenticated` **by name**. `REVOKE ... FROM PUBLIC` does not remove a named grant, so a migration that only revokes from PUBLIC leaves the object open to anyone holding the public anon key.
+- **Every new function**: `REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon, authenticated;` — all three, by name — then `GRANT EXECUTE` only to the roles that call it (`authenticated` for a client RPC, `service_role` for an edge function or cron, `anon` only when a logged-out screen calls it). Trigger functions get no grant.
+- **Every new table**: `REVOKE ALL ON ... FROM PUBLIC, anon, authenticated;` then grant what is used. No `anon` grant unless a logged-out screen reads the table, and never an `anon` write grant.
+- **Every VERIFY** asserts the result with `has_function_privilege` / `has_table_privilege` for `anon`, `authenticated` and `service_role`.
+- `SECURITY DEFINER` functions pin `search_path` and check `auth.uid()` / ownership inside: the grant is not the only guard.
+
 ### Contexts (`src/contexts/`)
 - `AuthContext` — session, user object, role detection; wrap all authenticated UI
 - `LangContext` — active language (`he`/`ar`/`en`), RTL/LTR direction, `t()` translation lookup. Hebrew is the default and is RTL.
@@ -63,7 +70,7 @@ Three-step wizard:
 2. **Date/time picker** — 14-day horizontal scroll, 15-minute slots
 3. **Confirmation** — summary, "pay at venue" note
 
-Slot availability (`useRealAvailability()`): generates 15-min slots, filters overlaps against existing bookings, respects blocked dates and weekly schedule. Group services expose `spotsLeft` / `isFull` from `get_slot_capacity()` DB function.
+Slot availability (`useRealAvailability()`): generates 15-min slots, filters overlaps against existing bookings, respects blocked dates and weekly schedule. Group services expose `spotsLeft` / `isFull` computed in the client by `getGroupSlotsWithCapacity()` (inside `useRealAvailability()`) from the busy slots. The `get_slot_capacity()` DB function is NOT called by the app (service_role only since 2026-11-17).
 
 ### UI Conventions
 - **Styling**: Tailwind + HSL CSS variables for theming; dark mode via `next-themes`
@@ -80,3 +87,5 @@ Vite splits output into three manual chunks: `vendor-react`, `vendor-ui`, `vendo
 
 - **`getProviderStatus` does not handle past-midnight closing times.** If `provider_availability.end_time` is e.g. `02:00` (next day), the helper compares `nowMins < 120` and reports closed all day. Affects Home status pills and Provider Detail status pill. Fix would need to detect `end_time < start_time` and treat as cross-midnight window.
 - **`getProviderStatus` does not handle mid-day breaks.** Schema is one row per `(provider_id, day_of_week)`, so a provider open `09:00–12:00` and `16:00–22:00` cannot be represented; the helper treats whatever single window is stored as contiguous. Schema + helper change required.
+- **`get_provider_busy_slots` has no date-range cap.** It is callable while logged out by design and returns only date, time, service ids, staff id and duration (no customer data), but it accepts any provider and any range, so one call can read a provider's whole booking volume. Follow-up: cap the range (the app asks for the booking window only).
+- **DEV/PROD parity — `average_rating`.** On PROD `provider_profiles.average_rating` is kept current by `trg_update_provider_rating` (AFTER INSERT OR UPDATE OR DELETE on `reviews`, function `update_provider_average_rating()`), so the old "stale average_rating" ticket is closed there. DEV has neither the function nor the trigger: ratings on DEV go stale. Part of the DEV/PROD parity ticket.
