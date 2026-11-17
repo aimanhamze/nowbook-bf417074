@@ -39,20 +39,21 @@ export async function fetchAllPages<T>(page: (from: number, to: number) => PageR
 export const IN_BATCH = 100;
 
 /**
- * Run an `.in(col, ids)` lookup in batches and concatenate the results. Errors
- * are ignored (the batch contributes nothing) — these lookups only enrich rows
- * with names and balances, and a missing name must not blank a whole screen.
+ * Run an `.in(col, ids)` lookup in batches and concatenate the results, in id
+ * order. The batches go out TOGETHER: they are independent, and one after
+ * another a provider with 600 customers waited on seven round trips in a row
+ * for names alone. Errors are ignored (the batch contributes nothing) — these
+ * lookups only enrich rows with names and balances, and a missing name must
+ * not blank a whole screen.
  */
 export async function inBatches<T>(
   ids: string[],
   run: (batch: string[]) => PromiseLike<{ data: unknown }>,
 ): Promise<T[]> {
-  const out: T[] = [];
-  for (let i = 0; i < ids.length; i += IN_BATCH) {
-    const { data } = await run(ids.slice(i, i + IN_BATCH));
-    out.push(...((data ?? []) as T[]));
-  }
-  return out;
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += IN_BATCH) batches.push(ids.slice(i, i + IN_BATCH));
+  const results = await Promise.all(batches.map((batch) => run(batch)));
+  return results.flatMap(({ data }) => (data ?? []) as T[]);
 }
 
 /**

@@ -22,9 +22,13 @@ const state: { bookings: Record<string, unknown>[]; inCalls: Record<string, numb
 function builder(table: string) {
   let range: [number, number] | null = null;
   let inIds: string[] | null = null;
+  const eqs: Record<string, unknown> = {};
   const q = {
     select: () => q,
-    eq: () => q,
+    eq: (col: string, val: unknown) => {
+      eqs[col] = val;
+      return q;
+    },
     order: () => q,
     in: (col: string, ids: string[]) => {
       if (col !== "status") {
@@ -40,7 +44,8 @@ function builder(table: string) {
     then: (resolve: (r: { data: unknown[]; error: null }) => unknown) => {
       let rows: unknown[] = [];
       if (table === "bookings") {
-        rows = range ? state.bookings.slice(range[0], range[1] + 1) : state.bookings;
+        const matching = state.bookings.filter((b) => !("status" in eqs) || b.status === eqs.status);
+        rows = range ? matching.slice(range[0], range[1] + 1) : matching;
       } else if (table === "profiles") {
         rows = (inIds ?? []).map((id) => ({ user_id: id, display_name: `name-${id}`, phone: null, avatar_url: null }));
       }
@@ -59,7 +64,7 @@ vi.mock("@/lib/whatsappConfirm", () => ({
   notifyBookingsCancelled: vi.fn(),
 }));
 
-const { useProviderBookings } = await import("./useProviderBookings");
+const { useProviderBookings, useProviderPendingBookings, usePendingCount } = await import("./useProviderBookings");
 
 const row = (i: number) => ({
   id: `b-${String(i).padStart(5, "0")}`,
@@ -108,5 +113,23 @@ describe("useProviderBookings — row cap", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data!.every((b) => b.customer_name === `name-${b.user_id}`)).toBe(true);
     expect(state.inCalls.profiles).toBeGreaterThan(1);
+  });
+});
+
+describe("pending bookings — their own query", () => {
+  it("returns only the pending bookings, enriched, without the rest of the history", async () => {
+    state.bookings = Array.from({ length: 1500 }, (_, i) => row(i));
+    const { result } = renderHook(() => useProviderPendingBookings(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.map((b) => b.id)).toEqual(["b-01499"]);
+    expect(result.current.data![0].customer_name).toBe("name-u-1499");
+    // One customer to name → one profiles request, not one per 100 of 1,500.
+    expect(state.inCalls.profiles).toBe(1);
+  });
+
+  it("usePendingCount is the length of that list", async () => {
+    state.bookings = Array.from({ length: 1500 }, (_, i) => row(i));
+    const { result } = renderHook(() => usePendingCount(), { wrapper });
+    await waitFor(() => expect(result.current).toBe(1));
   });
 });

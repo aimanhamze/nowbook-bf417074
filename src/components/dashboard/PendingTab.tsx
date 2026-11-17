@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
-import { useProviderBookings, useApproveBooking, useRejectBooking, usePendingCount, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import { useProviderPendingBookings, useApproveBooking, useRejectBooking, usePendingCount, type EnrichedBooking } from "@/hooks/useProviderBookings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { DEFAULT_DEPOSIT_TEMPLATE } from "@/components/dashboard/BusinessProfileTab";
 
@@ -242,7 +242,7 @@ function PendingCard({ booking, index, depositTemplate, depositEnabled, business
 
 export function PendingTab() {
   const { t } = useLang();
-  const { data: bookings = [], isLoading } = useProviderBookings();
+  const { data: bookings = [], isLoading } = useProviderPendingBookings();
   const { profile } = useProviderProfile();
   const depositTemplate = profile?.deposit_message_template || DEFAULT_DEPOSIT_TEMPLATE;
   // Cast: column added by 20260618000002 migration; types.ts regenerated after

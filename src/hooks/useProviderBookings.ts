@@ -77,6 +77,21 @@ export interface EnrichedBooking {
   package_total_entries: number | null;
 }
 
+const BOOKING_STATUSES = ["confirmed", "pending", "cancelled"];
+
+/**
+ * Every bookings query of the signed-in provider lives under this prefix, so
+ * one `invalidateQueries({ queryKey: ["provider-bookings-enriched"] })` — what
+ * every mutation already does — refreshes all of them.
+ */
+const BOOKINGS_KEY = "provider-bookings-enriched";
+
+/**
+ * Bookings are polled every 30s; a query younger than that is not refetched
+ * merely because a screen mounted or the window regained focus.
+ */
+const BOOKINGS_STALE_MS = 30 * 1000;
+
 // Paged (see lib/fetchAll): a single unpaged select returned only a busy
 // provider's OLDEST 1000 bookings, so their current and upcoming bookings —
 // every pending one included — never reached the calendar or the pending tab.
@@ -86,140 +101,185 @@ function fetchAllProviderBookings(providerId: string): Promise<Tables<"bookings"
       .from("bookings")
       .select("*")
       .eq("provider_id", providerId)
-      .in("status", ["confirmed", "pending", "cancelled"])
+      .in("status", BOOKING_STATUSES)
       .order("booking_date", { ascending: true })
       .order("id", { ascending: true })
       .range(from, to),
   );
 }
 
+/** Every pending booking of the branch, whatever its date. A handful of rows. */
+function fetchPendingProviderBookings(providerId: string): Promise<Tables<"bookings">[]> {
+  return fetchAllPages((from, to) =>
+    supabase
+      .from("bookings")
+      .select("*")
+      .eq("provider_id", providerId)
+      .eq("status", "pending")
+      .order("booking_date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+}
+
+/**
+ * Resolve everything a booking card shows that is not on the row itself:
+ * customer, service, class, staff and package. The lookups are independent of
+ * each other, so they are sent TOGETHER — in sequence they were most of the
+ * calendar's load time.
+ */
+async function enrichBookings(
+  providerId: string,
+  bookings: Tables<"bookings">[],
+): Promise<EnrichedBooking[]> {
+  if (bookings.length === 0) return [];
+
+  // customer_package_id / check_in_at are absent from the generated types
+  // (types.ts is generated from PROD), so they are read through a narrow cast
+  // — see integrations/supabase/packageTypes.ts for why that file exists.
+  const withPkg = bookings as (typeof bookings[number] & {
+    check_in_at?: string | null;
+    customer_package_id?: string | null;
+  })[];
+
+  // Walk-in bookings have user_id IS NULL — exclude those from the profiles lookup.
+  const userIds = [...new Set(bookings.map((b) => b.user_id).filter(Boolean))] as string[];
+  // Deliberately NOT filtered to is_active: a booking keeps its class after the
+  // class is deactivated or edited, and must stay visible on the calendar.
+  const classIds = [...new Set(bookings.map((b) => b.class_schedule_id).filter(Boolean))] as string[];
+  // Deliberately NOT filtered to is_active: a deactivated staff member must
+  // still be named on their past/existing bookings. Non-staff providers have
+  // staff_id NULL on every row → no query fired.
+  const staffIds = [...new Set(bookings.map((b) => b.staff_id).filter(Boolean))] as string[];
+  const packageIds = [
+    ...new Set(withPkg.map((b) => b.customer_package_id).filter(Boolean)),
+  ] as string[];
+
+  // Package balances for the badge on each booking card. The template names
+  // depend on the packages, so those two stay in sequence with each other.
+  const loadPackages = async () => {
+    const packages = await inBatches<Pick<
+      CustomerPackageRow, "id" | "entries_remaining" | "total_entries" | "template_id"
+    >>(packageIds, (batch) =>
+      pkgFrom("customer_packages")
+        .select("id, entries_remaining, total_entries, template_id")
+        .in("id", batch),
+    );
+    const { data: pkgTemplateRows } = packages.length > 0
+      ? await pkgFrom("package_templates")
+          .select("id, name")
+          .in("id", [...new Set(packages.map((p) => p.template_id))])
+      : { data: [] };
+    return { packages, pkgTemplateRows };
+  };
+
+  const [profiles, { data: services }, classRows, { data: staffRows }, { packages, pkgTemplateRows }] =
+    await Promise.all([
+      inBatches<{
+        user_id: string; display_name: string | null; phone: string | null; avatar_url: string | null;
+      }>(userIds, (batch) =>
+        supabase.from("profiles").select("user_id, display_name, phone, avatar_url").in("user_id", batch),
+      ),
+      supabase
+        .from("provider_services")
+        .select("id, name, service_type, max_capacity")
+        .eq("provider_id", providerId),
+      inBatches<ClassScheduleEntry>(classIds, (batch) =>
+        supabase.from("provider_class_schedule").select("*").in("id", batch),
+      ),
+      staffIds.length > 0
+        ? supabase.from("provider_staff").select("id, name").in("id", staffIds)
+        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      loadPackages(),
+    ]);
+
+  const profileMap = new Map(profiles.map((p) => [p.user_id, p]));
+  const serviceMap = new Map((services || []).map((s) => [s.id, s]));
+  const classMap = new Map(classRows.map((c) => [c.id, c]));
+  const staffMap = new Map((staffRows || []).map((s) => [s.id, s.name as string]));
+  const pkgTemplateMap = new Map(
+    ((pkgTemplateRows ?? []) as unknown as { id: string; name: string }[])
+      .map((tpl) => [tpl.id, tpl.name]),
+  );
+  const packageMap = new Map(packages.map((p) => [p.id, p]));
+
+  return withPkg.map((b): EnrichedBooking => {
+    // Walk-in: user_id is null → profileMap lookup is skipped (no account).
+    const customer = b.user_id ? profileMap.get(b.user_id) : undefined;
+    const primaryService = serviceMap.get(b.service_ids?.[0]);
+    // Walk-in bookings store the customer's details on the row; app bookings
+    // leave these NULL and resolve via the profiles join above.
+    return {
+      ...b,
+      treatment_notes: b.treatment_notes ?? null,
+      customer_notes: b.customer_notes ?? null,
+      customer_name: b.customer_name || customer?.display_name || null,
+      customer_phone: b.customer_phone || customer?.phone || null,
+      customer_avatar: customer?.avatar_url || null,
+      service_names: (b.service_ids || []).map((id) => serviceMap.get(id)?.name || id),
+      is_group_service: primaryService?.service_type === 'group',
+      service_capacity: primaryService?.max_capacity ?? 1,
+      class_schedule_id: b.class_schedule_id ?? null,
+      class_name: b.class_schedule_id ? (classMap.get(b.class_schedule_id)?.class_name ?? null) : null,
+      class_entry: b.class_schedule_id ? (classMap.get(b.class_schedule_id) ?? null) : null,
+      linked_user_id: b.linked_user_id ?? null,
+      staff_id: b.staff_id ?? null,
+      staff_name: b.staff_id ? (staffMap.get(b.staff_id) ?? null) : null,
+      duration_override: b.duration_override ?? null,
+      check_in_at: b.check_in_at ?? null,
+      customer_package_id: b.customer_package_id ?? null,
+      package_name: b.customer_package_id
+        ? (pkgTemplateMap.get(
+            packageMap.get(b.customer_package_id)?.template_id ?? "",
+          ) ?? null)
+        : null,
+      package_entries_remaining: b.customer_package_id
+        ? (packageMap.get(b.customer_package_id)?.entries_remaining ?? null)
+        : null,
+      package_total_entries: b.customer_package_id
+        ? (packageMap.get(b.customer_package_id)?.total_entries ?? null)
+        : null,
+    };
+  });
+}
+
 export function useProviderBookings() {
   const { profile } = useProviderProfile();
 
   return useQuery({
-    queryKey: ["provider-bookings-enriched", profile?.id],
+    queryKey: [BOOKINGS_KEY, profile?.id],
     queryFn: async () => {
       if (!profile) return [];
-
-      const bookings = await fetchAllProviderBookings(profile.id);
-      if (bookings.length === 0) return [];
-
-      // Walk-in bookings have user_id IS NULL — exclude those from the profiles lookup.
-      const userIds = [...new Set(bookings.map((b) => b.user_id).filter(Boolean))] as string[];
-      const profiles = await inBatches<{
-        user_id: string; display_name: string | null; phone: string | null; avatar_url: string | null;
-      }>(userIds, (batch) =>
-        supabase.from("profiles").select("user_id, display_name, phone, avatar_url").in("user_id", batch),
-      );
-
-      const { data: services } = await supabase
-        .from("provider_services")
-        .select("id, name, service_type, max_capacity")
-        .eq("provider_id", profile.id);
-
-      const profileMap = new Map(
-        (profiles || []).map((p) => [p.user_id, p])
-      );
-      const serviceMap = new Map(
-        (services || []).map((s) => [s.id, s])
-      );
-
-      // Batch-fetch the class rows for any fitness_studio bookings. Deliberately
-      // NOT filtered to is_active: a booking keeps its class after the class is
-      // deactivated or edited, and must stay visible on the calendar.
-      const classIds = [...new Set(bookings.map((b) => b.class_schedule_id).filter(Boolean))] as string[];
-      const classRows = await inBatches<ClassScheduleEntry>(classIds, (batch) =>
-        supabase.from("provider_class_schedule").select("*").in("id", batch),
-      );
-      const classMap = new Map(classRows.map((c) => [c.id, c]));
-
-      // Batch-fetch staff names (same pattern as classMap). Deliberately NOT
-      // filtered to is_active: a deactivated staff member must still be named
-      // on their past/existing bookings. Non-staff providers have staff_id
-      // NULL on every row → no query fired.
-      const staffIds = [...new Set(bookings.map((b) => b.staff_id).filter(Boolean))] as string[];
-      const { data: staffRows } = staffIds.length > 0
-        ? await supabase.from("provider_staff").select("id, name").in("id", staffIds)
-        : { data: [] };
-      const staffMap = new Map((staffRows || []).map((s) => [s.id, s.name as string]));
-
-      // Package balances for the badge on each booking card. Same batch shape
-      // as classMap/staffMap above. customer_package_id is absent from the
-      // generated types (Phase 1 is DEV-only, and types.ts is generated from
-      // PROD), so the column is read through a narrow cast — see
-      // integrations/supabase/packageTypes.ts for why that file exists.
-      const withPkg = bookings as (typeof bookings[number] & {
-        check_in_at?: string | null;
-        customer_package_id?: string | null;
-      })[];
-      const packageIds = [
-        ...new Set(withPkg.map((b) => b.customer_package_id).filter(Boolean)),
-      ] as string[];
-      const packages = await inBatches<Pick<
-        CustomerPackageRow, "id" | "entries_remaining" | "total_entries" | "template_id"
-      >>(packageIds, (batch) =>
-        pkgFrom("customer_packages")
-          .select("id, entries_remaining, total_entries, template_id")
-          .in("id", batch),
-      );
-      const { data: pkgTemplateRows } = packages.length > 0
-        ? await pkgFrom("package_templates")
-            .select("id, name")
-            .in("id", [...new Set(packages.map((p) => p.template_id))])
-        : { data: [] };
-      const pkgTemplateMap = new Map(
-        ((pkgTemplateRows ?? []) as unknown as { id: string; name: string }[])
-          .map((tpl) => [tpl.id, tpl.name]),
-      );
-      const packageMap = new Map(packages.map((p) => [p.id, p]));
-
-      return withPkg.map((b): EnrichedBooking => {
-        // Walk-in: user_id is null → profileMap lookup is skipped (no account).
-        const customer = b.user_id ? profileMap.get(b.user_id) : undefined;
-        const primaryService = serviceMap.get(b.service_ids?.[0]);
-        // Walk-in bookings store the customer's details on the row; app bookings
-        // leave these NULL and resolve via the profiles join above.
-        return {
-          ...b,
-          treatment_notes: b.treatment_notes ?? null,
-          customer_notes: b.customer_notes ?? null,
-          customer_name: b.customer_name || customer?.display_name || null,
-          customer_phone: b.customer_phone || customer?.phone || null,
-          customer_avatar: customer?.avatar_url || null,
-          service_names: (b.service_ids || []).map((id) => serviceMap.get(id)?.name || id),
-          is_group_service: primaryService?.service_type === 'group',
-          service_capacity: primaryService?.max_capacity ?? 1,
-          class_schedule_id: b.class_schedule_id ?? null,
-          class_name: b.class_schedule_id ? (classMap.get(b.class_schedule_id)?.class_name ?? null) : null,
-          class_entry: b.class_schedule_id ? (classMap.get(b.class_schedule_id) ?? null) : null,
-          linked_user_id: b.linked_user_id ?? null,
-          staff_id: b.staff_id ?? null,
-          staff_name: b.staff_id ? (staffMap.get(b.staff_id) ?? null) : null,
-          duration_override: b.duration_override ?? null,
-          check_in_at: b.check_in_at ?? null,
-          customer_package_id: b.customer_package_id ?? null,
-          package_name: b.customer_package_id
-            ? (pkgTemplateMap.get(
-                packageMap.get(b.customer_package_id)?.template_id ?? "",
-              ) ?? null)
-            : null,
-          package_entries_remaining: b.customer_package_id
-            ? (packageMap.get(b.customer_package_id)?.entries_remaining ?? null)
-            : null,
-          package_total_entries: b.customer_package_id
-            ? (packageMap.get(b.customer_package_id)?.total_entries ?? null)
-            : null,
-        };
-      });
+      return enrichBookings(profile.id, await fetchAllProviderBookings(profile.id));
     },
     enabled: !!profile,
     refetchInterval: 30000,
   });
 }
 
+/**
+ * The active branch's pending bookings — the pending tab's list and the source
+ * of every pending badge. Its own small query, so the badge in the bottom nav
+ * (mounted on every provider page) no longer costs the whole booking history.
+ */
+export function useProviderPendingBookings() {
+  const { profile } = useProviderProfile();
+
+  return useQuery({
+    queryKey: [BOOKINGS_KEY, profile?.id, "pending"],
+    queryFn: async () => {
+      if (!profile) return [];
+      return enrichBookings(profile.id, await fetchPendingProviderBookings(profile.id));
+    },
+    enabled: !!profile,
+    staleTime: BOOKINGS_STALE_MS,
+    refetchInterval: 30000,
+  });
+}
+
 export function usePendingCount() {
-  const { data: bookings = [] } = useProviderBookings();
-  return bookings.filter((b) => b.status === "pending").length;
+  const { data: pending = [] } = useProviderPendingBookings();
+  return pending.length;
 }
 
 export function useCancelBooking() {
