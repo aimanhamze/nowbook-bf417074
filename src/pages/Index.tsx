@@ -18,6 +18,7 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { beautyCategories, healthCategories, fitnessCategories, learningCategories } from "@/lib/mock-data";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnreadNotificationCount } from "@/hooks/useUnreadNotificationCount";
 import { Navigate, useNavigate } from "react-router-dom";
 import type { Provider } from "@/lib/mock-data";
 
@@ -254,24 +255,9 @@ const Index = () => {
     enabled: !!user,
   });
 
-  // Same queryKey + queryFn as BottomNav's bell badge — React Query shares the
-  // cached count, so the header bell always shows the exact same number.
-  const { data: unreadCount = 0 } = useQuery({
-    queryKey: ["unread-notifications", user?.id],
-    staleTime: 30 * 1000,
-    queryFn: async () => {
-      if (!user) return 0;
-      const { count, error } = await supabase
-        .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("is_read", false);
-      if (error) return 0;
-      return count || 0;
-    },
-    enabled: !!user,
-    refetchInterval: 30000,
-  });
+  // The same query as BottomNav's bell badge — one shared cache entry, so the
+  // header bell always shows the exact same number.
+  const unreadCount = useUnreadNotificationCount();
 
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
 

@@ -4,10 +4,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
 import { usePendingCount } from "@/hooks/useProviderBookings";
 import { useKeyboardOpen } from "@/hooks/useKeyboardOpen";
+import { useUnreadNotificationCount } from "@/hooks/useUnreadNotificationCount";
 
 export function BottomNav() {
   const location = useLocation();
@@ -17,28 +16,18 @@ export function BottomNav() {
   const keyboardOpen = useKeyboardOpen();
   const navigate = useNavigate();
   const { t } = useLang();
-  const { isProvider, isAdmin, user } = useAuth();
+  const { isProvider, isAdmin } = useAuth();
+
+  // Full-screen pages render no bar at all (see the early return below).
+  const hidden = location.pathname.startsWith("/provider/") || location.pathname === "/nearby";
 
   // Provider-only: count of bookings awaiting approval. Returns 0 (no fetch)
   // for customers/logged-out, so it's safe to call unconditionally here.
   const pendingCount = usePendingCount();
 
-  const { data: unreadCount = 0 } = useQuery({
-    queryKey: ["unread-notifications", user?.id],
-    staleTime: 30 * 1000,
-    queryFn: async () => {
-      if (!user) return 0;
-      const { count, error } = await supabase
-        .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("is_read", false);
-      if (error) return 0;
-      return count || 0;
-    },
-    enabled: !!user,
-    refetchInterval: 30000,
-  });
+  // Shared with the home header bell. Not fetched while the bar is hidden —
+  // there is no bell on screen to keep fresh.
+  const unreadCount = useUnreadNotificationCount({ enabled: !hidden });
 
   // Admin nav takes precedence (an admin is never shown the consumer/provider
   // bar). Non-admins are completely unaffected by this branch.
@@ -66,7 +55,7 @@ export function BottomNav() {
       ];
 
   // Hide BottomNav on full-screen pages
-  if (location.pathname.startsWith("/provider/") || location.pathname === "/nearby") {
+  if (hidden) {
     return null;
   }
 

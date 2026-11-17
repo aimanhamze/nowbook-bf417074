@@ -12,8 +12,9 @@ import { Button } from "@/components/ui/button";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { formatDistanceToNow } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ProviderPageTitle } from "@/components/branch/ProviderPageTitle";
+import { UNREAD_COUNT_CAP, unreadNotificationsKey } from "@/hooks/useUnreadNotificationCount";
 
 const typeIcons: Record<string, string> = {
   booking_new: "🎉",
@@ -33,6 +34,14 @@ const Notifications = () => {
   const providerView = isProvider && !isAdmin;
   const queryClient = useQueryClient();
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
+
+  // Opening the bell is the moment the badge must be right: refresh the count
+  // now rather than waiting for the next scheduled refetch.
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    queryClient.invalidateQueries({ queryKey: unreadNotificationsKey(userId) });
+  }, [userId, queryClient]);
 
   const PAGE_SIZE = 20;
   const [page, setPage] = useState(0);
@@ -70,8 +79,11 @@ const Notifications = () => {
       queryClient.setQueryData(["notifications", user?.id], (old: typeof notifications) =>
         (old || []).map((n) => n.id === id ? { ...n, is_read: true } : n)
       );
-      queryClient.setQueryData<number>(["unread-notifications", user?.id], (old = 0) =>
-        Math.max(0, old - 1)
+      // The count is capped: UNREAD_COUNT_CAP means "10 or more", so one less
+      // may still be 10 or more. Leave it (the badge stays "9+") and let the
+      // refetch in onSettled bring the real value.
+      queryClient.setQueryData<number>(unreadNotificationsKey(user?.id), (old = 0) =>
+        old >= UNREAD_COUNT_CAP ? old : Math.max(0, old - 1)
       );
       return { previous };
     },
