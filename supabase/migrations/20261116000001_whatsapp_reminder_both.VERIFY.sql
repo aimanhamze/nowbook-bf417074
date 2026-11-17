@@ -19,8 +19,9 @@
 SELECT pg_get_functiondef('public.get_due_whatsapp_reminders(integer)'::regprocedure);
 
 -- 0.2 Owner, security, search_path, ACL. SAVE IT.
---     Expect: prosecdef = true; proconfig = {"search_path=public, pg_temp"};
---             EXECUTE for service_role only (plus the owner).
+--     Expect: prosecdef = true; proconfig = {"search_path=public, pg_temp"}.
+--             proacl as read 2026-11-17 on BOTH projects (the hole §4 closes):
+--             {postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef, p.proconfig, p.provolatile, p.proacl
 FROM pg_proc p
 WHERE p.oid = 'public.get_due_whatsapp_reminders(integer)'::regprocedure;
@@ -72,8 +73,10 @@ SELECT md5(btrim(regexp_replace(prosrc, '[[:space:]]+', ' ', 'g'), ' ')) AS norm
 FROM pg_proc
 WHERE oid = 'public.get_due_whatsapp_reminders(integer)'::regprocedure;
 
--- A4. Signature, result and security unchanged. Compare with 0.2 / 0.4.
---     Expect: same owner/prosecdef/proconfig/provolatile/proacl as 0.2;
+-- A4. Signature, result and security. Compare with 0.2 / 0.4.
+--     Expect: owner/prosecdef/proconfig/provolatile the same as 0.2;
+--             proacl = {postgres=X/postgres,service_role=X/postgres} — EXACTLY
+--               these two; NOT "same as 0.2" (§4 removes anon + authenticated);
 --             result = TABLE(r_booking_id uuid, r_provider_id uuid, r_message_kind text);
 --             overloads = 1.
 SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef, p.proconfig, p.provolatile, p.proacl,
@@ -83,6 +86,31 @@ SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef, p.proconfig, p.provola
           AND pronamespace = 'public'::regnamespace) AS overloads
 FROM pg_proc p
 WHERE p.oid = 'public.get_due_whatsapp_reminders(integer)'::regprocedure;
+
+-- A5. The client roles can no longer execute it; service_role still can.
+--     Raises "FAIL A5: …" on any mismatch; on success emits the notice "A5 PASS".
+DO $a5$
+DECLARE
+  v_fn text := 'public.get_due_whatsapp_reminders(integer)';
+BEGIN
+  IF has_function_privilege('anon', v_fn, 'EXECUTE') THEN
+    RAISE EXCEPTION 'FAIL A5: anon can still EXECUTE %', v_fn;
+  END IF;
+  IF has_function_privilege('authenticated', v_fn, 'EXECUTE') THEN
+    RAISE EXCEPTION 'FAIL A5: authenticated can still EXECUTE %', v_fn;
+  END IF;
+  IF NOT has_function_privilege('service_role', v_fn, 'EXECUTE') THEN
+    RAISE EXCEPTION 'FAIL A5: service_role can NOT execute % — the Edge Function would break', v_fn;
+  END IF;
+  RAISE NOTICE 'A5 PASS: anon=false authenticated=false service_role=true';
+END
+$a5$;
+
+-- A5 as a plain row, for the SQL editor (shows the LAST result only — run alone).
+--     Expect: anon = false, authenticated = false, service_role = true.
+SELECT has_function_privilege('anon',          'public.get_due_whatsapp_reminders(integer)', 'EXECUTE') AS anon,
+       has_function_privilege('authenticated', 'public.get_due_whatsapp_reminders(integer)', 'EXECUTE') AS authenticated,
+       has_function_privilege('service_role',  'public.get_due_whatsapp_reminders(integer)', 'EXECUTE') AS service_role;
 
 
 -- ═════════════════════════════════════════════════════════════════════════════
@@ -334,8 +362,10 @@ $b2$;
 -- ═════════════════════════════════════════════════════════════════════════════
 -- §E. ROLLBACK — only after the UI and the Edge Function are reverted
 -- ═════════════════════════════════════════════════════════════════════════════
--- 1. Run the CREATE OR REPLACE saved from 0.1, then:
--- REVOKE ALL ON FUNCTION public.get_due_whatsapp_reminders(integer) FROM PUBLIC;
+-- 1. Run the CREATE OR REPLACE saved from 0.1. CREATE OR REPLACE keeps the
+--    current ACL, so the §4 security fix SURVIVES the rollback. Do NOT restore
+--    0.2's proacl — that would re-open the anon/authenticated hole. Restate:
+-- REVOKE EXECUTE ON FUNCTION public.get_due_whatsapp_reminders(integer) FROM PUBLIC, anon, authenticated;
 -- GRANT EXECUTE ON FUNCTION public.get_due_whatsapp_reminders(integer) TO service_role;
 -- 2. 0.3 hash is back to 7fa44c7143444f91af770654cf034aa6.
 -- 3. Optional — the column is harmless if left:

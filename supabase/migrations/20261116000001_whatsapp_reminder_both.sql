@@ -48,6 +48,10 @@
 --   * The RPC signature and return columns, so no DROP FUNCTION is needed and
 --     the deployed Edge Function keeps working against it.
 --
+-- ALSO FIXED HERE (security): EXECUTE on get_due_whatsapp_reminders was
+-- granted to anon and authenticated on both DEV and PROD. §4 revokes it by
+-- name; only service_role keeps it. See §4.
+--
 -- KNOWN, KEPT (ticket, not this change): in single 24h mode a booking made
 -- less than 24h ahead (e.g. 20h) is reminded within ~15 minutes of booking,
 -- because the [18h, 24h] window is already open. "Both" mode does not do this
@@ -241,10 +245,29 @@ AS $fn$
 $fn$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- §4. Grants — restated, unchanged (service_role only)
+-- §4. Grants — CLOSE the anon/authenticated hole (service_role only)
 -- ─────────────────────────────────────────────────────────────────────────────
+-- SECURITY FIX. Read live on DEV and PROD before this migration:
+--   proacl = {postgres=X/postgres, anon=X/postgres,
+--             authenticated=X/postgres, service_role=X/postgres}
+-- The function is SECURITY DEFINER, so anyone holding the public anon key
+-- (it ships in the client bundle) could call it and list every due booking's
+-- id, provider and slot.
+--
+-- Why the previous migrations' "REVOKE ... FROM PUBLIC" did not prevent this:
+-- Supabase's default privileges grant EXECUTE on new public functions to anon
+-- and authenticated BY NAME. Revoking from PUBLIC removes only the PUBLIC
+-- pseudo-role grant, never those named grants. They must be revoked by name.
+--
+-- Nothing legitimate loses access: the only caller is the
+-- whatsapp-booking-reminder Edge Function, which uses the service_role key.
+-- No client code calls this RPC.
+--
+-- VERIFY §A4/§A5 assert proacl = postgres + service_role ONLY and that
+-- has_function_privilege is false for anon and authenticated.
 
-REVOKE ALL ON FUNCTION public.get_due_whatsapp_reminders(integer) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_due_whatsapp_reminders(integer)
+  FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_due_whatsapp_reminders(integer) TO service_role;
 
 COMMIT;
