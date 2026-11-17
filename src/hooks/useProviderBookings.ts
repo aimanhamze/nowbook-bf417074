@@ -15,13 +15,6 @@ import {
 export interface EnrichedBooking {
   id: string;
   user_id: string | null;
-  /**
-   * Set by the link_walkin_to_account trigger when a provider-created walk-in's
-   * phone unambiguously matches one registered profile. Carried through so
-   * lib/customerKey can fold a linked walk-in into that account's identity
-   * instead of counting the same person twice.
-   */
-  linked_user_id: string | null;
   provider_id: string;
   service_ids: string[];
   booking_date: string;
@@ -30,8 +23,6 @@ export interface EnrichedBooking {
   status: string;
   treatment_notes: string | null;
   customer_notes: string | null;
-  created_at: string;
-  updated_at: string;
   customer_name: string | null;
   customer_phone: string | null;
   customer_avatar: string | null;
@@ -99,6 +90,40 @@ export interface SeriesMemberRow {
 
 const BOOKING_STATUSES = ["confirmed", "pending", "cancelled"];
 
+/**
+ * The bookings columns the calendar and the pending tab read — and no others.
+ *
+ * select("*") also shipped provider_id (the same value on every row),
+ * created_at, updated_at, linked_user_id, guest_notes and whatsapp_consent,
+ * which no card reads; that was about a third of every row. EnrichedBooking
+ * declares exactly what is listed here, so a card that starts reading another
+ * column fails to compile instead of silently getting undefined: ADD THE
+ * COLUMN HERE AND TO BookingRow / EnrichedBooking TOGETHER.
+ *
+ * linked_user_id and created_at are still read by the statistics — from
+ * useProviderBookingsHistory, which has its own list.
+ */
+const BOOKING_COLUMNS =
+  "id, user_id, service_ids, booking_date, booking_time, total_price, status, " +
+  "treatment_notes, customer_notes, customer_name, customer_phone, class_schedule_id, " +
+  "staff_id, duration_override, check_in_at, customer_package_id, series_id";
+
+/** One row of BOOKING_COLUMNS. */
+type BookingRow = Pick<
+  Tables<"bookings">,
+  | "id" | "user_id" | "service_ids" | "booking_date" | "booking_time" | "total_price" | "status"
+  | "treatment_notes" | "customer_notes" | "customer_name" | "customer_phone" | "class_schedule_id"
+  | "staff_id" | "duration_override" | "check_in_at" | "customer_package_id"
+> & {
+  // Not in the generated types until they are regenerated.
+  series_id: string | null;
+};
+
+// series_id makes the typed builder reject the column list, so the two
+// card-feeding reads below go through an untyped one; BookingRow is their type.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const untyped = supabase as any;
+
 // Every read below is paged (see lib/fetchAll): a single unpaged select
 // returned only a busy provider's OLDEST 1000 bookings, so their current and
 // upcoming bookings — every pending one included — never reached the calendar
@@ -109,11 +134,11 @@ function fetchProviderBookingsInRange(
   providerId: string,
   from: string,
   to: string,
-): Promise<Tables<"bookings">[]> {
-  return fetchAllPages((pageFrom, pageTo) =>
-    supabase
+): Promise<BookingRow[]> {
+  return fetchAllPages<BookingRow>((pageFrom, pageTo) =>
+    untyped
       .from("bookings")
-      .select("*")
+      .select(BOOKING_COLUMNS)
       .eq("provider_id", providerId)
       .in("status", BOOKING_STATUSES)
       .gte("booking_date", from)
@@ -136,12 +161,10 @@ const SERIES_BATCH = 50;
  * one read.
  */
 function fetchSeriesMembers(providerId: string, seriesIds: string[]): Promise<SeriesMemberRow[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = supabase as any;
   return inBatches<SeriesMemberRow>(
     seriesIds,
     (batch) =>
-      db
+      untyped
         .from("bookings")
         .select("id, series_id, booking_date, booking_time, status")
         .eq("provider_id", providerId)
@@ -152,11 +175,11 @@ function fetchSeriesMembers(providerId: string, seriesIds: string[]): Promise<Se
 }
 
 /** Every pending booking of the branch, whatever its date. A handful of rows. */
-function fetchPendingProviderBookings(providerId: string): Promise<Tables<"bookings">[]> {
-  return fetchAllPages((from, to) =>
-    supabase
+function fetchPendingProviderBookings(providerId: string): Promise<BookingRow[]> {
+  return fetchAllPages<BookingRow>((from, to) =>
+    untyped
       .from("bookings")
-      .select("*")
+      .select(BOOKING_COLUMNS)
       .eq("provider_id", providerId)
       .eq("status", "pending")
       .order("booking_date", { ascending: true })
@@ -173,18 +196,9 @@ function fetchPendingProviderBookings(providerId: string): Promise<Tables<"booki
  */
 async function enrichBookings(
   providerId: string,
-  bookings: Tables<"bookings">[],
+  bookings: BookingRow[],
 ): Promise<EnrichedBooking[]> {
   if (bookings.length === 0) return [];
-
-  // customer_package_id / check_in_at are absent from the generated types
-  // (types.ts is generated from PROD), so they are read through a narrow cast
-  // — see integrations/supabase/packageTypes.ts for why that file exists.
-  const withPkg = bookings as (typeof bookings[number] & {
-    check_in_at?: string | null;
-    customer_package_id?: string | null;
-    series_id?: string | null;
-  })[];
 
   // Walk-in bookings have user_id IS NULL — exclude those from the profiles lookup.
   const userIds = [...new Set(bookings.map((b) => b.user_id).filter(Boolean))] as string[];
@@ -196,9 +210,9 @@ async function enrichBookings(
   // staff_id NULL on every row → no query fired.
   const staffIds = [...new Set(bookings.map((b) => b.staff_id).filter(Boolean))] as string[];
   const packageIds = [
-    ...new Set(withPkg.map((b) => b.customer_package_id).filter(Boolean)),
+    ...new Set(bookings.map((b) => b.customer_package_id).filter(Boolean)),
   ] as string[];
-  const seriesIds = [...new Set(withPkg.map((b) => b.series_id).filter(Boolean))] as string[];
+  const seriesIds = [...new Set(bookings.map((b) => b.series_id).filter(Boolean))] as string[];
 
   // Package balances for the badge on each booking card. The template names
   // depend on the packages, so those two stay in sequence with each other.
@@ -255,7 +269,7 @@ async function enrichBookings(
     else seriesMap.set(row.series_id, [row]);
   }
 
-  return withPkg.map((b): EnrichedBooking => {
+  return bookings.map((b): EnrichedBooking => {
     // Walk-in: user_id is null → profileMap lookup is skipped (no account).
     const customer = b.user_id ? profileMap.get(b.user_id) : undefined;
     const primaryService = serviceMap.get(b.service_ids?.[0]);
@@ -263,6 +277,8 @@ async function enrichBookings(
     // leave these NULL and resolve via the profiles join above.
     return {
       ...b,
+      // Not selected — it is the branch the query was filtered to.
+      provider_id: providerId,
       treatment_notes: b.treatment_notes ?? null,
       customer_notes: b.customer_notes ?? null,
       customer_name: b.customer_name || customer?.display_name || null,
@@ -274,7 +290,6 @@ async function enrichBookings(
       class_schedule_id: b.class_schedule_id ?? null,
       class_name: b.class_schedule_id ? (classMap.get(b.class_schedule_id)?.class_name ?? null) : null,
       class_entry: b.class_schedule_id ? (classMap.get(b.class_schedule_id) ?? null) : null,
-      linked_user_id: b.linked_user_id ?? null,
       staff_id: b.staff_id ?? null,
       staff_name: b.staff_id ? (staffMap.get(b.staff_id) ?? null) : null,
       duration_override: b.duration_override ?? null,

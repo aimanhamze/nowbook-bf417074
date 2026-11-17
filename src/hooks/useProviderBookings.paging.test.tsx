@@ -282,3 +282,34 @@ describe("useProviderBookingsHistory — statistics and the monthly report", () 
     }
   });
 });
+
+describe("column list — the calendar and pending reads", () => {
+  const CARD_COLUMNS = [
+    "id", "user_id", "service_ids", "booking_date", "booking_time", "total_price", "status",
+    "treatment_notes", "customer_notes", "customer_name", "customer_phone", "class_schedule_id",
+    "staff_id", "duration_override", "check_in_at", "customer_package_id", "series_id",
+  ];
+  const bookingColumns = () =>
+    state.requests.filter((r) => r.table === "bookings").map((r) => r.columns.split(", ").sort());
+
+  it("the range read asks for exactly the columns the cards use, never *", async () => {
+    state.bookings = [row(1)];
+    const { result } = renderHook(() => useProviderBookingsRange("2026-10-01", "2026-10-31"), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(bookingColumns()).toEqual([[...CARD_COLUMNS].sort()]);
+  });
+
+  it("the pending read asks for the same columns", async () => {
+    state.bookings = [row(1, { status: "pending" })];
+    const { result } = renderHook(() => useProviderPendingBookings(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(bookingColumns()).toEqual([[...CARD_COLUMNS].sort()]);
+  });
+
+  it("provider_id is not downloaded but is still on every booking", async () => {
+    state.bookings = [row(1)];
+    const { result } = renderHook(() => useProviderBookingsRange("2026-10-01", "2026-10-31"), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data![0].provider_id).toBe("pp");
+  });
+});
