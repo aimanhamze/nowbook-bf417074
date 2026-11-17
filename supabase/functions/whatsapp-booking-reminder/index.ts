@@ -28,6 +28,15 @@
 //   Do not add new Date() arithmetic over booking_date/booking_time here. If a
 //   new time-based rule is needed, put it in the RPC.
 //
+// LEAD TIMES ("both" mode, 20261116000001): a provider may be reminded at 24h,
+// at 1h, or at BOTH. The RPC returns one of two key shapes:
+//     'booking_reminder:<slot>'       single mode (either lead), or both-mode 24h
+//     'booking_reminder:<slot>#1h'    both-mode 1h
+// The same template and parameters serve every lead. Which lead a key stands
+// for is decided in SQL; this function only checks that the key still matches
+// the booking's current slot and, for a '#1h' key, that the provider is still
+// in "both" mode.
+//
 // NO SHARED MODULE: the SendPulse logic is duplicated from
 // whatsapp-booking-confirm on purpose. These two functions ship, fail and roll
 // back independently, and a shared module would couple them.
@@ -236,6 +245,30 @@ function slotKeyFor(bookingDate: string, bookingTime: string): string {
   const datePart = (bookingDate ?? "").slice(0, 10);
   const timePart = (bookingTime ?? "").slice(0, 5);
   return `booking_reminder:${datePart}T${timePart}`;
+}
+
+/**
+ * Suffix the RPC appends to the both-mode 1h key. MUST STAY BYTE-IDENTICAL TO
+ * the SQL: `c.slot_key || '#1h'` in get_due_whatsapp_reminders
+ * (20261116000001 §3).
+ */
+const ONE_HOUR_SUFFIX = "#1h";
+
+/**
+ * Matches the RPC's key against the booking's CURRENT slot, accepting both key
+ * shapes. Returns which shape matched, or null when the slot has moved (or the
+ * key is unrecognised) — the caller skips that as SLOT_CHANGED.
+ *
+ *   "slot"      key === slotKey            single mode, or both-mode 24h
+ *   "both_1h"   key === slotKey + "#1h"    both-mode 1h
+ */
+function matchReminderKey(
+  messageKind: string,
+  currentSlotKey: string,
+): "slot" | "both_1h" | null {
+  if (messageKind === currentSlotKey) return "slot";
+  if (messageKind === currentSlotKey + ONE_HOUR_SUFFIX) return "both_1h";
+  return null;
 }
 
 /** Service-role client. Bypasses RLS — never built from a caller-supplied key. */
@@ -476,8 +509,13 @@ async function processBooking(
     //
     // The moved booking is not lost: its new slot produces a new key, and the
     // next cron run reminds for the corrected time.
+    //
+    // Both key shapes are accepted (see LEAD TIMES in the header); the '#1h'
+    // shape is compared against the same current slot, so a moved booking is
+    // caught identically whichever reminder it was due for.
     const currentKey = slotKeyFor(booking.booking_date, booking.booking_time);
-    if (currentKey !== messageKind) {
+    const keyShape = matchReminderKey(messageKind, currentKey);
+    if (keyShape === null) {
       // Logged with BOTH keys, every time. For a genuine reschedule this is a
       // handful of lines. For a key-format divergence between this function and
       // the RPC it is every booking in the run — which is the difference
@@ -494,7 +532,7 @@ async function processBooking(
     // ── Provider, re-read ────────────────────────────────────────────────────
     const { data: provider, error: providerError } = await admin
       .from("provider_profiles")
-      .select("id, business_name, whatsapp_reminder_enabled, whatsapp_message_language")
+      .select("id, business_name, whatsapp_reminder_enabled, whatsapp_reminder_both, whatsapp_message_language")
       .eq("id", booking.provider_id)
       .maybeSingle();
 
@@ -504,6 +542,18 @@ async function processBooking(
     // GATE: the provider may have opted out since the query.
     if (!provider.whatsapp_reminder_enabled) {
       return { outcome: "skipped", reason: "PROVIDER_OPTED_OUT" };
+    }
+
+    // GATE: a both-mode 1h key is only valid while the provider is still in
+    // "both" mode. A switch to a single lead between the RPC and this read must
+    // not let the extra reminder through.
+    //
+    // Policy skip — NO ledger row, like every other reversible gate: if they
+    // switch back, the reminder is still owed and must not be blocked by a
+    // claim. The plain 'slot' shape needs no such check: it is valid in every
+    // mode.
+    if (keyShape === "both_1h" && !provider.whatsapp_reminder_both) {
+      return { outcome: "skipped", reason: "REMINDER_MODE_CHANGED" };
     }
 
     // Language is resolved SERVER-SIDE from the provider's stored preference,
@@ -735,6 +785,9 @@ async function processBooking(
     console.log("whatsapp-booking-reminder: sent", {
       booking_id: bookingId,
       provider_id: provider.id,
+      // Date/time key only, no PII. A '#1h' suffix marks the both-mode 1h
+      // reminder; without it the lead is whatever the provider's mode implies.
+      message_kind: messageKind,
       phone: maskPhone(phoneDigits),
       language: template.languageCode,
       message_id: sent.messageId,
