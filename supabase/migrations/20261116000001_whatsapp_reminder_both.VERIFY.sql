@@ -4,7 +4,7 @@
 --   §A  after the migration. Read-only object checks.
 --   §B  after the migration.
 --         B1  read-only: existing providers get exactly what they got before.
---         B2  ROLLBACK-wrapped behaviour tests for "both" mode. DEV ONLY.
+--         B2  ONE DO block for "both" mode; ends in a PASS/FAIL exception. DEV ONLY.
 --   §E  rollback (commented out).
 --
 -- Deploy order: migration -> whatsapp-booking-reminder -> UI. Rollback in reverse.
@@ -127,156 +127,208 @@ SELECT (SELECT count(*) FROM (SELECT * FROM new_rpc EXCEPT SELECT * FROM old_rpc
 
 
 -- ═════════════════════════════════════════════════════════════════════════════
--- §B2. "BOTH" MODE BEHAVIOUR — ROLLBACK-wrapped, DEV ONLY, run the block at once
+-- §B2. "BOTH" MODE BEHAVIOUR — ONE DO BLOCK, DEV ONLY
 -- ═════════════════════════════════════════════════════════════════════════════
--- Mutates one real account booking and its provider inside a transaction and
--- rolls everything back. now() is frozen for the whole transaction, so ledger
--- rows inserted below get created_at = the same instant the RPC compares with.
+-- Run the block on its own. It mutates one real account booking and its
+-- provider, checks T0–T14, and ALWAYS ends in an exception, so nothing it did
+-- is kept:
+--   ERROR: FAIL <test>: got …, want …   -> that test failed (everything rolled back)
+--   ERROR: PASS: …                      -> all 15 tests passed (everything rolled back)
+--
+-- now() is frozen for the whole block, so ledger rows written here get
+-- created_at = the same instant the RPC compares against.
 --
 -- If moving the booking raises (prevent_booking_conflicts, staff hours, etc.),
--- change the OFFSET to pick another booking — a test-data collision, not a
--- failure of the migration. If T0 is not 1, there is nothing to test with: stop.
+-- change the OFFSET below to pick another booking — a test-data collision, not
+-- a failure of the migration. If T0 fails, there is nothing to test with: stop.
 
-BEGIN;
+DO $b2$
+DECLARE
+  v_bid  uuid;
+  v_pid  uuid;
+  v_n    integer;
+  v_kind text;
+BEGIN
+  SELECT b.id, b.provider_id INTO v_bid, v_pid
+  FROM public.bookings b
+  WHERE b.status = 'confirmed'
+    AND b.user_id IS NOT NULL
+    AND b.class_schedule_id IS NULL
+  ORDER BY b.created_at DESC
+  LIMIT 1 OFFSET 0;
 
-CREATE TEMP TABLE _t ON COMMIT DROP AS
-SELECT b.id AS booking_id, b.provider_id
-FROM public.bookings b
-WHERE b.status = 'confirmed'
-  AND b.user_id IS NOT NULL
-  AND b.class_schedule_id IS NULL
-ORDER BY b.created_at DESC
-LIMIT 1 OFFSET 0;
+  -- T0. A test booking exists.
+  IF v_bid IS NULL THEN
+    RAISE EXCEPTION 'FAIL T0: got no confirmed account booking, want one to test with';
+  END IF;
 
-CREATE TEMP VIEW _due AS
-SELECT r.r_message_kind
-FROM public.get_due_whatsapp_reminders(100000) r
-JOIN _t ON r.r_booking_id = _t.booking_id;
+  -- ── Helpers (temp; dropped by the final rollback) ──────────────────────────
+  -- Slot key for now() + p_ahead, built exactly as the RPC builds it.
+  CREATE FUNCTION pg_temp.b2_slot(p_ahead interval) RETURNS text
+  LANGUAGE sql STABLE AS $f$
+    SELECT 'booking_reminder:'
+        || to_char((now() AT TIME ZONE 'Asia/Jerusalem') + p_ahead, 'YYYY-MM-DD"T"HH24:MI')
+  $f$;
 
--- Moves the test booking to now() + p_ahead (Israel wall clock) and sets its
--- created_at to now() - p_age. Temp function — dropped with the session.
-CREATE FUNCTION pg_temp.place(p_ahead interval, p_age interval) RETURNS void
-LANGUAGE sql AS $$
+  -- Moves the booking to now() + p_ahead (Israel wall clock), sets created_at
+  -- to now() - p_age, and clears its ledger rows.
+  CREATE FUNCTION pg_temp.b2_place(p_bid uuid, p_ahead interval, p_age interval) RETURNS void
+  LANGUAGE sql AS $f$
+    UPDATE public.bookings
+    SET booking_date = ((now() AT TIME ZONE 'Asia/Jerusalem') + p_ahead)::date,
+        booking_time = to_char((now() AT TIME ZONE 'Asia/Jerusalem') + p_ahead, 'HH24:MI'),
+        created_at   = now() - p_age
+    WHERE id = p_bid;
+    DELETE FROM public.whatsapp_send_log WHERE booking_id = p_bid;
+  $f$;
+
+  -- A 'sent' ledger row with the given key and created_at.
+  CREATE FUNCTION pg_temp.b2_log(p_bid uuid, p_pid uuid, p_kind text, p_at timestamptz) RETURNS void
+  LANGUAGE sql AS $f$
+    INSERT INTO public.whatsapp_send_log (booking_id, provider_id, message_kind, status, created_at)
+    VALUES (p_bid, p_pid, p_kind, 'sent', p_at);
+  $f$;
+
+  -- What the RPC returns for the test booking.
+  CREATE FUNCTION pg_temp.b2_due(p_bid uuid) RETURNS SETOF text
+  LANGUAGE sql STABLE AS $f$
+    SELECT r_message_kind FROM public.get_due_whatsapp_reminders(100000)
+    WHERE r_booking_id = p_bid
+  $f$;
+
+  UPDATE public.provider_profiles
+  SET whatsapp_reminder_enabled = true, whatsapp_reminder_both = true, whatsapp_reminder_hours = 24
+  WHERE id = v_pid;
+
+  -- T1. Both mode, 20h ahead, booked days ago -> the 24h reminder, OLD key.
+  PERFORM pg_temp.b2_place(v_bid, interval '20 hours', interval '3 days');
+  SELECT count(*), min(k) INTO v_n, v_kind FROM pg_temp.b2_due(v_bid) k;
+  IF v_n <> 1 OR v_kind IS DISTINCT FROM pg_temp.b2_slot(interval '20 hours') THEN
+    RAISE EXCEPTION 'FAIL T1 both 24h: got % row(s) %, want 1 row %', v_n, v_kind, pg_temp.b2_slot(interval '20 hours');
+  END IF;
+
+  -- T2. Once sent, not again.
+  PERFORM pg_temp.b2_log(v_bid, v_pid, pg_temp.b2_slot(interval '20 hours'), now());
+  SELECT count(*) INTO v_n FROM pg_temp.b2_due(v_bid);
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'FAIL T2 both 24h sent: got % row(s), want 0', v_n;
+  END IF;
+
+  -- T3. Both mode, 45 min ahead -> the 1h reminder, '#1h' key.
+  PERFORM pg_temp.b2_place(v_bid, interval '45 minutes', interval '3 days');
+  SELECT count(*), min(k) INTO v_n, v_kind FROM pg_temp.b2_due(v_bid) k;
+  IF v_n <> 1 OR v_kind IS DISTINCT FROM pg_temp.b2_slot(interval '45 minutes') || '#1h' THEN
+    RAISE EXCEPTION 'FAIL T3 both 1h: got % row(s) %, want 1 row %', v_n, v_kind, pg_temp.b2_slot(interval '45 minutes') || '#1h';
+  END IF;
+
+  -- T4. 24h reminder for this slot already sent (old key, created ~20h before
+  --     the slot) -> the 1h reminder is STILL due.
+  PERFORM pg_temp.b2_log(v_bid, v_pid, pg_temp.b2_slot(interval '45 minutes'), now() - interval '19 hours 15 minutes');
+  SELECT count(*), min(k) INTO v_n, v_kind FROM pg_temp.b2_due(v_bid) k;
+  IF v_n <> 1 OR v_kind IS DISTINCT FROM pg_temp.b2_slot(interval '45 minutes') || '#1h' THEN
+    RAISE EXCEPTION 'FAIL T4 24h sent, 1h still due: got % row(s) %, want 1 row %', v_n, v_kind, pg_temp.b2_slot(interval '45 minutes') || '#1h';
+  END IF;
+
+  -- T5. '#1h' sent -> nothing.
+  PERFORM pg_temp.b2_log(v_bid, v_pid, pg_temp.b2_slot(interval '45 minutes') || '#1h', now());
+  SELECT count(*) INTO v_n FROM pg_temp.b2_due(v_bid);
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'FAIL T5 both 1h sent: got % row(s), want 0', v_n;
+  END IF;
+
+  -- T6. Switch both -> single 1h after the '#1h' went out (booking made 10h
+  --     ahead, so no 24h row exists) -> NOT resent.
+  PERFORM pg_temp.b2_place(v_bid, interval '45 minutes', interval '10 hours');
+  PERFORM pg_temp.b2_log(v_bid, v_pid, pg_temp.b2_slot(interval '45 minutes') || '#1h', now());
+  UPDATE public.provider_profiles SET whatsapp_reminder_both = false, whatsapp_reminder_hours = 1
+  WHERE id = v_pid;
+  SELECT count(*) INTO v_n FROM pg_temp.b2_due(v_bid);
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'FAIL T6 both->1h no resend: got % row(s), want 0', v_n;
+  END IF;
+
+  -- T7. Single 1h mode uses the OLD key; once sent, switching 1h -> both does
+  --     NOT resend.
+  PERFORM pg_temp.b2_place(v_bid, interval '45 minutes', interval '3 days');
+  SELECT count(*), min(k) INTO v_n, v_kind FROM pg_temp.b2_due(v_bid) k;
+  IF v_n <> 1 OR v_kind IS DISTINCT FROM pg_temp.b2_slot(interval '45 minutes') THEN
+    RAISE EXCEPTION 'FAIL T7a single 1h key: got % row(s) %, want 1 row %', v_n, v_kind, pg_temp.b2_slot(interval '45 minutes');
+  END IF;
+  PERFORM pg_temp.b2_log(v_bid, v_pid, v_kind, now());
+  UPDATE public.provider_profiles SET whatsapp_reminder_both = true WHERE id = v_pid;
+  SELECT count(*) INTO v_n FROM pg_temp.b2_due(v_bid);
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'FAIL T7b 1h->both no resend: got % row(s), want 0', v_n;
+  END IF;
+
+  -- T8. Single 24h mode, sent, then switch 24h -> both -> NOT resent.
+  UPDATE public.provider_profiles SET whatsapp_reminder_both = false, whatsapp_reminder_hours = 24
+  WHERE id = v_pid;
+  PERFORM pg_temp.b2_place(v_bid, interval '20 hours', interval '3 days');
+  PERFORM pg_temp.b2_log(v_bid, v_pid, pg_temp.b2_slot(interval '20 hours'), now());
+  UPDATE public.provider_profiles SET whatsapp_reminder_both = true WHERE id = v_pid;
+  SELECT count(*) INTO v_n FROM pg_temp.b2_due(v_bid);
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'FAIL T8 24h->both no resend: got % row(s), want 0', v_n;
+  END IF;
+
+  -- T9. Both mode, booking MADE 2h ago for 20h ahead -> no 24h reminder.
+  PERFORM pg_temp.b2_place(v_bid, interval '20 hours', interval '2 hours');
+  SELECT count(*) INTO v_n FROM pg_temp.b2_due(v_bid);
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'FAIL T9 made <24h ahead, no 24h: got % row(s), want 0', v_n;
+  END IF;
+
+  -- T10. ...but a booking made <24h ahead does get its 1h reminder.
+  PERFORM pg_temp.b2_place(v_bid, interval '45 minutes', interval '19 hours');
+  SELECT count(*), min(k) INTO v_n, v_kind FROM pg_temp.b2_due(v_bid) k;
+  IF v_n <> 1 OR v_kind IS DISTINCT FROM pg_temp.b2_slot(interval '45 minutes') || '#1h' THEN
+    RAISE EXCEPTION 'FAIL T10 made <24h ahead, 1h yes: got % row(s) %, want 1 row %', v_n, v_kind, pg_temp.b2_slot(interval '45 minutes') || '#1h';
+  END IF;
+
+  -- T11. Both mode, booking made 10 min ago for 45 min ahead -> none.
+  PERFORM pg_temp.b2_place(v_bid, interval '45 minutes', interval '10 minutes');
+  SELECT count(*) INTO v_n FROM pg_temp.b2_due(v_bid);
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'FAIL T11 made <1h ahead, none: got % row(s), want 0', v_n;
+  END IF;
+
+  -- T12. SINGLE 24h mode is NOT subject to the created-late rule (unchanged
+  --      behaviour, ticketed): made 2h ago for 20h ahead -> still due, old key.
+  UPDATE public.provider_profiles SET whatsapp_reminder_both = false, whatsapp_reminder_hours = 24
+  WHERE id = v_pid;
+  PERFORM pg_temp.b2_place(v_bid, interval '20 hours', interval '2 hours');
+  SELECT count(*), min(k) INTO v_n, v_kind FROM pg_temp.b2_due(v_bid) k;
+  IF v_n <> 1 OR v_kind IS DISTINCT FROM pg_temp.b2_slot(interval '20 hours') THEN
+    RAISE EXCEPTION 'FAIL T12 single 24h unchanged: got % row(s) %, want 1 row %', v_n, v_kind, pg_temp.b2_slot(interval '20 hours');
+  END IF;
+
+  -- T13. Reschedule after the 24h reminder went out: new slot -> new key, due.
+  UPDATE public.provider_profiles SET whatsapp_reminder_both = true WHERE id = v_pid;
+  PERFORM pg_temp.b2_place(v_bid, interval '20 hours', interval '3 days');
+  PERFORM pg_temp.b2_log(v_bid, v_pid, pg_temp.b2_slot(interval '20 hours'), now());
   UPDATE public.bookings
-  SET booking_date = ((now() AT TIME ZONE 'Asia/Jerusalem') + p_ahead)::date,
-      booking_time = to_char((now() AT TIME ZONE 'Asia/Jerusalem') + p_ahead, 'HH24:MI'),
-      created_at   = now() - p_age
-  WHERE id = (SELECT booking_id FROM _t);
-  DELETE FROM public.whatsapp_send_log WHERE booking_id = (SELECT booking_id FROM _t);
-$$;
+  SET booking_date = ((now() AT TIME ZONE 'Asia/Jerusalem') + interval '22 hours')::date,
+      booking_time = to_char((now() AT TIME ZONE 'Asia/Jerusalem') + interval '22 hours', 'HH24:MI')
+  WHERE id = v_bid;
+  SELECT count(*), min(k) INTO v_n, v_kind FROM pg_temp.b2_due(v_bid) k;
+  IF v_n <> 1 OR v_kind IS DISTINCT FROM pg_temp.b2_slot(interval '22 hours') THEN
+    RAISE EXCEPTION 'FAIL T13 rescheduled: got % row(s) %, want 1 row %', v_n, v_kind, pg_temp.b2_slot(interval '22 hours');
+  END IF;
 
--- Ledger row for the test booking with a given key and created_at.
-CREATE FUNCTION pg_temp.logged(p_kind text, p_at timestamptz) RETURNS void
-LANGUAGE sql AS $$
-  INSERT INTO public.whatsapp_send_log (booking_id, provider_id, message_kind, status, created_at)
-  SELECT booking_id, provider_id, p_kind, 'sent', p_at FROM _t;
-$$;
+  -- T14. Reminders switched off -> nothing, even in both mode.
+  UPDATE public.provider_profiles SET whatsapp_reminder_enabled = false WHERE id = v_pid;
+  SELECT count(*) INTO v_n FROM pg_temp.b2_due(v_bid);
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'FAIL T14 disabled: got % row(s), want 0', v_n;
+  END IF;
 
--- T0. Expect 1.
-SELECT 'T0 test booking found' AS test, count(*) AS expect_1 FROM _t;
+  RAISE EXCEPTION 'PASS: §B2 T0–T14 all passed on booking % (everything rolled back)', v_bid;
+END
+$b2$;
 
-UPDATE public.provider_profiles
-SET whatsapp_reminder_enabled = true, whatsapp_reminder_both = true, whatsapp_reminder_hours = 24
-WHERE id = (SELECT provider_id FROM _t);
-
--- T1. Both mode, 20h ahead, booked days ago -> the 24h reminder, OLD key shape.
---     Expect: 1 row, kind 'booking_reminder:YYYY-MM-DDTHH:MI' (no '#1h').
-SELECT pg_temp.place(interval '20 hours', interval '3 days');
-SELECT 'T1 both 24h' AS test, r_message_kind FROM _due;
-
--- T2. Once sent, not again.  Expect 0.
-SELECT pg_temp.logged((SELECT r_message_kind FROM _due), now());
-SELECT 'T2 both 24h sent' AS test, count(*) AS expect_0 FROM _due;
-
--- T3. Both mode, 45 min ahead -> the 1h reminder, '#1h' key.
---     Expect: 1 row ending in '#1h'.
-SELECT pg_temp.place(interval '45 minutes', interval '3 days');
-SELECT 'T3 both 1h' AS test, r_message_kind FROM _due;
-
--- T4. 24h reminder for this slot already sent (old key, created 20h before) ->
---     the 1h reminder is STILL due.  Expect 1 row ending in '#1h'.
-SELECT pg_temp.logged(
-  'booking_reminder:' || to_char((now() AT TIME ZONE 'Asia/Jerusalem') + interval '45 minutes', 'YYYY-MM-DD"T"HH24:MI'),
-  now() - interval '19 hours 15 minutes');
-SELECT 'T4 24h sent, 1h still due' AS test, r_message_kind FROM _due;
-
--- T5. '#1h' sent -> nothing.  Expect 0.
-SELECT pg_temp.logged((SELECT r_message_kind FROM _due), now());
-SELECT 'T5 both 1h sent' AS test, count(*) AS expect_0 FROM _due;
-
--- T6. Switch both -> single 1h after the '#1h' went out (booking made 10h
---     ahead, so no 24h row exists) -> NOT resent.  Expect 0.
-SELECT pg_temp.place(interval '45 minutes', interval '10 hours');
-SELECT pg_temp.logged((SELECT r_message_kind FROM _due), now());
-UPDATE public.provider_profiles SET whatsapp_reminder_both = false, whatsapp_reminder_hours = 1
-WHERE id = (SELECT provider_id FROM _t);
-SELECT 'T6 both->1h no resend' AS test, count(*) AS expect_0 FROM _due;
-
--- T7. Single 1h mode, old key sent, then switch 1h -> both -> NOT resent.
---     Expect: first 1 row (old key, no '#1h'), then 0.
-SELECT pg_temp.place(interval '45 minutes', interval '3 days');
-SELECT 'T7a single 1h key' AS test, r_message_kind FROM _due;
-SELECT pg_temp.logged((SELECT r_message_kind FROM _due), now());
-UPDATE public.provider_profiles SET whatsapp_reminder_both = true
-WHERE id = (SELECT provider_id FROM _t);
-SELECT 'T7b 1h->both no resend' AS test, count(*) AS expect_0 FROM _due;
-
--- T8. Single 24h mode, sent, then switch 24h -> both -> NOT resent.
---     Expect: 0.
-UPDATE public.provider_profiles SET whatsapp_reminder_both = false, whatsapp_reminder_hours = 24
-WHERE id = (SELECT provider_id FROM _t);
-SELECT pg_temp.place(interval '20 hours', interval '3 days');
-SELECT pg_temp.logged((SELECT r_message_kind FROM _due), now());
-UPDATE public.provider_profiles SET whatsapp_reminder_both = true
-WHERE id = (SELECT provider_id FROM _t);
-SELECT 'T8 24h->both no resend' AS test, count(*) AS expect_0 FROM _due;
-
--- T9. Both mode, booking MADE 2h ago for 20h ahead -> no 24h reminder.
---     Expect 0.
-SELECT pg_temp.place(interval '20 hours', interval '2 hours');
-SELECT 'T9 made <24h ahead: no 24h' AS test, count(*) AS expect_0 FROM _due;
-
--- T10. ...but that same booking gets its 1h reminder.
---      Expect 1 row ending in '#1h'.
-SELECT pg_temp.place(interval '45 minutes', interval '19 hours');
-SELECT 'T10 made <24h ahead: 1h yes' AS test, r_message_kind FROM _due;
-
--- T11. Both mode, booking made 10 min ago for 45 min ahead -> none.  Expect 0.
-SELECT pg_temp.place(interval '45 minutes', interval '10 minutes');
-SELECT 'T11 made <1h ahead: none' AS test, count(*) AS expect_0 FROM _due;
-
--- T12. SINGLE 24h mode is NOT subject to the created-late rule (unchanged
---      behaviour, ticketed): made 2h ago for 20h ahead -> still due.
---      Expect 1 row, old key.
-UPDATE public.provider_profiles SET whatsapp_reminder_both = false, whatsapp_reminder_hours = 24
-WHERE id = (SELECT provider_id FROM _t);
-SELECT pg_temp.place(interval '20 hours', interval '2 hours');
-SELECT 'T12 single 24h unchanged' AS test, r_message_kind FROM _due;
-
--- T13. Reschedule after the 24h reminder: new slot -> new key, due again.
---      Expect 1 row whose key differs from the logged one.
-UPDATE public.provider_profiles SET whatsapp_reminder_both = true
-WHERE id = (SELECT provider_id FROM _t);
-SELECT pg_temp.place(interval '20 hours', interval '3 days');
-SELECT pg_temp.logged((SELECT r_message_kind FROM _due), now());
-UPDATE public.bookings
-SET booking_date = ((now() AT TIME ZONE 'Asia/Jerusalem') + interval '22 hours')::date,
-    booking_time = to_char((now() AT TIME ZONE 'Asia/Jerusalem') + interval '22 hours', 'HH24:MI')
-WHERE id = (SELECT booking_id FROM _t);
-SELECT 'T13 rescheduled' AS test, r_message_kind,
-       r_message_kind <> (SELECT message_kind FROM public.whatsapp_send_log
-                          WHERE booking_id = (SELECT booking_id FROM _t)) AS new_key
-FROM _due;
-
--- T14. Reminders switched off -> nothing, in both mode.  Expect 0.
-UPDATE public.provider_profiles SET whatsapp_reminder_enabled = false
-WHERE id = (SELECT provider_id FROM _t);
-SELECT 'T14 disabled' AS test, count(*) AS expect_0 FROM _due;
-
-ROLLBACK;
-
--- After the rollback.  Expect: both_on = 0.
-SELECT count(*) FILTER (WHERE whatsapp_reminder_both) AS both_on FROM public.provider_profiles;
+-- Optional, run on its own afterwards. Expect: both_on = 0.
+-- SELECT count(*) FILTER (WHERE whatsapp_reminder_both) AS both_on FROM public.provider_profiles;
 
 
 -- ═════════════════════════════════════════════════════════════════════════════
