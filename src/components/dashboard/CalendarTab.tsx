@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, createContext, useContext, type CSSProperties, type ReactNode } from "react";
-import { format, isSameDay, parseISO, isAfter, isToday, getDay, startOfWeek, addDays } from "date-fns";
+import { format, isSameDay, parseISO, isToday, getDay, startOfMonth, startOfWeek, addDays } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
 import { isAcademyCategory } from "@/lib/academyCategory";
 import { AcademyCalendar } from "@/components/academy/calendar/AcademyCalendar";
@@ -9,7 +9,8 @@ import { useNavigate } from "react-router-dom";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
-import { useProviderBookings, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, useSaveTreatmentNote, useSetDurationOverride, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import { useProviderBookingsAhead, useCancelBooking, useDeleteBooking, useCancelGroupClass, useApproveBooking, useRejectBooking, useSaveTreatmentNote, useSetDurationOverride, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import { useCalendarBookings } from "@/hooks/useCalendarBookings";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { useProviderServices } from "@/hooks/useProviderServices";
 import { useProviderActiveStaff } from "@/hooks/useProviderStaff";
@@ -30,7 +31,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { assignOverlapColumns } from "@/lib/weeklyOverlap";
 import { bookingDuration } from "@/lib/bookingDuration";
-import { seriesPositions, type SeriesMember } from "@/lib/recurringSeries";
+import { seriesPositions } from "@/lib/recurringSeries";
 import { supabaseErrorMessage, supabaseErrorCode } from "@/lib/supabaseError";
 import { DEFAULT_SERVICE_COLOR, normalizeColor, withAlpha, darken } from "@/lib/serviceColors";
 import {
@@ -304,22 +305,21 @@ function DurationOverrideBox({ booking }: { booking: EnrichedBooking }) {
   );
 }
 
-// bookings.series_id arrives with select("*") but is not in the generated
-// types until they are regenerated after the migration.
 function seriesIdOf(b: EnrichedBooking): string | null {
-  return (b as EnrichedBooking & { series_id?: string | null }).series_id ?? null;
+  return b.series_id ?? null;
 }
 
 /**
  * "תור קבוע · 3 מתוך 5" for a series booking, null otherwise. Positions come
- * from the provider's full booking list (the same cached query every card
- * already shares), computed once per fetch — see seriesPositions.
+ * from the booking's own series_members — the WHOLE series, fetched by
+ * series_id — never from the bookings the calendar has loaded, which stop at
+ * the visible range. The array is shared by the series' cards, so
+ * seriesPositions builds its map once per fetch.
  */
 function useSeriesLabel(booking: EnrichedBooking): string | null {
   const { t } = useLang();
-  const { data: all } = useProviderBookings();
   if (!seriesIdOf(booking)) return null;
-  const pos = all ? seriesPositions(all as unknown as SeriesMember[]).get(booking.id) : undefined;
+  const pos = booking.series_members ? seriesPositions(booking.series_members).get(booking.id) : undefined;
   return pos
     ? `${t("seriesBadge")} · ${t("seriesPosition").replace("{i}", String(pos.index)).replace("{n}", String(pos.total))}`
     : t("seriesBadge");
@@ -1482,7 +1482,6 @@ export function CalendarTab() {
 function BookingCalendarTab() {
   const { t, lang } = useLang();
   const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
-  const { data: bookings = [], isLoading } = useProviderBookings();
   const { services, isLoading: servicesLoading } = useProviderServices();
   const { profile } = useProviderProfile();
   const { schedule } = useProviderClassSchedule();
@@ -1504,6 +1503,27 @@ function BookingCalendarTab() {
   const isAcademy = isAcademyCategory(profile?.category);
   const noServices = !servicesLoading && services.length === 0 && !isFitnessStudio && !isAcademy;
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // Selected view mode persists across sessions. Defaults to the monthly view so
+  // existing providers see the unchanged layout on first upgrade.
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem(VIEW_MODE_KEY) : null;
+    return saved === "daily" || saved === "weekly" || saved === "monthly" ? saved : "monthly";
+  });
+  useEffect(() => {
+    localStorage.setItem(VIEW_MODE_KEY, viewMode);
+  }, [viewMode]);
+  // The month the monthly grid shows. Held here (it used to live inside the
+  // grid) because it decides which bookings are loaded. It starts on the
+  // current month and returns to it each time the monthly view is opened —
+  // what the grid did on its own when it was re-created on every view switch.
+  const [displayMonth, setDisplayMonth] = useState<Date>(() => startOfMonth(new Date()));
+  const changeViewMode = (mode: ViewMode) => {
+    if (mode === "monthly" && viewMode !== "monthly") setDisplayMonth(startOfMonth(new Date()));
+    setViewMode(mode);
+  };
+
+  // Only the bookings the current view can show — see useCalendarBookings.
+  const { bookings, isLoading } = useCalendarBookings(viewMode, selectedDate, displayMonth);
 
   // ── Multi-staff filter (Phase 6, display only) ──
   // Options come from the ACTIVE staff list (you don't filter by a deactivated
@@ -1531,16 +1551,6 @@ function BookingCalendarTab() {
         : bookings.filter((b) => b.staff_id === effectiveStaffFilter),
     [bookings, effectiveStaffFilter],
   );
-
-  // Selected view mode persists across sessions. Defaults to the monthly view so
-  // existing providers see the unchanged layout on first upgrade.
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem(VIEW_MODE_KEY) : null;
-    return saved === "daily" || saved === "weekly" || saved === "monthly" ? saved : "monthly";
-  });
-  useEffect(() => {
-    localStorage.setItem(VIEW_MODE_KEY, viewMode);
-  }, [viewMode]);
 
   // Monthly view items for the selected date (unchanged behaviour; with the
   // staff filter on "all" — every non-staff provider — visibleBookings IS the
@@ -1686,11 +1696,20 @@ function BookingCalendarTab() {
     [availability, monthlySettings, blockedDateStrs, dateOverrides],
   );
 
-  const activeBookings = visibleBookings.filter(b => b.status !== 'cancelled');
-  const todayBookings = activeBookings.filter((b) => isToday(parseISO(b.booking_date))).length;
-  const upcomingBookings = activeBookings.filter((b) => isAfter(parseISO(b.booking_date), new Date())).length;
-  const todayRevenue = activeBookings
-    .filter((b) => isToday(parseISO(b.booking_date)) && b.status === "confirmed")
+  // ── Header numbers ──
+  // "Upcoming" counts EVERY future booking, far beyond the visible range, so
+  // these come from their own query (confirmed + pending from today onward)
+  // rather than from the loaded bookings. They follow the staff filter exactly
+  // as the views do. booking_date is a zero-padded "yyyy-MM-dd", so comparing
+  // it to today's local date as a string is a date comparison.
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const { data: ahead = [] } = useProviderBookingsAhead(todayStr);
+  const aheadVisible =
+    effectiveStaffFilter === "all" ? ahead : ahead.filter((b) => b.staff_id === effectiveStaffFilter);
+  const todayBookings = aheadVisible.filter((b) => b.booking_date === todayStr).length;
+  const upcomingBookings = aheadVisible.filter((b) => b.booking_date > todayStr).length;
+  const todayRevenue = aheadVisible
+    .filter((b) => b.booking_date === todayStr && b.status === "confirmed")
     .reduce((sum, b) => sum + b.total_price, 0);
 
   const isSelectedToday = isToday(selectedDate);
@@ -1773,7 +1792,7 @@ function BookingCalendarTab() {
         {viewTabs.map(({ mode, label }) => (
           <button
             key={mode}
-            onClick={() => setViewMode(mode)}
+            onClick={() => changeViewMode(mode)}
             className={cn(
               "py-2 rounded-xl text-sm font-medium transition-colors",
               viewMode === mode
@@ -1823,6 +1842,8 @@ function BookingCalendarTab() {
               mode="single"
               selected={selectedDate}
               onSelect={(d) => d && setSelectedDate(d)}
+              month={displayMonth}
+              onMonthChange={setDisplayMonth}
               locale={dateFnsLocale}
               weekStartsOn={0}
               className="pointer-events-auto"

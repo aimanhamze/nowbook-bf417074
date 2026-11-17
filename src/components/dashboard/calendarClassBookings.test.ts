@@ -36,6 +36,8 @@ const booking = (over: Partial<EnrichedBooking> = {}): EnrichedBooking => ({
   id: `b-${++n}`,
   user_id: "u",
   linked_user_id: null,
+  series_id: null,
+  series_members: null,
   provider_id: "pp",
   service_ids: [],
   booking_date: DATE,

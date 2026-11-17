@@ -4,13 +4,9 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLang } from "@/contexts/LangContext";
 import { cn } from "@/lib/utils";
-import { useProviderBookings, type EnrichedBooking } from "@/hooks/useProviderBookings";
+import type { EnrichedBooking } from "@/hooks/useProviderBookings";
 import { useCancelRecurringSeries } from "@/hooks/useRecurringSeries";
-import {
-  seriesCancelCounts,
-  type SeriesBookingRow,
-  type SeriesCancelScope,
-} from "@/lib/recurringSeries";
+import { seriesCancelCounts, type SeriesCancelScope } from "@/lib/recurringSeries";
 
 /**
  * The three-way cancel for a booking that belongs to a recurring series.
@@ -37,14 +33,12 @@ export function SeriesCancelDialog({
   onOnlyThis: () => void;
 }) {
   const { t } = useLang();
-  const { data: all } = useProviderBookings();
   const cancelSeries = useCancelRecurringSeries();
   const [busy, setBusy] = useState<SeriesCancelScope | null>(null);
 
-  const counts = seriesCancelCounts(
-    (all ?? []) as unknown as SeriesBookingRow[],
-    booking as unknown as SeriesBookingRow,
-  );
+  // The whole series, fetched by series_id with the booking — not the bookings
+  // the calendar happens to have loaded, which stop at the visible range.
+  const counts = seriesCancelCounts(booking.series_members ?? [], booking);
 
   const countLabel = (n: number) =>
     n === 1 ? t("seriesCancelCountOne") : t("seriesCancelCount").replace("{n}", String(n));

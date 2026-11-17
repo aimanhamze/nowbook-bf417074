@@ -44,14 +44,16 @@ export const IN_BATCH = 100;
  * another a provider with 600 customers waited on seven round trips in a row
  * for names alone. Errors are ignored (the batch contributes nothing) — these
  * lookups only enrich rows with names and balances, and a missing name must
- * not blank a whole screen.
+ * not blank a whole screen. `size` lowers the ids per request for lookups that
+ * return several rows per id, which must stay under the row cap.
  */
 export async function inBatches<T>(
   ids: string[],
   run: (batch: string[]) => PromiseLike<{ data: unknown }>,
+  size: number = IN_BATCH,
 ): Promise<T[]> {
   const batches: string[][] = [];
-  for (let i = 0; i < ids.length; i += IN_BATCH) batches.push(ids.slice(i, i + IN_BATCH));
+  for (let i = 0; i < ids.length; i += size) batches.push(ids.slice(i, i + size));
   const results = await Promise.all(batches.map((batch) => run(batch)));
   return results.flatMap(({ data }) => (data ?? []) as T[]);
 }

@@ -75,6 +75,25 @@ export interface EnrichedBooking {
   package_name: string | null;
   package_entries_remaining: number | null;
   package_total_entries: number | null;
+  /** The recurring series this booking belongs to. NULL = a one-off booking. */
+  series_id: string | null;
+  /**
+   * EVERY booking of this booking's series — cancelled ones and ones far
+   * outside the loaded date range included — or null for a one-off booking.
+   * Fetched by series_id, not taken from the loaded range: "3 מתוך 5" and the
+   * cancel dialog's counts need the whole series, which a month never holds.
+   * One array instance is shared by all of a series' bookings in a fetch.
+   */
+  series_members: SeriesMemberRow[] | null;
+}
+
+/** The fields the series helpers (lib/recurringSeries) read. */
+export interface SeriesMemberRow {
+  id: string;
+  series_id: string;
+  booking_date: string;
+  booking_time: string;
+  status: string;
 }
 
 const BOOKING_STATUSES = ["confirmed", "pending", "cancelled"];
@@ -105,6 +124,53 @@ function fetchAllProviderBookings(providerId: string): Promise<Tables<"bookings"
       .order("booking_date", { ascending: true })
       .order("id", { ascending: true })
       .range(from, to),
+  );
+}
+
+/** One date range of the branch's bookings, inclusive "yyyy-MM-dd" bounds. */
+function fetchProviderBookingsInRange(
+  providerId: string,
+  from: string,
+  to: string,
+): Promise<Tables<"bookings">[]> {
+  return fetchAllPages((pageFrom, pageTo) =>
+    supabase
+      .from("bookings")
+      .select("*")
+      .eq("provider_id", providerId)
+      .in("status", BOOKING_STATUSES)
+      .gte("booking_date", from)
+      .lte("booking_date", to)
+      .order("booking_date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(pageFrom, pageTo),
+  );
+}
+
+/**
+ * Series per request. A series holds at most 12 bookings (weeklySeriesDates
+ * clamps it), so 50 series stay well under PostgREST's silent 1000-row cap.
+ */
+const SERIES_BATCH = 50;
+
+/**
+ * All bookings of the given series. bookings.series_id is not in the generated
+ * types until they are regenerated, hence the untyped builder — scoped to this
+ * one read.
+ */
+function fetchSeriesMembers(providerId: string, seriesIds: string[]): Promise<SeriesMemberRow[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any;
+  return inBatches<SeriesMemberRow>(
+    seriesIds,
+    (batch) =>
+      db
+        .from("bookings")
+        .select("id, series_id, booking_date, booking_time, status")
+        .eq("provider_id", providerId)
+        .in("status", BOOKING_STATUSES)
+        .in("series_id", batch),
+    SERIES_BATCH,
   );
 }
 
@@ -140,6 +206,7 @@ async function enrichBookings(
   const withPkg = bookings as (typeof bookings[number] & {
     check_in_at?: string | null;
     customer_package_id?: string | null;
+    series_id?: string | null;
   })[];
 
   // Walk-in bookings have user_id IS NULL — exclude those from the profiles lookup.
@@ -154,6 +221,7 @@ async function enrichBookings(
   const packageIds = [
     ...new Set(withPkg.map((b) => b.customer_package_id).filter(Boolean)),
   ] as string[];
+  const seriesIds = [...new Set(withPkg.map((b) => b.series_id).filter(Boolean))] as string[];
 
   // Package balances for the badge on each booking card. The template names
   // depend on the packages, so those two stay in sequence with each other.
@@ -173,7 +241,7 @@ async function enrichBookings(
     return { packages, pkgTemplateRows };
   };
 
-  const [profiles, { data: services }, classRows, { data: staffRows }, { packages, pkgTemplateRows }] =
+  const [profiles, { data: services }, classRows, { data: staffRows }, { packages, pkgTemplateRows }, seriesRows] =
     await Promise.all([
       inBatches<{
         user_id: string; display_name: string | null; phone: string | null; avatar_url: string | null;
@@ -191,6 +259,7 @@ async function enrichBookings(
         ? supabase.from("provider_staff").select("id, name").in("id", staffIds)
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),
       loadPackages(),
+      fetchSeriesMembers(providerId, seriesIds),
     ]);
 
   const profileMap = new Map(profiles.map((p) => [p.user_id, p]));
@@ -202,6 +271,12 @@ async function enrichBookings(
       .map((tpl) => [tpl.id, tpl.name]),
   );
   const packageMap = new Map(packages.map((p) => [p.id, p]));
+  const seriesMap = new Map<string, SeriesMemberRow[]>();
+  for (const row of seriesRows) {
+    const list = seriesMap.get(row.series_id);
+    if (list) list.push(row);
+    else seriesMap.set(row.series_id, [row]);
+  }
 
   return withPkg.map((b): EnrichedBooking => {
     // Walk-in: user_id is null → profileMap lookup is skipped (no account).
@@ -239,6 +314,8 @@ async function enrichBookings(
       package_total_entries: b.customer_package_id
         ? (packageMap.get(b.customer_package_id)?.total_entries ?? null)
         : null,
+      series_id: b.series_id ?? null,
+      series_members: b.series_id ? (seriesMap.get(b.series_id) ?? null) : null,
     };
   });
 }
@@ -253,6 +330,91 @@ export function useProviderBookings() {
       return enrichBookings(profile.id, await fetchAllProviderBookings(profile.id));
     },
     enabled: !!profile,
+    refetchInterval: 30000,
+  });
+}
+
+/** Query options for one date range — shared by the hook and by prefetching. */
+export function providerBookingsRangeOptions(providerId: string, from: string, to: string) {
+  return {
+    queryKey: [BOOKINGS_KEY, providerId, "range", from, to] as const,
+    queryFn: async () =>
+      enrichBookings(providerId, await fetchProviderBookingsInRange(providerId, from, to)),
+    staleTime: BOOKINGS_STALE_MS,
+  };
+}
+
+/**
+ * The active branch's bookings between two inclusive "yyyy-MM-dd" dates,
+ * every status (cancelled included — the calendar shows them).
+ *
+ * `poll` keeps the range fresh every 30s while it is on screen. `enabled:
+ * false` (or a null bound) fetches nothing.
+ */
+export function useProviderBookingsRange(
+  from: string | null,
+  to: string | null,
+  {
+    poll = true,
+    enabled = true,
+    keepPrevious = false,
+  }: { poll?: boolean; enabled?: boolean; keepPrevious?: boolean } = {},
+) {
+  const { profile } = useProviderProfile();
+  const providerId = profile?.id ?? "";
+  const on = !!profile && !!from && !!to && enabled;
+
+  return useQuery({
+    ...providerBookingsRangeOptions(providerId, from ?? "", to ?? ""),
+    enabled: on,
+    refetchInterval: poll ? 30000 : false,
+    // keepPrevious: while a range that is not cached yet loads, keep showing
+    // the previous one so the screen stays mounted mid-navigation. Never
+    // across branches — another branch's bookings must not appear, even for
+    // a moment.
+    placeholderData: keepPrevious
+      ? (previous: EnrichedBooking[] | undefined, previousQuery: { queryKey: readonly unknown[] } | undefined) =>
+          previousQuery?.queryKey[1] === providerId ? previous : undefined
+      : undefined,
+  });
+}
+
+/** What the calendar's header numbers need from a booking — nothing else. */
+export interface AheadBooking {
+  id: string;
+  booking_date: string;
+  status: string;
+  total_price: number;
+  staff_id: string | null;
+}
+
+/**
+ * Every confirmed / pending booking from `todayStr` onward, a few narrow
+ * columns each. Feeds the calendar header ("today", "upcoming", today's
+ * revenue), which counts ALL future bookings — more than any one visible
+ * range holds. `todayStr` is a LOCAL "yyyy-MM-dd".
+ */
+export function useProviderBookingsAhead(todayStr: string) {
+  const { profile } = useProviderProfile();
+
+  return useQuery({
+    queryKey: [BOOKINGS_KEY, profile?.id, "ahead", todayStr],
+    queryFn: async (): Promise<AheadBooking[]> => {
+      if (!profile) return [];
+      return fetchAllPages((from, to) =>
+        supabase
+          .from("bookings")
+          .select("id, booking_date, status, total_price, staff_id")
+          .eq("provider_id", profile.id)
+          .in("status", ["confirmed", "pending"])
+          .gte("booking_date", todayStr)
+          .order("booking_date", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      );
+    },
+    enabled: !!profile,
+    staleTime: BOOKINGS_STALE_MS,
     refetchInterval: 30000,
   });
 }
