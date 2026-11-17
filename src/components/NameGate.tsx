@@ -126,22 +126,39 @@ export function NameGate({ children }: { children: React.ReactNode }) {
   // Only authenticated, role-resolved, non-provider, non-admin users are gated.
   const gateCandidate = !!user && !roleLoading && !isProvider && !isAdmin;
 
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading, isError } = useQuery({
     queryKey: ["name-gate-profile", user?.id],
     enabled: gateCandidate,
     staleTime: 5 * 60 * 1000,
+    // One quick retry, then decide: the default three retries would hold the
+    // whole app on the loader for several seconds.
+    retry: 1,
+    retryDelay: 500,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .select("display_name")
         .eq("user_id", user!.id)
         .maybeSingle();
+      // A FAILED read is not "no name". profiles is no longer readable without
+      // a session, so a request that went out with a dead token is refused
+      // (401) — swallowing that used to look like a name-less customer and
+      // put the name screen in front of someone who already has a name.
+      if (error) throw error;
+      // No error and no row: the profile really has no name yet.
       return data ?? { display_name: null as string | null };
     },
   });
 
   // Logged out, or a provider/admin, or roles not yet known → never gate.
   if (!gateCandidate) return <>{children}</>;
+
+  // The read failed and nothing is cached: the name is UNKNOWN, not missing.
+  // Let the app through rather than ask for a name the customer may already
+  // have; the query runs again on the next focus / mount and gates then if the
+  // name really is missing. (A cached answer from an earlier success is still
+  // used below — `profile` stays defined when only a refetch fails.)
+  if (isError && profile === undefined) return <>{children}</>;
 
   // Customer, but we don't yet know their name → hold the app (prevents any
   // deep-link to booking before the gate decision is made).
