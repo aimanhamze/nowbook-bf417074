@@ -561,7 +561,13 @@ $c$;
 --     6. Academy → registrations: names and phones of registrants.
 --     7. Waiting list for a day: names (comes from a definer RPC — should be
 --        untouched; listed to be sure).
---     8. A second branch of the same owner (switch branch): names there too.
+--     8. MULTI-BRANCH — REQUIRED ON PROD. Sign in as an owner with two
+--        branches, switch to the SECOND branch, and open its calendar and
+--        its Customers page: a customer who booked ONLY at that second
+--        branch shows their name and phone. §B2 T7 covers this with
+--        fixtures, but it is skipped on a database where
+--        provider_profiles.user_id is still UNIQUE (DEV may be one), so this
+--        step is the proof that the policy follows the OWNER across branches.
 --   Customer:
 --     9. Sign in: no name screen; name on home and /profile.
 --    10. Book, cancel, reschedule: the provider's bell text still carries the
