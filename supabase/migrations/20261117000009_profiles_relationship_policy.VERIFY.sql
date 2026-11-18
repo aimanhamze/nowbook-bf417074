@@ -9,12 +9,14 @@
 --           Ends in an ERROR on purpose: "PASS: …" or "FAIL Tn: …".
 --   §B2     ONE DO block, DEV ONLY. Builds its own fixtures; the final
 --           exception rolls everything back. "PASS: …" or "FAIL Tn: …".
+--   §B3     ONE DO block, read-only, DEV and PROD, with a REAL multi-branch
+--           owner. "PASS: …", "FAIL: …" or "SKIP: …".
 --   §C      ONE DO block, read-only, DEV and PROD. Ends in an ERROR whose
 --           text IS the query plan.
 --   §E      rollback.
 --
 -- ORDER: 20261117000008 applied and its §A checked
---        → §0 → apply 20261117000009 → §A → §B1 → §B2 (DEV) → §C
+--        → §0 → apply 20261117000009 → §A → §B1 → §B2 (DEV) → §B3 → §C
 --        → smoke list (PROD).
 
 
@@ -220,14 +222,22 @@ BEGIN
     JOIN public.profiles pr ON pr.user_id = b.user_id
     WHERE b.provider_id = v_pid;
 
-    -- What provider_customers returns with RLS out of the way (this block
-    -- runs as the editor's role, which bypasses it).
+    -- The OWNER's claims are set BEFORE the truth is computed, so both calls
+    -- below run with the same auth.uid() and differ only in the role.
+    -- provider_customers() has no auth.uid() / ownership check in its body
+    -- (it is SECURITY INVOKER and leaves that to RLS — checked in the repo
+    -- definition, 20261117000001), so the claims do not change its answer
+    -- today; setting them first keeps T3 honest if a check is ever added,
+    -- instead of comparing against a truth computed as T1's admin.
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_owner, 'role', 'authenticated')::text, true);
+    PERFORM set_config('request.jwt.claim.sub', v_owner::text, true);
+
+    -- What provider_customers returns with RLS out of the way: same claims,
+    -- but as the editor's role, which owns the tables and bypasses RLS.
     SELECT count(*)::text || ':' || md5(COALESCE(string_agg(e::text, ',' ORDER BY e::text), ''))
       INTO v_truth
     FROM jsonb_array_elements(public.provider_customers(v_pid)) e;
 
-    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_owner, 'role', 'authenticated')::text, true);
-    PERFORM set_config('request.jwt.claim.sub', v_owner::text, true);
     SET LOCAL ROLE authenticated;
     SELECT count(*) INTO v_n FROM public.profiles WHERE user_id = ANY (v_ids);
     SELECT count(*)::text || ':' || md5(COALESCE(string_agg(e::text, ',' ORDER BY e::text), ''))
@@ -493,6 +503,116 @@ END;
 $b2$;
 
 
+-- ── §B3 MULTI-BRANCH WITH A REAL OWNER, read-only — DEV and PROD ──────────
+--     ONE DO block. It only reads, and ends in an exception on purpose:
+--       ERROR: PASS: …      -> the owner sees every customer of every branch
+--       ERROR: FAIL: …      -> some are missing (the text says how many and
+--                              at which branch)
+--       ERROR: SKIP: …      -> no owner has more than one branch here
+--     It picks the REAL owner with the most branches (ties: the one with the
+--     most bookings), collects every distinct bookings.user_id across ALL of
+--     that owner's branches that has a profile row, then acts as that owner
+--     and counts how many of those profiles they can read.
+--     This is the proof that the policy follows the OWNER across branches;
+--     §B2 T7 does the same with fixtures but is skipped where
+--     provider_profiles.user_id is still UNIQUE. It replaces smoke item 8.
+--     The text lists every branch: customers, how many the owner sees, and
+--     only_here = customers who booked at NO other branch of this owner.
+--     A branch with only_here > 0 and seen = customers is the strong case:
+--     those customers are reachable through that branch alone. If every
+--     only_here is 0 the PASS says so.
+DO $b3$
+DECLARE
+  v_owner    uuid;
+  v_branches integer;
+  v_ids      uuid[];
+  v_seen     bigint;
+  v_branch   record;
+  v_detail   text := '';
+  v_only     bigint;
+  v_only_sum bigint := 0;
+  v_b_seen   bigint;
+BEGIN
+  SELECT pp.user_id, count(DISTINCT pp.id)::int INTO v_owner, v_branches
+  FROM public.provider_profiles pp
+  LEFT JOIN public.bookings b ON b.provider_id = pp.id
+  GROUP BY pp.user_id
+  HAVING count(DISTINCT pp.id) > 1
+  ORDER BY count(DISTINCT pp.id) DESC, count(b.id) DESC
+  LIMIT 1;
+
+  IF v_owner IS NULL THEN
+    RAISE EXCEPTION 'SKIP: no owner has more than one branch on this database — nothing to test';
+  END IF;
+
+  SELECT array_agg(DISTINCT b.user_id) INTO v_ids
+  FROM public.bookings b
+  JOIN public.provider_profiles pp ON pp.id = b.provider_id
+  JOIN public.profiles pr          ON pr.user_id = b.user_id
+  WHERE pp.user_id = v_owner;
+
+  IF v_ids IS NULL THEN
+    RAISE EXCEPTION 'SKIP: the owner with the most branches (% branches) has no registered-customer bookings at any of them', v_branches;
+  END IF;
+
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_owner, 'role', 'authenticated')::text, true);
+  PERFORM set_config('request.jwt.claim.sub', v_owner::text, true);
+
+  -- All branches together.
+  SET LOCAL ROLE authenticated;
+  SELECT count(*) INTO v_seen FROM public.profiles WHERE user_id = ANY (v_ids);
+  RESET ROLE;
+
+  -- Branch by branch: customers of that branch, how many the owner sees, and
+  -- how many of them booked at NO other branch of this owner.
+  FOR v_branch IN
+    SELECT pp.id,
+           ARRAY(SELECT DISTINCT b.user_id
+                 FROM public.bookings b
+                 JOIN public.profiles pr ON pr.user_id = b.user_id
+                 WHERE b.provider_id = pp.id) AS ids
+    FROM public.provider_profiles pp
+    WHERE pp.user_id = v_owner
+    ORDER BY pp.created_at, pp.id
+  LOOP
+    SELECT count(*) INTO v_only
+    FROM unnest(v_branch.ids) u(user_id)
+    WHERE NOT EXISTS (SELECT 1
+                      FROM public.bookings b2
+                      JOIN public.provider_profiles pp2 ON pp2.id = b2.provider_id
+                      WHERE b2.user_id = u.user_id
+                        AND pp2.user_id = v_owner
+                        AND pp2.id <> v_branch.id);
+    v_only_sum := v_only_sum + v_only;
+
+    SET LOCAL ROLE authenticated;
+    SELECT count(*) INTO v_b_seen FROM public.profiles WHERE user_id = ANY (v_branch.ids);
+    RESET ROLE;
+
+    v_detail := v_detail || format(' [branch %s: customers=%s seen=%s only_here=%s]',
+                                   left(v_branch.id::text, 8), cardinality(v_branch.ids), v_b_seen, v_only);
+
+    IF v_b_seen <> cardinality(v_branch.ids) THEN
+      RAISE EXCEPTION 'FAIL: the owner sees % of % customers of branch % —%',
+        v_b_seen, cardinality(v_branch.ids), v_branch.id, v_detail;
+    END IF;
+  END LOOP;
+
+  IF v_seen <> cardinality(v_ids) THEN
+    RAISE EXCEPTION 'FAIL: the owner sees % of % customers across % branches —%',
+      v_seen, cardinality(v_ids), v_branches, v_detail;
+  END IF;
+
+  RAISE EXCEPTION 'PASS: owner with % branches sees all % registered customers across them%;%',
+    v_branches, cardinality(v_ids),
+    CASE WHEN v_only_sum = 0
+         THEN ' (NOTE: no customer booked at only one branch, so every customer is also reachable through another branch)'
+         ELSE '' END,
+    v_detail;
+END;
+$b3$;
+
+
 -- ── §C THE PLAN of the provider calendar's profiles read — DEV and PROD ───
 --     ONE DO block, read-only. It runs, AS THE OWNER of the branch with the
 --     most registered customers, the exact statement useProviderBookings
@@ -561,13 +681,10 @@ $c$;
 --     6. Academy → registrations: names and phones of registrants.
 --     7. Waiting list for a day: names (comes from a definer RPC — should be
 --        untouched; listed to be sure).
---     8. MULTI-BRANCH — REQUIRED ON PROD. Sign in as an owner with two
---        branches, switch to the SECOND branch, and open its calendar and
---        its Customers page: a customer who booked ONLY at that second
---        branch shows their name and phone. §B2 T7 covers this with
---        fixtures, but it is skipped on a database where
---        provider_profiles.user_id is still UNIQUE (DEV may be one), so this
---        step is the proof that the policy follows the OWNER across branches.
+--     8. MULTI-BRANCH — covered by §B3 on PROD (a real owner with several
+--        branches sees every customer of every branch), which replaces the
+--        in-app check: signing in as another provider is not possible.
+--        §B3 must end in PASS on PROD, not SKIP.
 --   Customer:
 --     9. Sign in: no name screen; name on home and /profile.
 --    10. Book, cancel, reschedule: the provider's bell text still carries the
