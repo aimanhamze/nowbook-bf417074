@@ -12,6 +12,7 @@ import { useProviderLocations, type ProviderLocation } from "@/hooks/useProvider
 import { ProviderBottomSheet } from "@/components/map/ProviderBottomSheet";
 import { getInitials } from "@/lib/geo";
 import { saveMapView, loadMapView } from "@/lib/mapCache";
+import { sized } from "@/lib/imageUrl";
 import { toast } from "sonner";
 
 const DEFAULT_CENTER: [number, number] = [32.0853, 34.7818];
@@ -62,9 +63,12 @@ function createAvatarPin(provider: ProviderLocation, isSelected: boolean): L.Div
     : "0 2px 8px rgba(0,0,0,0.25)";
   const scale = isSelected ? "scale(1.1)" : "scale(1)";
 
+  // Sized 96px copy; on error fall back ONCE to the original (data-original),
+  // then hide so the initials show — same guard as withOriginalFallback().
   const imgHtml = provider.avatar_image
-    ? `<img src="${esc(provider.avatar_image)}" loading="lazy" alt=""
-         onerror="this.style.display='none'"
+    ? `<img src="${esc(sized(provider.avatar_image, { width: 96, height: 96 }))}" loading="lazy" decoding="async" alt=""
+         width="48" height="48" data-original="${esc(provider.avatar_image)}"
+         onerror="var o=this.getAttribute('data-original');if(o&&this.getAttribute('data-fb')!=='1'&&this.getAttribute('src')!==o){this.setAttribute('data-fb','1');this.src=o}else{this.style.display='none'}"
          style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;z-index:1;"/>`
     : "";
 

@@ -5,6 +5,7 @@ import { useLang } from "@/contexts/LangContext";
 import { haversineKm, formatDistance, getInitials } from "@/lib/geo";
 import type { ProviderLocation } from "@/hooks/useProviderLocations";
 import type { TranslationKey } from "@/lib/translations";
+import { sized, withOriginalFallback } from "@/lib/imageUrl";
 
 const KNOWN_CATEGORIES = new Set([
   "barber", "salon", "nails", "brows", "spa", "skincare", "makeup",
@@ -35,13 +36,16 @@ function AvatarCircle({ provider, size }: { provider: ProviderLocation; size: nu
       </span>
       {provider.avatar_image && (
         <img
-          src={provider.avatar_image}
+          src={sized(provider.avatar_image, { width: 160, height: 160 })}
           alt=""
           loading="lazy"
+          decoding="async"
+          width={size}
+          height={size}
           className="absolute inset-0 w-full h-full object-cover rounded-full z-10"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
+          onError={withOriginalFallback(provider.avatar_image, (e) => {
+            e.currentTarget.style.display = "none";
+          })}
         />
       )}
     </div>

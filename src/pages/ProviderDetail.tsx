@@ -24,6 +24,7 @@ import ReviewCard from "@/components/reviews/ReviewCard";
 import type { SocialLinks } from "@/lib/socialLinks";
 import { buildWhatsAppLink } from "@/lib/socialLinks";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
+import { sized, withOriginalFallback } from "@/lib/imageUrl";
 import { SessionHandledError } from "@/lib/liveSession";
 import { useProviderPackages, useMyPackagesAt, useRequestPackage } from "@/hooks/usePublicPackages";
 import { packageErrorKey } from "@/hooks/usePackageActions";
@@ -127,6 +128,12 @@ function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | und
   );
 }
 
+
+// Sized copies (see lib/imageUrl). The cover/avatar full-screen viewer is the
+// only place that loads the original.
+const AVATAR_SIZE = { width: 240, height: 240 } as const;
+const LIGHTBOX_SIZE = { width: 1600, resize: "contain" } as const;
+const THUMB_SIZE = { width: 128, height: 128 } as const;
 
 const ProviderDetail = () => {
   const { id } = useParams();
@@ -303,7 +310,16 @@ const ProviderDetail = () => {
         bigAvatarRef={bigAvatarRef}
         avatar={
           provider.image?.trim() && !avatarFailed ? (
-            <img src={provider.image.trim()} alt="" className="h-full w-full object-cover" />
+            // Same 240px URL as the big avatar below, so it's one download.
+            <img
+              src={sized(provider.image.trim(), AVATAR_SIZE)}
+              alt=""
+              decoding="async"
+              width={40}
+              height={40}
+              className="h-full w-full object-cover"
+              onError={withOriginalFallback(provider.image.trim())}
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <span className="select-none text-sm font-medium text-foreground/60">
@@ -346,27 +362,31 @@ const ProviderDetail = () => {
               className="block w-full"
               onClick={() => setFullImageSrc(coverImgSrc)}
             >
+              {/* Blurred anyway, so a small copy is plenty. */}
               <img
-                src={coverImgSrc}
+                src={sized(coverImgSrc, { width: 200 })}
                 alt={provider.name[lang]}
+                decoding="async"
                 className="h-64 w-full scale-110 object-cover blur-xl"
-                onError={handleCoverImageError}
+                onError={withOriginalFallback(coverImgSrc, handleCoverImageError)}
               />
             </button>
           ) : (
-            // Real cover: keep the image's natural aspect ratio (height only
-            // clamped to a sane range) so designed banners with text/logos
-            // are shown in full instead of being cropped by a fixed height.
+            // Real cover: the box is sized BEFORE the image loads (16:9,
+            // clamped to the old 224–384px range) so the page no longer jumps.
+            // 16:9 keeps designed banners with text/logos essentially whole;
+            // taller photos are cropped top/bottom. Tapping opens the original.
             <button
               type="button"
               className="block w-full"
               onClick={() => setFullImageSrc(coverImgSrc)}
             >
               <img
-                src={coverImgSrc}
+                src={sized(coverImgSrc, { width: 1080 })}
                 alt={provider.name[lang]}
-                className="max-h-96 min-h-56 w-full object-cover"
-                onError={handleCoverImageError}
+                decoding="async"
+                className="aspect-[16/9] max-h-96 min-h-56 w-full object-cover"
+                onError={withOriginalFallback(coverImgSrc, handleCoverImageError)}
               />
             </button>
           )
@@ -407,10 +427,13 @@ const ProviderDetail = () => {
                   onClick={() => setFullImageSrc(provider.image.trim())}
                 >
                   <img
-                    src={provider.image.trim()}
+                    src={sized(provider.image.trim(), AVATAR_SIZE)}
                     alt={provider.name[lang]}
+                    decoding="async"
+                    width={112}
+                    height={112}
                     className="h-full w-full object-cover"
-                    onError={() => setAvatarFailed(true)}
+                    onError={withOriginalFallback(provider.image.trim(), () => setAvatarFailed(true))}
                   />
                 </button>
               ) : (
@@ -520,6 +543,9 @@ const ProviderDetail = () => {
         const visible = photos.slice(0, 5);
         const hiddenCount = photos.length - visible.length;
 
+        // Featured tiles (the lone 16:10 tile, the tall 3-up and 5-up lead)
+        // get 600px; the small squares 300px. 2x their displayed size.
+        const featured = (i: number) => i === 0 && (visible.length === 1 || visible.length === 3 || visible.length === 5);
         const tile = (i: number, sizeClass: string, withMoreBadge = false) => (
           <motion.button
             key={visible[i].id}
@@ -531,10 +557,12 @@ const ProviderDetail = () => {
             className={`relative overflow-hidden rounded-xl bg-secondary ring-1 ring-black/5 transition-transform active:scale-[0.98] ${sizeClass}`}
           >
             <img
-              src={visible[i].url}
+              src={sized(visible[i].url, featured(i) ? { width: 600 } : { width: 300, height: 300 })}
               alt={visible[i].caption ?? ""}
               loading="lazy"
+              decoding="async"
               className="absolute inset-0 h-full w-full object-cover"
+              onError={withOriginalFallback(visible[i].url)}
             />
             {withMoreBadge && hiddenCount > 0 && (
               <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/50 text-white">
@@ -692,9 +720,11 @@ const ProviderDetail = () => {
               onClick={e => e.stopPropagation()}
             >
               <img
-                src={photos[lightboxIndex].url}
+                src={sized(photos[lightboxIndex].url, LIGHTBOX_SIZE)}
                 alt={photos[lightboxIndex].caption ?? ""}
+                decoding="async"
                 className="max-h-[calc(100dvh-12rem)] max-w-full rounded-xl object-contain"
+                onError={withOriginalFallback(photos[lightboxIndex].url)}
               />
               {photos[lightboxIndex].caption && (
                 <p className="mt-3 text-center text-sm text-white/80">{photos[lightboxIndex].caption}</p>
@@ -723,10 +753,14 @@ const ProviderDetail = () => {
                       }`}
                     >
                       <img
-                        src={photo.url}
+                        src={sized(photo.url, THUMB_SIZE)}
                         alt={photo.caption ?? ""}
                         loading="lazy"
+                        decoding="async"
+                        width={56}
+                        height={64}
                         className="h-full w-full object-cover"
+                        onError={withOriginalFallback(photo.url)}
                       />
                     </button>
                   );
@@ -786,12 +820,14 @@ const ProviderDetail = () => {
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-accent/10 text-accent">
                   {service.image_url ? (
                     <img
-                      src={service.image_url}
+                      src={sized(service.image_url, { width: 80, height: 80 })}
                       alt={service.name[lang]}
                       loading="lazy"
+                      decoding="async"
                       width={40}
                       height={40}
                       className="h-full w-full object-cover"
+                      onError={withOriginalFallback(service.image_url)}
                     />
                   ) : (
                     <Sparkles className="h-4 w-4" />

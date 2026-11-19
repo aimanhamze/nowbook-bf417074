@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFavorites } from "@/hooks/useFavorites";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { categoryNames } from "@/lib/mock-data";
+import { sized, withOriginalFallback } from "@/lib/imageUrl";
 
 interface ProviderCardProps {
   provider: Provider;
@@ -38,11 +39,14 @@ export function ProviderCard({ provider, index = 0 }: ProviderCardProps) {
     >
       <div className="w-[84px] h-[84px] rounded-2xl shrink-0 bg-gradient-to-br from-accent/30 via-accent/10 to-[hsl(265_45%_88%)] overflow-hidden">
         <img
-          src={provider.image}
+          src={sized(provider.image, { width: 168, height: 168 })}
           alt={provider.name[lang]}
           className="w-full h-full object-cover"
           loading="lazy"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          decoding="async"
+          width={84}
+          height={84}
+          onError={withOriginalFallback(provider.image, (e) => { e.currentTarget.style.display = 'none'; })}
         />
       </div>
       <div className="flex flex-col justify-center gap-1 min-w-0">
