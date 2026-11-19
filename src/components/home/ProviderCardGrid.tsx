@@ -11,6 +11,7 @@ import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { isAcademyCategory } from "@/lib/academyCategory";
 import type { ProviderSchedule } from "@/hooks/useAllProviders";
 import { cityFromAddress } from "@/lib/cityFromAddress";
+import { sized, withOriginalFallback } from "@/lib/imageUrl";
 
 interface ProviderCardGridProps {
   provider: Provider;
@@ -67,11 +68,12 @@ export function ProviderCardGrid({ provider, schedule, now }: ProviderCardGridPr
       <div className="relative h-[104px] w-full shrink-0 overflow-hidden bg-gradient-to-br from-accent/30 via-accent/10 to-[hsl(265_45%_88%)]">
         {imgOk ? (
           <img
-            src={banner}
+            src={sized(banner, { width: 400, height: 240 })}
             alt={provider.name[lang]}
             className="h-full w-full object-cover"
             loading="lazy"
-            onError={() => setImgOk(false)}
+            decoding="async"
+            onError={withOriginalFallback(banner, () => setImgOk(false))}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">

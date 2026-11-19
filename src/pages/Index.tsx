@@ -3,6 +3,7 @@ import { SearchBar } from "@/components/home/SearchBar";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { CategoryRow } from "@/components/home/CategoryRow";
 import { ProviderCardGrid } from "@/components/home/ProviderCardGrid";
+import { sized, withOriginalFallback } from "@/lib/imageUrl";
 import { ForwardArrow } from "@/components/ui/directional-icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bell, CalendarDays, Moon, Store, Sun, Sunrise, Sunset, User as UserIcon, type LucideIcon } from "lucide-react";
@@ -171,11 +172,14 @@ function FavoriteStory({ provider, schedule, now, onClick }: FavoriteStoryProps)
           <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-accent/30 via-accent/10 to-[hsl(265_45%_88%)]">
             {imgOk ? (
               <img
-                src={provider.image}
+                src={sized(provider.image, { width: 160, height: 160 })}
                 alt={provider.name[lang]}
                 className="h-full w-full object-cover"
                 loading="lazy"
-                onError={() => setImgOk(false)}
+                decoding="async"
+                width={59}
+                height={59}
+                onError={withOriginalFallback(provider.image, () => setImgOk(false))}
               />
             ) : (
               <span className="text-lg font-bold text-accent">{initial}</span>
