@@ -218,6 +218,35 @@ const ProviderDetail = () => {
     setAvatarFailed(false);
   }, [provider?.id, provider?.coverImage, provider?.image]);
 
+  // Gallery viewer: warm the browser cache with the neighbouring photos (same
+  // 1600px URL the slide will request) so a swipe shows the next photo at
+  // once. If the sized copy is refused, preload the original instead — that's
+  // what the slide's own fallback will ask for.
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    for (const i of [lightboxIndex - 1, lightboxIndex + 1]) {
+      const original = photos[i]?.url;
+      if (!original) continue;
+      const img = new Image();
+      img.decoding = "async";
+      img.onerror = () => {
+        img.onerror = null;
+        if (img.src !== original) img.src = original;
+      };
+      img.src = sized(original, LIGHTBOX_SIZE);
+    }
+  }, [lightboxIndex, photos]);
+
+  // Keep the active thumbnail centred — only when the index changes, not on
+  // every render.
+  const stripRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    stripRef.current
+      ?.querySelector<HTMLElement>(`[data-strip-index="${lightboxIndex}"]`)
+      ?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [lightboxIndex]);
+
   const handleCoverImageError = () => {
     const primary = provider?.coverImage?.trim() || "";
     const fallback = provider?.image?.trim() || "";
@@ -734,17 +763,13 @@ const ProviderDetail = () => {
               className="absolute inset-x-0 bottom-0 overflow-x-auto bg-gradient-to-t from-black via-black/80 to-transparent pb-[calc(env(safe-area-inset-bottom,0px)+0.875rem)] pt-4 scrollbar-hide"
               onClick={e => e.stopPropagation()}
             >
-              <div className="mx-auto flex w-max gap-2 px-4">
+              <div ref={stripRef} className="mx-auto flex w-max gap-2 px-4">
                 {photos.map((photo, i) => {
                   const isActive = i === lightboxIndex;
                   return (
                     <button
                       key={photo.id}
-                      ref={el => {
-                        if (isActive && el) {
-                          el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-                        }
-                      }}
+                      data-strip-index={i}
                       onClick={() => setLightboxIndex(i)}
                       className={`h-16 w-14 shrink-0 overflow-hidden rounded-lg transition-all ${
                         isActive
