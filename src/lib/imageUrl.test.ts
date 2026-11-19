@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SyntheticEvent } from "react";
-import { sized, withOriginalFallback } from "./imageUrl";
+import { imageTransformsEnabled, sized, withOriginalFallback } from "./imageUrl";
 
 const OWN = "https://aqlcjjrgsxispdjwrnqf.supabase.co";
 const obj = (path: string) => `${OWN}/storage/v1/object/public/${path}`;
@@ -45,6 +45,36 @@ describe("sized", () => {
     expect(sized("data:image/png;base64,AAAA", { width: 200 })).toBe("data:image/png;base64,AAAA");
     expect(sized("blob:https://app.test/123", { width: 200 })).toBe("blob:https://app.test/123");
     expect(sized("not a url", { width: 200 })).toBe("not a url");
+  });
+});
+
+describe("VITE_IMAGE_TRANSFORMS kill switch", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+  const original = obj("provider-photos/u1/a.jpeg");
+
+  it("is on when unset", () => {
+    vi.stubEnv("VITE_IMAGE_TRANSFORMS", undefined);
+    expect(imageTransformsEnabled()).toBe(true);
+    expect(sized(original, { width: 600 })).toBe(`${render("provider-photos/u1/a.jpeg")}?width=600`);
+  });
+
+  it("is on for 'on' (and any value other than off)", () => {
+    vi.stubEnv("VITE_IMAGE_TRANSFORMS", "on");
+    expect(sized(original, { width: 600 })).toBe(`${render("provider-photos/u1/a.jpeg")}?width=600`);
+    vi.stubEnv("VITE_IMAGE_TRANSFORMS", "");
+    expect(imageTransformsEnabled()).toBe(true);
+  });
+
+  it("returns every URL unchanged when 'off' (case/space-insensitive)", () => {
+    for (const value of ["off", "OFF", " Off "]) {
+      vi.stubEnv("VITE_IMAGE_TRANSFORMS", value);
+      expect(imageTransformsEnabled()).toBe(false);
+      expect(sized(original, { width: 600 })).toBe(original);
+      expect(sized(original, { width: 1600, resize: "contain" })).toBe(original);
+      expect(sized(null, { width: 600 })).toBeNull();
+    }
   });
 });
 

@@ -13,8 +13,21 @@ import type { SyntheticEvent } from "react";
 // cycle's origin-image quota is used up), so every <img> using `sized()` must
 // also use `withOriginalFallback()`: on the first error it swaps to the
 // original URL once; a second error goes to the caller's own handler.
+//
+// Every caller (incl. the map-pin HTML in Nearby.tsx and the gallery viewer
+// preload) goes through sized(), so the kill switch below covers them all.
 
 export const OWN_STORAGE_HOST = "aqlcjjrgsxispdjwrnqf.supabase.co";
+
+/**
+ * Kill switch: VITE_IMAGE_TRANSFORMS=off makes sized() return every URL
+ * unchanged (originals everywhere). Unset or any other value = on. Read per
+ * call so tests can stub it; Vite inlines it at build time.
+ */
+export function imageTransformsEnabled(): boolean {
+  const flag = import.meta.env.VITE_IMAGE_TRANSFORMS;
+  return typeof flag !== "string" || flag.trim().toLowerCase() !== "off";
+}
 const OBJECT_PREFIX = "/storage/v1/object/public/";
 const RENDER_PREFIX = "/storage/v1/render/image/public/";
 
@@ -30,7 +43,7 @@ export interface SizeOptions {
 export function sized(url: string, opts: SizeOptions): string;
 export function sized(url: string | null | undefined, opts: SizeOptions): string | null | undefined;
 export function sized(url: string | null | undefined, opts: SizeOptions): string | null | undefined {
-  if (!url) return url;
+  if (!url || !imageTransformsEnabled()) return url;
   let parsed: URL;
   try {
     parsed = new URL(url);
