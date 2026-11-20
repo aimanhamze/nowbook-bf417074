@@ -135,7 +135,7 @@ function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | und
 // (server crop = final crop). Anything else requests width only (aspect
 // preserved) and lets object-fit crop once — a server crop to a different
 // aspect followed by a CSS crop looks zoomed.
-const AVATAR_SIZE = { width: 240, height: 240 } as const; // h-28 w-28 / h-8 w-8 circles
+const AVATAR_SIZE = { width: 336, height: 336 } as const; // h-28 w-28 (112px) × 3; mini h-8 w-8 shares it
 const LIGHTBOX_SIZE = { width: 1600, resize: "contain" } as const;
 const THUMB_SIZE = { width: 112, height: 128 } as const; // h-16 w-14 = 56×64 box, ×2
 
@@ -343,7 +343,7 @@ const ProviderDetail = () => {
         bigAvatarRef={bigAvatarRef}
         avatar={
           provider.image?.trim() && !avatarFailed ? (
-            // Same 240px URL as the big avatar below, so it's one download.
+            // Same 336px URL as the big avatar below, so it's one download.
             <img
               src={sized(provider.image.trim(), AVATAR_SIZE)}
               alt=""
