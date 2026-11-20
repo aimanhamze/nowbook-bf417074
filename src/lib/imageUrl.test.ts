@@ -9,16 +9,31 @@ const render = (path: string) => `${OWN}/storage/v1/render/image/public/${path}`
 describe("sized", () => {
   it("rewrites own-host public object URLs to the render endpoint with params", () => {
     expect(sized(obj("provider-photos/u1/1790781816142.jpeg"), { width: 600 })).toBe(
-      `${render("provider-photos/u1/1790781816142.jpeg")}?width=600`,
+      `${render("provider-photos/u1/1790781816142.jpeg")}?width=600&resize=contain`,
     );
     expect(
       sized(obj("provider-images/u1/cover-1.jpeg"), { width: 128, height: 128, quality: 70, resize: "contain" }),
     ).toBe(`${render("provider-images/u1/cover-1.jpeg")}?width=128&height=128&quality=70&resize=contain`);
   });
 
+  it("defaults width-only requests to resize=contain (keeps aspect ratio)", () => {
+    expect(sized(obj("provider-photos/u1/a.jpeg"), { width: 400 })).toBe(
+      `${render("provider-photos/u1/a.jpeg")}?width=400&resize=contain`,
+    );
+  });
+
+  it("leaves width+height on Supabase's default cover, and an explicit resize wins", () => {
+    expect(sized(obj("provider-images/u1/av.jpeg"), { width: 240, height: 240 })).toBe(
+      `${render("provider-images/u1/av.jpeg")}?width=240&height=240`,
+    );
+    expect(sized(obj("provider-images/u1/av.jpeg"), { width: 400, resize: "cover" })).toBe(
+      `${render("provider-images/u1/av.jpeg")}?width=400&resize=cover`,
+    );
+  });
+
   it("keeps an existing query string and overrides our own params", () => {
     expect(sized(`${obj("provider-images/u1/a.png")}?t=5&width=9999`, { width: 200 })).toBe(
-      `${render("provider-images/u1/a.png")}?t=5&width=200`,
+      `${render("provider-images/u1/a.png")}?t=5&width=200&resize=contain`,
     );
   });
 
@@ -57,12 +72,12 @@ describe("VITE_IMAGE_TRANSFORMS kill switch", () => {
   it("is on when unset", () => {
     vi.stubEnv("VITE_IMAGE_TRANSFORMS", undefined);
     expect(imageTransformsEnabled()).toBe(true);
-    expect(sized(original, { width: 600 })).toBe(`${render("provider-photos/u1/a.jpeg")}?width=600`);
+    expect(sized(original, { width: 600 })).toBe(`${render("provider-photos/u1/a.jpeg")}?width=600&resize=contain`);
   });
 
   it("is on for 'on' (and any value other than off)", () => {
     vi.stubEnv("VITE_IMAGE_TRANSFORMS", "on");
-    expect(sized(original, { width: 600 })).toBe(`${render("provider-photos/u1/a.jpeg")}?width=600`);
+    expect(sized(original, { width: 600 })).toBe(`${render("provider-photos/u1/a.jpeg")}?width=600&resize=contain`);
     vi.stubEnv("VITE_IMAGE_TRANSFORMS", "");
     expect(imageTransformsEnabled()).toBe(true);
   });

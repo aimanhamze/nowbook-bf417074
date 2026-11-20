@@ -36,7 +36,7 @@ export interface SizeOptions {
   height?: number;
   /** 20–100; Supabase default is 80. */
   quality?: number;
-  /** Supabase default is "cover". */
+  /** Default: "contain" when height is omitted, else Supabase's "cover". */
   resize?: "cover" | "contain" | "fill";
 }
 
@@ -57,7 +57,12 @@ export function sized(url: string | null | undefined, opts: SizeOptions): string
   parsed.searchParams.set("width", String(Math.round(opts.width)));
   if (opts.height != null) parsed.searchParams.set("height", String(Math.round(opts.height)));
   if (opts.quality != null) parsed.searchParams.set("quality", String(Math.round(opts.quality)));
-  if (opts.resize) parsed.searchParams.set("resize", opts.resize);
+  // Width without height: Supabase's default resize=cover does NOT keep the
+  // aspect ratio — it crops to width × original height (a tall strip), which
+  // object-cover then crops again (looks zoomed). contain scales the whole
+  // image down instead. An explicit resize from the caller still wins.
+  const resize = opts.resize ?? (opts.height == null ? "contain" : undefined);
+  if (resize) parsed.searchParams.set("resize", resize);
   return parsed.toString();
 }
 
