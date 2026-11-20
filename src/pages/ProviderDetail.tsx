@@ -131,9 +131,13 @@ function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | und
 
 // Sized copies (see lib/imageUrl). The cover/avatar full-screen viewer is the
 // only place that loads the original.
-const AVATAR_SIZE = { width: 240, height: 240 } as const;
+// Rule: request width+height ONLY when the CSS box has exactly that aspect
+// (server crop = final crop). Anything else requests width only (aspect
+// preserved) and lets object-fit crop once — a server crop to a different
+// aspect followed by a CSS crop looks zoomed.
+const AVATAR_SIZE = { width: 240, height: 240 } as const; // h-28 w-28 / h-8 w-8 circles
 const LIGHTBOX_SIZE = { width: 1600, resize: "contain" } as const;
-const THUMB_SIZE = { width: 128, height: 128 } as const;
+const THUMB_SIZE = { width: 112, height: 128 } as const; // h-16 w-14 = 56×64 box, ×2
 
 const ProviderDetail = () => {
   const { id } = useParams();
@@ -344,8 +348,8 @@ const ProviderDetail = () => {
               src={sized(provider.image.trim(), AVATAR_SIZE)}
               alt=""
               decoding="async"
-              width={40}
-              height={40}
+              width={32}
+              height={32}
               className="h-full w-full object-cover"
               onError={withOriginalFallback(provider.image.trim())}
             />
@@ -401,10 +405,11 @@ const ProviderDetail = () => {
               />
             </button>
           ) : (
-            // Real cover: the box is sized BEFORE the image loads (16:9,
-            // clamped to the old 224–384px range) so the page no longer jumps.
-            // 16:9 keeps designed banners with text/logos essentially whole;
-            // taller photos are cropped top/bottom. Tapping opens the original.
+            // Real cover: keep the image's natural aspect ratio (height only
+            // clamped to a sane range) so designed banners with text/logos
+            // are shown in full instead of being cropped by a fixed height.
+            // Width-only request keeps that aspect; the page jumps once when
+            // it loads (accepted — a fixed box cropped real covers).
             <button
               type="button"
               className="block w-full"
@@ -414,7 +419,7 @@ const ProviderDetail = () => {
                 src={sized(coverImgSrc, { width: 1080 })}
                 alt={provider.name[lang]}
                 decoding="async"
-                className="aspect-[16/9] max-h-96 min-h-56 w-full object-cover"
+                className="max-h-96 min-h-56 w-full object-cover"
                 onError={withOriginalFallback(coverImgSrc, handleCoverImageError)}
               />
             </button>
@@ -573,7 +578,8 @@ const ProviderDetail = () => {
         const hiddenCount = photos.length - visible.length;
 
         // Featured tiles (the lone 16:10 tile, the tall 3-up and 5-up lead)
-        // get 600px; the small squares 300px. 2x their displayed size.
+        // get 800px wide; the small squares 400px. Width only — object-cover
+        // does the single crop into each box.
         const featured = (i: number) => i === 0 && (visible.length === 1 || visible.length === 3 || visible.length === 5);
         const tile = (i: number, sizeClass: string, withMoreBadge = false) => (
           <motion.button
@@ -586,7 +592,7 @@ const ProviderDetail = () => {
             className={`relative overflow-hidden rounded-xl bg-secondary ring-1 ring-black/5 transition-transform active:scale-[0.98] ${sizeClass}`}
           >
             <img
-              src={sized(visible[i].url, featured(i) ? { width: 600 } : { width: 300, height: 300 })}
+              src={sized(visible[i].url, { width: featured(i) ? 800 : 400 })}
               alt={visible[i].caption ?? ""}
               loading="lazy"
               decoding="async"
@@ -845,7 +851,7 @@ const ProviderDetail = () => {
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-accent/10 text-accent">
                   {service.image_url ? (
                     <img
-                      src={sized(service.image_url, { width: 80, height: 80 })}
+                      src={sized(service.image_url, { width: 120 })}
                       alt={service.name[lang]}
                       loading="lazy"
                       decoding="async"
