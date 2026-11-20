@@ -416,7 +416,9 @@ const ProviderDetail = () => {
               onClick={() => setFullImageSrc(coverImgSrc)}
             >
               <img
-                src={sized(coverImgSrc, { width: 1080 })}
+                // 1200: a 16:9 cover is clamped to 224px tall at 375px wide,
+                // and 1200×675 still covers 672px (224 × 3) after contain.
+                src={sized(coverImgSrc, { width: 1200 })}
                 alt={provider.name[lang]}
                 decoding="async"
                 className="max-h-96 min-h-56 w-full object-cover"
@@ -577,10 +579,20 @@ const ProviderDetail = () => {
         const visible = photos.slice(0, 5);
         const hiddenCount = photos.length - visible.length;
 
-        // Featured tiles (the lone 16:10 tile, the tall 3-up and 5-up lead)
-        // get 800px wide; the small squares 400px. Width only — object-cover
-        // does the single crop into each box.
-        const featured = (i: number) => i === 0 && (visible.length === 1 || visible.length === 3 || visible.length === 5);
+        // Width-only (resize=contain), so object-cover does the single crop.
+        // Sized so a typical 16:9 photo still covers its box at DPR 3 in BOTH
+        // dimensions (contain height = width × 9/16 must reach box height × 3).
+        // Boxes at 375px (content 335px, gap 6px):
+        //   1-up 335×209 → 1200 · 3-up lead 165×335 (tall) → 1800
+        //   5-up lead 183×146 → 800 · 165px squares (2/3/4-up) → 900
+        //   5-up 70px squares → 400
+        const tileWidth = (i: number) => {
+          const n = visible.length;
+          if (i === 0 && n === 1) return 1200;
+          if (i === 0 && n === 3) return 1800;
+          if (i === 0 && n === 5) return 800;
+          return n === 5 ? 400 : 900;
+        };
         const tile = (i: number, sizeClass: string, withMoreBadge = false) => (
           <motion.button
             key={visible[i].id}
@@ -592,7 +604,7 @@ const ProviderDetail = () => {
             className={`relative overflow-hidden rounded-xl bg-secondary ring-1 ring-black/5 transition-transform active:scale-[0.98] ${sizeClass}`}
           >
             <img
-              src={sized(visible[i].url, { width: featured(i) ? 800 : 400 })}
+              src={sized(visible[i].url, { width: tileWidth(i) })}
               alt={visible[i].caption ?? ""}
               loading="lazy"
               decoding="async"
@@ -851,7 +863,7 @@ const ProviderDetail = () => {
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-accent/10 text-accent">
                   {service.image_url ? (
                     <img
-                      src={sized(service.image_url, { width: 120 })}
+                      src={sized(service.image_url, { width: 240 })}
                       alt={service.name[lang]}
                       loading="lazy"
                       decoding="async"
