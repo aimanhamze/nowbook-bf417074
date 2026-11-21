@@ -68,7 +68,7 @@ export function ProviderCardGrid({ provider, schedule, now }: ProviderCardGridPr
       <div className="relative h-[104px] w-full shrink-0 overflow-hidden bg-gradient-to-br from-accent/30 via-accent/10 to-[hsl(265_45%_88%)]">
         {imgOk ? (
           <img
-            src={sized(banner, { width: 400, height: 240 })}
+            src={sized(banner, { width: 800 })}
             alt={provider.name[lang]}
             className="h-full w-full object-cover"
             loading="lazy"
