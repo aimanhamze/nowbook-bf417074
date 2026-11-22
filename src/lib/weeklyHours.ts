@@ -22,6 +22,9 @@ export interface WeeklyDayRow {
   end_time: string;
   break_start?: string | null;
   break_end?: string | null;
+  /** Every-2-weeks rule (lib/repeatWeeks). Read only; drafts never copy it. */
+  repeat_every_weeks?: number | null;
+  repeat_anchor_date?: string | null;
 }
 
 export const DEFAULT_START = "09:00";
