@@ -508,7 +508,7 @@ async function loadProvider(admin: Admin, providerId: string, dates: string[]): 
       .select("id, business_name, whatsapp_message_language, slot_interval_minutes, availability_mode, monthly_default_available, monthly_default_start, monthly_default_end")
       .eq("id", providerId).maybeSingle(),
     admin.from("provider_availability")
-      .select("day_of_week, start_time, end_time, is_available, break_start, break_end")
+      .select("day_of_week, start_time, end_time, is_available, break_start, break_end, repeat_every_weeks, repeat_anchor_date")
       .eq("provider_id", providerId),
     admin.from("provider_blocked_dates").select("blocked_date").eq("provider_id", providerId).in("blocked_date", dates),
     admin.from("provider_date_overrides")

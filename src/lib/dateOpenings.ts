@@ -5,7 +5,7 @@
 // precedence blocked -> override -> weekly row.
 
 import { addDays, differenceInCalendarDays, startOfDay } from "date-fns";
-import { toLocalDateStr } from "@/lib/availabilityResolver";
+import { isOffWeek, toLocalDateStr } from "@/lib/availabilityResolver";
 import type { TranslationKey } from "@/lib/translations";
 
 /** The RPC refuses more than this many dates (the longest booking window). */
@@ -15,6 +15,9 @@ export const MAX_OPENING_DATES = 90;
 export interface OpeningWeeklyRow {
   day_of_week: number;
   is_available: boolean;
+  /** Every-2-weeks rule (see isOffWeek). Absent = every week. */
+  repeat_every_weeks?: number | null;
+  repeat_anchor_date?: string | null;
 }
 
 /** One staff member's configured week: day_of_week -> row. */
@@ -43,9 +46,12 @@ export function bookingWindowEnd(today: Date, windowDays: number): Date {
   return addDays(startOfDay(today), Math.max(1, windowDays) - 1);
 }
 
-/** Is the date's weekday open in the normal weekly hours? */
+/**
+ * Is the date open in the normal weekly hours? An every-2-weeks weekday counts
+ * as closed on its off weeks, so a range of openings fills them.
+ */
 export function isNormallyOpen(date: Date, rows: readonly OpeningWeeklyRow[]): boolean {
-  return rows.some((r) => r.day_of_week === date.getDay() && r.is_available);
+  return rows.some((r) => r.day_of_week === date.getDay() && r.is_available && !isOffWeek(r, date));
 }
 
 /**

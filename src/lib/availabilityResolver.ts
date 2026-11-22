@@ -32,6 +32,10 @@ export interface WeeklyRow {
   is_available: boolean;
   break_start?: string | null;
   break_end?: string | null;
+  /** 1 = every week (the default), 2 = every 2 weeks. Absent = 1. See isOffWeek. */
+  repeat_every_weeks?: number | null;
+  /** "YYYY-MM-DD", a date the weekday WORKS. Only read when repeat_every_weeks = 2. */
+  repeat_anchor_date?: string | null;
 }
 
 /** The resolved open window for a date, or null when the day is closed. */
@@ -53,6 +57,47 @@ export function toLocalDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+// ── EVERY 2 WEEKS ────────────────────────────────────────────────────────────
+//
+// A weekday row with repeat_every_weeks = 2 works only on dates an EVEN number
+// of weeks from repeat_anchor_date (a date it works), and is closed on the
+// others. Weeks are counted from a stored date rather than from ISO week
+// numbers because 2026 has 53 ISO weeks: odd/even week numbers flip at New Year.
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Is `date` an OFF week for this weekday row? Only ever true for
+ * repeat_every_weeks = 2 with a usable anchor.
+ *
+ * The day count is taken from the two dates' Y/M/D through Date.UTC, never from
+ * local timestamps, so a daylight-saving change between them cannot turn
+ * 7 days into 6.96 and shift the count. `date` is read with the same LOCAL
+ * getters resolveDayHours uses for the weekday.
+ *
+ * A broken anchor is IGNORED (the day behaves as every week): missing,
+ * unparseable, not a real calendar date, or not on the row's weekday. The
+ * database CHECK makes all of these unreachable; this mirrors narrowToStaff's
+ * posture that malformed data must not silently close days.
+ */
+export function isOffWeek(
+  row: { repeat_every_weeks?: number | null; repeat_anchor_date?: string | null },
+  date: Date,
+): boolean {
+  if (row.repeat_every_weeks !== 2) return false;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(row.repeat_anchor_date ?? "");
+  if (!m) return false;
+  const y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
+  const anchor = new Date(Date.UTC(y, mo, d));
+  // Date.UTC rolls 2026-02-30 over to March: refuse anything that is not itself.
+  if (anchor.getUTCFullYear() !== y || anchor.getUTCMonth() !== mo || anchor.getUTCDate() !== d) return false;
+  const day = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const days = Math.round((day - anchor.getTime()) / DAY_MS);
+  // Not a whole number of weeks = the anchor is not on this weekday: broken.
+  if (days % 7 !== 0) return false;
+  return Math.abs(days / 7) % 2 === 1;
+}
+
 /**
  * SINGLE source of truth for "what are this provider's hours for date X".
  * Called by BOTH getAvailableSlots (private) and getGroupSlotsWithCapacity
@@ -63,7 +108,12 @@ export function toLocalDateStr(date: Date): string {
  * PRECEDENCE, identical in BOTH modes:
  *   1. blocked date        → closed. Blocked ALWAYS wins, checked first.
  *   2. date override       → that date's window (or closed if is_available=false).
- *   3. normal hours        → weekly: the weekday row; monthly: the flat default.
+ *   3. normal hours        → weekly: the weekday row (closed on its off weeks when
+ *                            it repeats every 2 weeks); monthly: the flat default.
+ *
+ * Every 2 weeks lives in step 3 ONLY, so a blocked date still closes a working
+ * week and a date override still opens (or re-times) an off week. A row with
+ * repeat_every_weeks absent or 1 resolves exactly as before.
  *
  * Step 2 used to run in monthly mode only. It now runs in weekly mode too, so a
  * weekly provider can OPEN a normally-closed date ("special opening days",
@@ -107,10 +157,11 @@ export function resolveDayHours(
     };
   }
 
-  // WEEKLY (default): the original inline weekday logic, unchanged.
+  // WEEKLY (default): the original inline weekday logic, plus the off week of
+  // an every-2-weeks row (isOffWeek is false for every other row).
   const dow = date.getDay();
   const slot = weeklyRows.find(a => a.day_of_week === dow);
-  if (!slot || !slot.is_available) return null;
+  if (!slot || !slot.is_available || isOffWeek(slot, date)) return null;
   return {
     start_time: slot.start_time,
     end_time: slot.end_time,

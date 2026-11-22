@@ -687,6 +687,8 @@ export type Database = {
           id: string
           is_available: boolean
           provider_id: string
+          repeat_anchor_date: string | null
+          repeat_every_weeks: number
           start_time: string
         }
         Insert: {
@@ -697,6 +699,8 @@ export type Database = {
           id?: string
           is_available?: boolean
           provider_id: string
+          repeat_anchor_date?: string | null
+          repeat_every_weeks?: number
           start_time?: string
         }
         Update: {
@@ -707,6 +711,8 @@ export type Database = {
           id?: string
           is_available?: boolean
           provider_id?: string
+          repeat_anchor_date?: string | null
+          repeat_every_weeks?: number
           start_time?: string
         }
         Relationships: [
