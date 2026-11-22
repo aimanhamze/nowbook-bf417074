@@ -34,6 +34,7 @@ import { OtherBranches } from "@/components/provider-detail/OtherBranches";
 import { CollapsingHeader, HeaderIconButton } from "@/components/provider-detail/CollapsingHeader";
 import { ProviderActions } from "@/components/provider-detail/ProviderActions";
 import { ServiceList } from "@/components/provider-detail/ServiceList";
+import { bookPath } from "@/lib/bookingPreselect";
 import { useKeyboardOpen } from "@/hooks/useKeyboardOpen";
 
 
@@ -741,7 +742,19 @@ const ProviderDetail = () => {
       {provider.services.length > 0 && !isAcademy && (
         <section className="mt-8 px-5">
           <SectionLabel className="mb-3">{t("services")}</SectionLabel>
-          <ServiceList services={provider.services} showPrices={provider.showPrices} lang={lang} t={t} />
+          <ServiceList
+            services={provider.services}
+            showPrices={provider.showPrices}
+            lang={lang}
+            t={t}
+            // A row starts booking with its service chosen — wherever the Book
+            // button is offered, except a fitness studio (it books classes).
+            onSelect={
+              canBook && !showsPackages
+                ? (service) => navigate(bookPath(provider.id, service.id))
+                : undefined
+            }
+          />
         </section>
       )}
 
@@ -860,7 +873,7 @@ const ProviderDetail = () => {
         <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[hsl(40_30%_96%)] to-transparent" />
         <div className="border-t border-white/40 bg-white/70 p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] backdrop-blur-xl">
           <button
-            onClick={() => navigate(`/provider/${provider.id}/book`)}
+            onClick={() => navigate(bookPath(provider.id))}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-base font-semibold text-accent-foreground shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)] transition-transform active:scale-[0.98]"
           >
             <CalendarPlus className="h-5 w-5" />

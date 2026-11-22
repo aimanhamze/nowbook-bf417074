@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ServiceList } from "./ServiceList";
 import { visibleServiceCount } from "@/lib/serviceListCollapse";
@@ -98,8 +98,57 @@ describe("ServiceList", () => {
     expect(screen.getByText("Helix + תכשיט").tagName).toBe("BDI");
   });
 
-  it("rows are not interactive yet", () => {
+  it("without onSelect rows are plain: no button, no chevron", () => {
     const { container } = render(<ServiceList services={make(3)} showPrices lang="he" t={t("he")} />);
     expect(container.querySelectorAll("li a, li button")).toHaveLength(0);
+  });
+});
+
+describe("ServiceList with onSelect (tappable rows)", () => {
+  it("every row is a button that reports its own service, with a chevron", () => {
+    const onSelect = vi.fn();
+    const services = make(3);
+    const { container } = render(<ServiceList services={services} showPrices lang="he" t={t("he")} onSelect={onSelect} />);
+    const rows = container.querySelectorAll("li > button");
+    expect(rows).toHaveLength(3);
+    expect(container.querySelectorAll("li svg")).toHaveLength(3);
+
+    fireEvent.click(rows[1]);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(services[1]);
+  });
+
+  it("the row's accessible name carries the name, duration and price", () => {
+    render(<ServiceList services={make(1)} showPrices lang="he" t={t("he")} onSelect={() => {}} />);
+    const row = screen.getByRole("button");
+    expect(row.textContent).toContain("שירות 1");
+    expect(row.textContent).toContain("15 דק׳");
+    expect(row.textContent).toContain("₪100");
+  });
+
+  it("show_prices off: the chevron still closes the row, no price", () => {
+    const { container } = render(<ServiceList services={make(2)} showPrices={false} lang="he" t={t("he")} onSelect={() => {}} />);
+    expect(container.textContent).not.toContain("₪");
+    expect(container.querySelectorAll("li svg")).toHaveLength(2);
+  });
+
+  it("the chevron points to the end side: left in he/ar, right in en", () => {
+    const cls = (lang: Lang) => {
+      const { container, unmount } = render(<ServiceList services={make(1)} showPrices lang={lang} t={t(lang)} onSelect={() => {}} />);
+      const c = container.querySelector("li svg")!.getAttribute("class") ?? "";
+      unmount();
+      return c;
+    };
+    expect(cls("he")).toContain("chevron-left");
+    expect(cls("ar")).toContain("chevron-left");
+    expect(cls("en")).toContain("chevron-right");
+  });
+
+  it("the expand row is separate from the service rows and selects nothing", () => {
+    const onSelect = vi.fn();
+    render(<ServiceList services={make(14)} showPrices lang="he" t={t("he")} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: "הצג את כל 14 השירותים" }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("listitem")).toHaveLength(14);
   });
 });

@@ -1,4 +1,4 @@
-import { useParams, useNavigate, Navigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Navigate } from "react-router-dom";
 import { isAcademyCategory } from "@/lib/academyCategory";
 import { useProviderById, useRealAvailability, usePublicProviderSchedule } from "@/hooks/useAllProviders";
 import { useProviderActiveStaff, useProviderStaffAssignments } from "@/hooks/useProviderStaff";
@@ -29,6 +29,7 @@ import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
+import { PRESELECT_PARAM, bookPath, resolvePreselectedService } from "@/lib/bookingPreselect";
 import { saveBookingDraft, consumeBookingDraft, type BookingDraft } from "@/lib/bookingDraft";
 import { SessionHandledError, isUnauthenticatedWriteError } from "@/lib/liveSession";
 import { useLiveSessionGuard } from "@/hooks/useLiveSessionGuard";
@@ -264,6 +265,8 @@ const BookAppointment = () => {
   // loaded — see resolveRestoredDraft / DraftRestoreCheck.
   const [pendingDraft, setPendingDraft] = useState<BookingDraft | null>(null);
   const draftConsumedRef = useRef(false);
+  // A draft was actually put back (read by the ?service= preselect below).
+  const draftAppliedRef = useRef(false);
   useEffect(() => {
     if (draftConsumedRef.current || !user || !provider) return;
     if (isFitnessStudio ? scheduleLoading : sessionsLoading) return;
@@ -298,8 +301,34 @@ const BookAppointment = () => {
       setSelectedTime(draft.time ?? "");
       setCustomerNotes(draft.notes ?? "");
     }
+    draftAppliedRef.current = true;
     setPendingDraft(draft);
   }, [user, provider, isFitnessStudio, scheduleLoading, sessionsLoading, classSchedule, t]);
+
+  // ── Preselected service (?service=<id>) ──
+  // The provider page's service rows open the flow with that service chosen,
+  // one step in (staff when enabled, else the calendar). Back from there is the
+  // service list with it ticked. Applied once; an id this provider does not
+  // offer, a fitness studio and a restored draft all leave the flow as usual
+  // (see resolvePreselectedService). Only selection state is set here — the
+  // same two setters the service list and Continue use.
+  const [searchParams] = useSearchParams();
+  const preselectId = searchParams.get(PRESELECT_PARAM);
+  const preselectDoneRef = useRef(false);
+  useEffect(() => {
+    if (preselectDoneRef.current || !preselectId || !user || isProvider || !provider) return;
+    // After the draft restore above has had its turn (it runs first, behind the
+    // same loading gate) …
+    if (!draftConsumedRef.current) return;
+    // … and once the staff queries have settled, the same wait the Continue
+    // button applies, so step 2 is known to be the staff step or the calendar.
+    if (provider.staffEnabled && (staffLoading || staffServicesLoading)) return;
+    preselectDoneRef.current = true;
+    const svc = resolvePreselectedService(preselectId, provider, draftAppliedRef.current);
+    if (!svc) return;
+    setSelectedServices([svc]);
+    setStep(2);
+  }, [preselectId, user, isProvider, provider, staffLoading, staffServicesLoading, sessionsLoading, scheduleLoading]);
 
   // An academy has no appointment wizard: its courses (and the Register
   // button) live on the provider page. Checked before the sign-in and
@@ -313,7 +342,7 @@ const BookAppointment = () => {
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center gap-4">
         <h2 className="text-lg font-bold">{t("mustLoginToBook")}</h2>
         <button
-          onClick={() => { saveRedirectAfterLogin(`/provider/${id}/book`); navigate("/auth"); }}
+          onClick={() => { saveRedirectAfterLogin(bookPath(id ?? "", preselectId)); navigate("/auth"); }}
           className="px-6 py-3 rounded-2xl bg-accent text-accent-foreground font-semibold"
         >
           {t("loginLabel")}
