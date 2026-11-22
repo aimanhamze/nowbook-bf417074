@@ -171,9 +171,9 @@ describe("status wording", () => {
   });
 
   it("closed, a week or more ahead: the date, since the weekday is ambiguous", () => {
-    expect(nextOpeningText(closed(7).next, "en", t("en"))).toBe("opens 29 November 17:00");
-    expect(nextOpeningText(closed(9).next, "he", t("he"))).toBe("נפתח 1 בדצמבר 17:00");
-    expect(nextOpeningText(closed(9).next, "ar", t("ar"))).toBe("يفتح 1 ديسمبر 17:00");
+    expect(nextOpeningText(closed(7).next, "en", t("en"))).toBe("opens on 29 November, 17:00");
+    expect(nextOpeningText(closed(9).next, "he", t("he"))).toBe("נפתח ב-1 בדצמבר, 17:00");
+    expect(nextOpeningText(closed(9).next, "ar", t("ar"))).toBe("يفتح في 1 ديسمبر، 17:00");
   });
 
   it("closed with nothing in range: the status alone", () => {

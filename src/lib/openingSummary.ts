@@ -91,12 +91,15 @@ const LOCALES = { he, ar, en: enUS } as const;
 // Past six days a weekday name alone is ambiguous, so the date is used.
 const DATE_PATTERN: Record<Lang, string> = { he: "d 'ב'MMMM", ar: "d MMMM", en: "d MMMM" };
 
-/** "opens at 17:00" / "opens tomorrow 09:00" / "opens Tuesday 17:00" / "opens 4 December 17:00". */
+/** "opens at 17:00" / "opens tomorrow 09:00" / "opens Tuesday 17:00" / "opens on 4 December, 17:00". */
 export function nextOpeningText(next: NextOpening, lang: Lang, t: Translate): string {
   if (next.daysAhead === 0) return t("statusOpensAt").replace("{time}", next.time);
   if (next.daysAhead === 1) return t("statusOpensTomorrow").replace("{time}", next.time);
-  const day = format(next.date, next.daysAhead <= 6 ? "EEEE" : DATE_PATTERN[lang], { locale: LOCALES[lang] });
-  return t("statusOpensDay").replace("{day}", day).replace("{time}", next.time);
+  const locale = LOCALES[lang];
+  if (next.daysAhead <= 6) {
+    return t("statusOpensDay").replace("{day}", format(next.date, "EEEE", { locale })).replace("{time}", next.time);
+  }
+  return t("statusOpensDate").replace("{date}", format(next.date, DATE_PATTERN[lang], { locale })).replace("{time}", next.time);
 }
 
 /** The status line, as its bold head ("Closed now") and its optional detail. */
