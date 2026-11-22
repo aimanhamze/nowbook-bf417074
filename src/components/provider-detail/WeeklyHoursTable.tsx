@@ -1,5 +1,8 @@
+import { format, isSameDay } from "date-fns";
+import { he, ar, enUS } from "date-fns/locale";
 import type { ProviderStatus, AvailabilityRow } from "@/lib/providerStatus";
 import type { Lang } from "@/lib/translations";
+import { nextWorkingDate } from "@/lib/repeatWeeks";
 
 const DOW_KEYS = [
   "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
@@ -31,10 +34,26 @@ interface Props {
   t: (key: string) => string;
 }
 
-export default function WeeklyHoursTable({ availability, status, staffEnabled, t }: Props) {
+export default function WeeklyHoursTable({ availability, status, staffEnabled, lang, t }: Props) {
   if (!status.hasSchedule) return null;
 
-  const todayDow = new Date().getDay();
+  const now = new Date();
+  const todayDow = now.getDay();
+  const dateLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
+
+  // "Every 2 weeks · next: 4 December" under an every-2-weeks day's name, or
+  // nothing for every other day (and for a broken anchor). By the rule only:
+  // a one-off blocked date does not move "next". No weekday in the date — the
+  // row already names it.
+  const repeatLine = (dow: number): string | null => {
+    const next = nextWorkingDate(availability.find(r => r.day_of_week === dow), now);
+    if (!next) return null;
+    const when = isSameDay(next, now)
+      ? t("today")
+      : t("hoursNextDate").replace("{date}", format(next, "d MMMM", { locale: dateLocale }));
+    return `${t("hoursEveryTwoWeeks")} · ${when}`;
+  };
+  const todayRepeat = repeatLine(todayDow);
 
   // today first, then the remaining 6 days in order starting from tomorrow
   const orderedDows = Array.from({ length: 7 }, (_, i) => (todayDow + i) % 7);
@@ -78,6 +97,9 @@ export default function WeeklyHoursTable({ availability, status, staffEnabled, t
             >
               {t(status.isOpen ? "providerStatusOpen" : "providerStatusClosed")}
             </span>
+            {todayRepeat && (
+              <span className="text-[11px] text-muted-foreground">{todayRepeat}</span>
+            )}
           </div>
         </div>
         {status.todayHours ? (
@@ -99,15 +121,21 @@ export default function WeeklyHoursTable({ availability, status, staffEnabled, t
       <div className="flex flex-col divide-y divide-border/40 px-2 pt-1">
         {orderedDows.slice(1).map(dow => {
           const hours = getRowHours(availability, dow);
+          const repeat = repeatLine(dow);
           return (
-            <div key={dow} className="flex items-center justify-between px-1.5 py-2.5">
-              <span
-                className={`text-sm ${hours ? "font-medium text-foreground/80" : "text-muted-foreground"}`}
-              >
-                {t(DOW_KEYS[dow])}
+            <div key={dow} className="flex items-center justify-between gap-3 px-1.5 py-2.5">
+              <span className="flex min-w-0 flex-col">
+                <span
+                  className={`text-sm ${hours ? "font-medium text-foreground/80" : "text-muted-foreground"}`}
+                >
+                  {t(DOW_KEYS[dow])}
+                </span>
+                {repeat && (
+                  <span className="text-[11px] text-muted-foreground">{repeat}</span>
+                )}
               </span>
               {hours ? (
-                <span dir="ltr" className="text-sm tabular-nums text-foreground">
+                <span dir="ltr" className="shrink-0 text-sm tabular-nums text-foreground">
                   {hours.open} - {hours.close}
                 </span>
               ) : (
