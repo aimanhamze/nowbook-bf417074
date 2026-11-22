@@ -1,3 +1,5 @@
+import { isOffWeek } from "./availabilityResolver";
+
 export interface ProviderHours {
   open: string;
   close: string;
@@ -14,6 +16,9 @@ export interface AvailabilityRow {
   start_time: string | null;
   end_time: string | null;
   is_available: boolean;
+  /** Every-2-weeks rule (see isOffWeek). Absent = every week. */
+  repeat_every_weeks?: number | null;
+  repeat_anchor_date?: string | null;
 }
 
 /** The provider_date_overrides fields the pill reads. */
@@ -44,7 +49,8 @@ function todayDateString(now: Date): string {
 
 /**
  * The open/closed pill. Same precedence as resolveDayHours:
- * blocked -> date override -> weekday row.
+ * blocked -> date override -> weekday row (closed on its off week when it
+ * repeats every 2 weeks — the same isOffWeek resolveDayHours uses).
  *
  * `overrides` is optional; omitted or empty gives the old result exactly.
  * A provider with no weekday rows but an override for today counts as having a
@@ -68,8 +74,11 @@ export function getProviderStatus(
     return { isOpen: false, todayHours: null, hasSchedule: true };
   }
 
-  const row = override ?? availability!.find(r => r.day_of_week === now.getDay());
-  if (!row || !row.is_available) {
+  // The every-2-weeks rule belongs to the weekday row only: an override for
+  // today wins over it, exactly as in resolveDayHours.
+  const weekday = override ? undefined : availability!.find(r => r.day_of_week === now.getDay());
+  const row = override ?? weekday;
+  if (!row || !row.is_available || (weekday && isOffWeek(weekday, now))) {
     return { isOpen: false, todayHours: null, hasSchedule: true };
   }
 

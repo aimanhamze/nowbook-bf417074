@@ -293,7 +293,7 @@ export function useAllProviderSchedules() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("provider_availability")
-        .select("provider_id, day_of_week, start_time, end_time, is_available");
+        .select("provider_id, day_of_week, start_time, end_time, is_available, repeat_every_weeks, repeat_anchor_date");
       if (error) throw error;
       return data || [];
     },

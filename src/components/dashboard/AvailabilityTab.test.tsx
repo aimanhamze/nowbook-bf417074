@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
@@ -21,9 +21,11 @@ const seed = () =>
     break_start: null, break_end: null,
   }));
 
+const fetchNames = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/useProviderAvailability", () => ({
   useProviderAvailability: () => avail,
   useDayActiveBookingCount: () => ({ data: 0, isLoading: false }),
+  fetchUpcomingBookingNames: (...args: unknown[]) => fetchNames(...args),
 }));
 vi.mock("@/hooks/useProviderStaff", () => ({ useProviderStaff: () => ({ activeStaff: [] }) }));
 vi.mock("@/hooks/useProviderStaffHours", () => ({ useProviderStaffHours: () => ({ hoursByStaff: new Map() }) }));
@@ -55,6 +57,8 @@ beforeEach(() => {
   profile = { id: "pp1", category: "barber", availability_mode: "weekly" };
   toast.success.mockClear();
   toast.error.mockClear();
+  fetchNames.mockReset();
+  fetchNames.mockResolvedValue([]);
 });
 
 describe("AvailabilityTab — weekly", () => {
@@ -193,5 +197,182 @@ describe("AvailabilityTab — other providers", () => {
     renderTab();
     fireEvent.click(screen.getByRole("button", { name: /hrsRemoveClosedDay/ }));
     await waitFor(() => expect((avail.unblockDate as ReturnType<typeof mutation>).mutateAsync).toHaveBeenCalledWith("b1"));
+  });
+});
+
+// ── Every 2 weeks (feat/biweekly-weekday) ───────────────────────────────────
+// Today is fixed at Sun 22 Nov 2026, so Friday's two choices are 27 Nov and
+// 4 Dec, and Monday's are 23 and 30 Nov. Dates render in Hebrew (lang "he").
+
+describe("AvailabilityTab — every 2 weeks", () => {
+  const FRI_HOURS = { day_of_week: 5, start_time: "08:00", end_time: "13:00", is_available: true, break_start: null, break_end: null };
+  /** Friday open 08–13, plus any repeat columns. */
+  const setFriday = (extra: Record<string, unknown> = {}) => {
+    avail.availability = seed().map((r) => (r.day_of_week === 5 ? { ...r, ...FRI_HOURS, start_time: "08:00:00", end_time: "13:00:00", ...extra } : r));
+  };
+  const booking = (id: string, booking_date: string, booking_time: string, name: string | null) => ({ id, booking_date, booking_time, name });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 22, 10, 0));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("switching to every 2 weeks asks for the next working date before Save is allowed", async () => {
+    setFriday();
+    renderTab();
+    const sheet = await openDay("friday");
+    expect(within(sheet).getByRole("radio", { name: "hrsRepeatWeekly" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(within(sheet).getByRole("radio", { name: "hrsRepeatBiweekly" }));
+    expect(within(sheet).getByText("hrsRepeatPick")).toBeInTheDocument();
+    expect(within(sheet).getByRole("radio", { name: "27 נובמבר" })).toHaveAttribute("aria-checked", "false");
+    expect(within(sheet).getByRole("radio", { name: "4 דצמבר" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "save" })).toBeDisabled();
+    expect(within(sheet).getByRole("button", { name: "hrsApplyOpen" })).toBeDisabled();
+  });
+
+  it("Save writes the hours plus the rule, after checking bookings from today", async () => {
+    setFriday();
+    renderTab();
+    const sheet = await openDay("friday");
+    fireEvent.click(within(sheet).getByRole("radio", { name: "hrsRepeatBiweekly" }));
+    fireEvent.click(within(sheet).getByRole("radio", { name: "27 נובמבר" }));
+    expect(within(sheet).getByText("hrsRepeatHint")).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole("button", { name: "save" }));
+    await waitFor(() => expect(upsert()).toHaveBeenCalledTimes(1));
+    expect(fetchNames).toHaveBeenCalledWith("pp1", "2026-11-22");
+    expect(upsert()).toHaveBeenCalledWith({
+      ...FRI_HOURS, repeat_every_weeks: 2, repeat_anchor_date: "2026-11-27",
+    });
+  });
+
+  it("warns with date + time + name for bookings on days that will close; Cancel saves nothing", async () => {
+    setFriday();
+    avail.blockedDates = [{ id: "b1", blocked_date: "2026-12-18" }];
+    avail.dateOverrides = [{ override_date: "2027-01-01", is_available: true, start_time: "08:00", end_time: "13:00", break_start: null, break_end: null }];
+    fetchNames.mockResolvedValue([
+      booking("k1", "2026-11-23", "10:00", "Monday Customer"),   // not a Friday
+      booking("k2", "2026-11-27", "09:00", "Working Week"),      // a working Friday: stays open
+      booking("k3", "2026-12-04", "11:00", null),                // off Friday, no name -> fallback
+      booking("k4", "2026-12-04", "10:00", "דנה כהן"),           // off Friday, walk-in name
+      booking("k5", "2026-12-18", "12:00", "Blocked Already"),   // off Friday, already blocked
+      booking("k6", "2027-01-01", "09:30", "Kept By Opening"),   // off Friday, a date-opening keeps it open
+      booking("k7", "2027-01-15", "08:30", "user@example.com"),  // off Friday, an email is never shown
+    ]);
+    renderTab();
+    const sheet = await openDay("friday");
+    fireEvent.click(within(sheet).getByRole("radio", { name: "hrsRepeatBiweekly" }));
+    fireEvent.click(within(sheet).getByRole("radio", { name: "27 נובמבר" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "save" }));
+
+    const warn = await screen.findByRole("alertdialog");
+    expect(warn).toHaveTextContent("hrsRepeatWarnTitle");
+    const headings = within(warn).getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(headings).toEqual(["יום שישי 4 דצמבר", "יום שישי 15 ינואר"]);
+    const items = within(warn).getAllByRole("listitem").map((li) => li.textContent);
+    expect(items).toEqual(["10:00דנה כהן", "11:00customerFallback", "08:30customerFallback"]);
+    expect(warn).not.toHaveTextContent(/Monday Customer|Working Week|Blocked Already|Kept By Opening|user@example/);
+    expect(upsert()).not.toHaveBeenCalled();
+
+    fireEvent.click(within(warn).getByRole("button", { name: "cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(upsert()).not.toHaveBeenCalled();
+  });
+
+  it("Save anyway writes the rule; nothing is cancelled", async () => {
+    setFriday();
+    fetchNames.mockResolvedValue([booking("k1", "2026-12-04", "10:00", "דנה כהן")]);
+    renderTab();
+    const sheet = await openDay("friday");
+    fireEvent.click(within(sheet).getByRole("radio", { name: "hrsRepeatBiweekly" }));
+    fireEvent.click(within(sheet).getByRole("radio", { name: "27 נובמבר" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "save" }));
+    const warn = await screen.findByRole("alertdialog");
+    fireEvent.click(within(warn).getByRole("button", { name: "hrsRepeatWarnConfirm" }));
+    await waitFor(() => expect(upsert()).toHaveBeenCalledTimes(1));
+    expect(upsert()).toHaveBeenCalledWith(expect.objectContaining({ repeat_every_weeks: 2, repeat_anchor_date: "2026-11-27" }));
+  });
+
+  it("a stored rule opens with its next working date selected; an unchanged Save writes and checks nothing", async () => {
+    setFriday({ repeat_every_weeks: 2, repeat_anchor_date: "2026-11-13" }); // same rhythm as 27 Nov
+    renderTab();
+    expect(screen.getByRole("button", { name: /friday.*hoursEveryTwoWeeks/ })).toBeInTheDocument();
+    const sheet = await openDay("friday");
+    expect(within(sheet).getByRole("radio", { name: "hrsRepeatBiweekly" })).toHaveAttribute("aria-checked", "true");
+    expect(within(sheet).getByRole("radio", { name: "27 נובמבר" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(within(sheet).getByRole("button", { name: "save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(upsert()).not.toHaveBeenCalled();
+    expect(fetchNames).not.toHaveBeenCalled();
+  });
+
+  it("changing the anchor to the other week is a change (and is checked)", async () => {
+    setFriday({ repeat_every_weeks: 2, repeat_anchor_date: "2026-11-13" });
+    renderTab();
+    const sheet = await openDay("friday");
+    fireEvent.click(within(sheet).getByRole("radio", { name: "4 דצמבר" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "save" }));
+    await waitFor(() => expect(upsert()).toHaveBeenCalledTimes(1));
+    expect(fetchNames).toHaveBeenCalledTimes(1);
+    expect(upsert()).toHaveBeenCalledWith(expect.objectContaining({ repeat_every_weeks: 2, repeat_anchor_date: "2026-12-04" }));
+  });
+
+  it("switching back to every week clears the anchor", async () => {
+    setFriday({ repeat_every_weeks: 2, repeat_anchor_date: "2026-11-27" });
+    renderTab();
+    const sheet = await openDay("friday");
+    fireEvent.click(within(sheet).getByRole("radio", { name: "hrsRepeatWeekly" }));
+    expect(within(sheet).queryByRole("radio", { name: "27 נובמבר" })).toBeNull();
+    fireEvent.click(within(sheet).getByRole("button", { name: "save" }));
+    await waitFor(() => expect(upsert()).toHaveBeenCalledWith({
+      ...FRI_HOURS, repeat_every_weeks: 1, repeat_anchor_date: null,
+    }));
+    expect(screen.queryByRole("alertdialog")).toBeNull(); // every week never closes a day
+  });
+
+  it("closing the day keeps the stored rule (no repeat columns written)", async () => {
+    setFriday({ repeat_every_weeks: 2, repeat_anchor_date: "2026-11-27" });
+    renderTab();
+    const sheet = await openDay("friday");
+    fireEvent.click(within(sheet).getByRole("switch"));
+    expect(within(sheet).queryByRole("radio", { name: "hrsRepeatBiweekly" })).toBeNull();
+    fireEvent.click(within(sheet).getByRole("button", { name: "save" }));
+    await waitFor(() => expect(upsert()).toHaveBeenCalledWith({ ...FRI_HOURS, is_available: false }));
+    expect(fetchNames).not.toHaveBeenCalled();
+  });
+
+  it("apply to all open days: the rule goes on this day only; the others get hours only", async () => {
+    renderTab();
+    const sheet = await openDay("monday");
+    fireEvent.change(within(sheet).getByLabelText("hrsCloses"), { target: { value: "19:00" } });
+    fireEvent.click(within(sheet).getByRole("radio", { name: "hrsRepeatBiweekly" }));
+    fireEvent.click(within(sheet).getByRole("radio", { name: "23 נובמבר" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "hrsApplyOpen" }));
+    const confirm = await screen.findByRole("alertdialog");
+    fireEvent.click(within(confirm).getByRole("button", { name: "hrsApplyConfirm" }));
+    await waitFor(() => expect(upsert()).toHaveBeenCalledTimes(5));
+    for (const [r] of upsert().mock.calls) {
+      if (r.day_of_week === 1) {
+        expect(r).toMatchObject({ end_time: "19:00", repeat_every_weeks: 2, repeat_anchor_date: "2026-11-23" });
+      } else {
+        expect(r).toMatchObject({ end_time: "19:00" });
+        expect(r).not.toHaveProperty("repeat_every_weeks");
+        expect(r).not.toHaveProperty("repeat_anchor_date");
+      }
+    }
+  });
+
+  it("if the booking check fails, nothing is saved and a translated error shows", async () => {
+    setFriday();
+    fetchNames.mockRejectedValue(new Error("permission denied for table bookings"));
+    renderTab();
+    const sheet = await openDay("friday");
+    fireEvent.click(within(sheet).getByRole("radio", { name: "hrsRepeatBiweekly" }));
+    fireEvent.click(within(sheet).getByRole("radio", { name: "27 נובמבר" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "save" }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("hrsRepeatCheckError"));
+    expect(upsert()).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { format, parseISO, startOfMonth, startOfToday, addMonths, subMonths, isAfter } from "date-fns";
 import { he, ar, enUS } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
@@ -15,7 +15,9 @@ import {
 import { ForwardArrow } from "@/components/ui/directional-icon";
 import { providerDesktopSheet } from "@/components/layout/providerDesktop";
 import { useLang } from "@/contexts/LangContext";
-import { useProviderAvailability } from "@/hooks/useProviderAvailability";
+import {
+  fetchUpcomingBookingNames, useProviderAvailability, type UpcomingBookingName,
+} from "@/hooks/useProviderAvailability";
 import { useProviderProfile } from "@/hooks/useProviderProfile";
 import { MonthlyAvailabilityCalendar } from "@/components/dashboard/MonthlyAvailabilityCalendar";
 import { DayHoursEditor } from "@/components/dashboard/DayHoursEditor";
@@ -30,6 +32,12 @@ import { toast } from "sonner";
 import { BranchSuffix } from "@/components/branch/BranchSuffix";
 import { SpecialOpeningsGroup } from "@/components/dashboard/SpecialOpeningsGroup";
 import { isAcademyCategory } from "@/lib/academyCategory";
+import { customerLabel } from "@/lib/customerLabel";
+import { toLocalDateStr, type DateOverrideRow, type WeeklyRow } from "@/lib/availabilityResolver";
+import {
+  anchorChoices, bookingsOnClosingDays, groupByDate, repeatDiffers, repeatFromRow, repeatIncomplete,
+  repeatPayload, type RepeatDraft,
+} from "@/lib/repeatWeeks";
 
 // The app's week order (Sunday first), as everywhere else.
 const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
@@ -100,6 +108,9 @@ function WeekSummary() {
                   )}
                 >
                   {ranges ? ltr(ranges) : t("dayClosedShort")}
+                  {ranges && rowFor(dow)?.repeat_every_weeks === 2 && (
+                    <span className="block text-xs text-foreground/70">{t("hoursEveryTwoWeeks")}</span>
+                  )}
                 </span>
                 <ForwardArrow className="h-4 w-4 shrink-0 text-foreground/40" />
               </button>
@@ -130,25 +141,42 @@ function WeekSummary() {
 
 function WeekDayEditor({ dow, rows, onDone }: { dow: number; rows: WeeklyDayRow[]; onDone: () => void }) {
   const { t, lang } = useLang();
-  const { upsertAvailability } = useProviderAvailability();
+  const { profile } = useProviderProfile();
+  const { upsertAvailability, blockedDates, dateOverrides } = useProviderAvailability();
   const stored = rows.find((r) => r.day_of_week === dow);
   const [draft, setDraft] = useState<DayDraft>(() => draftFromRow(stored));
+  // Fixed for the sheet's lifetime, so the two date choices can't shift under
+  // the owner if the sheet stays open past midnight.
+  const [today] = useState(() => startOfToday());
+  // The every-2-weeks setting, kept apart from the hours draft: DayHoursEditor
+  // is shared with the monthly and special-opening sheets, and "apply to all
+  // open days" copies the hours draft only.
+  const [repeat, setRepeat] = useState<RepeatDraft>(() => repeatFromRow(stored, today));
   const [busy, setBusy] = useState(false);
   // Days the confirmation lists; null = closed.
   const [confirmDays, setConfirmDays] = useState<number[] | null>(null);
+  // Bookings the repeat change would leave on closed days, and what Save does
+  // if the owner goes ahead. null = no warning showing.
+  const [stranded, setStranded] = useState<{ bookings: UpcomingBookingName[]; proceed: () => void } | null>(null);
   const error = validateDay(draft);
+  // Closing the day KEEPS the stored repeat setting: repeat edits only count,
+  // and are only written, while the day is open.
+  const repeatChanged = draft.open && repeatDiffers(stored, repeat);
+  const repeatBlocked = draft.open && repeatIncomplete(repeat);
+  const cantSave = !!error || repeatBlocked || busy;
+  const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
 
-  const write = (day: number, d: DayDraft) => upsertAvailability.mutateAsync(draftToRow(day, d));
+  const write = (day: number, d: DayDraft, withRepeat: boolean) =>
+    upsertAvailability.mutateAsync({ ...draftToRow(day, d), ...(withRepeat ? repeatPayload(repeat) : {}) });
 
-  const save = async () => {
-    if (error || busy) return;
-    if (!draftDiffers(stored, draft)) {
+  const doSave = async () => {
+    if (!draftDiffers(stored, draft) && !repeatChanged) {
       onDone();
       return;
     }
     setBusy(true);
     try {
-      await write(dow, draft);
+      await write(dow, draft, repeatChanged);
       toast.success(t("bsSaved"));
       onDone();
     } catch {
@@ -156,6 +184,46 @@ function WeekDayEditor({ dow, rows, onDone }: { dow: number; rows: WeeklyDayRow[
     } finally {
       setBusy(false);
     }
+  };
+
+  /**
+   * Before a repeat change is written: list the existing bookings that would
+   * land on days that become closed. Decided by resolveDayHours with the real
+   * blocked dates and openings (lib/repeatWeeks bookingsOnClosingDays), so
+   * dates already closed, or kept open by an opening, are not listed. Nothing
+   * is cancelled; the owner may still save. With no repeat change, or nothing
+   * affected, it goes straight on.
+   */
+  const checkRepeat = async (proceed: () => void) => {
+    if (!repeatChanged || !profile) {
+      proceed();
+      return;
+    }
+    setBusy(true);
+    let affected: UpcomingBookingName[];
+    try {
+      const upcoming = await fetchUpcomingBookingNames(profile.id, toLocalDateStr(today));
+      const newRow: WeeklyRow = { ...draftToRow(dow, draft), ...repeatPayload(repeat) };
+      affected = bookingsOnClosingDays(
+        upcoming,
+        rows as WeeklyRow[],
+        newRow,
+        blockedDates.map((b) => b.blocked_date.slice(0, 10)),
+        dateOverrides as DateOverrideRow[],
+      );
+    } catch {
+      toast.error(t("hrsRepeatCheckError"));
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    if (affected.length === 0) proceed();
+    else setStranded({ bookings: affected, proceed });
+  };
+
+  const save = () => {
+    if (cantSave) return;
+    void checkRepeat(() => void doSave());
   };
 
   const targets = draft.open ? openDaysToChange(rows, dow, draft) : [];
@@ -166,11 +234,12 @@ function WeekDayEditor({ dow, rows, onDone }: { dow: number; rows: WeeklyDayRow[
       // Sequential, one upsertAvailability per day: the same write as Save.
       // Not one transaction, so if one fails it stops there and says so; the
       // summary refreshes from whatever was saved.
-      if (draftDiffers(stored, draft)) await write(dow, draft);
+      if (draftDiffers(stored, draft) || repeatChanged) await write(dow, draft, repeatChanged);
       for (const day of days) {
         const target = rows.find((r) => r.day_of_week === day);
-        // Only currently-open days get here; they stay open.
-        if (target?.is_available) await write(day, { ...draft, open: true });
+        // Only currently-open days get here; they stay open. HOURS ONLY: each
+        // target keeps its own every-week / every-2-weeks setting.
+        if (target?.is_available) await write(day, { ...draft, open: true }, false);
       }
       toast.success(t("bsSaved"));
       setConfirmDays(null);
@@ -184,9 +253,11 @@ function WeekDayEditor({ dow, rows, onDone }: { dow: number; rows: WeeklyDayRow[
   };
 
   const onApply = () => {
-    if (error || busy) return;
-    if (targets.length === 0) void save();
-    else setConfirmDays(targets);
+    if (cantSave) return;
+    void checkRepeat(() => {
+      if (targets.length === 0) void doSave();
+      else setConfirmDays(targets);
+    });
   };
 
   return (
@@ -197,10 +268,11 @@ function WeekDayEditor({ dow, rows, onDone }: { dow: number; rows: WeeklyDayRow[
 
       <div className="mt-5">
         <DayHoursEditor value={draft} onChange={setDraft} error={error} closedHint={t("hrsClosedHint")} />
+        {draft.open && <RepeatEditor dow={dow} today={today} value={repeat} onChange={setRepeat} />}
       </div>
 
       <div className="mt-6 space-y-2">
-        <Button className="h-12 w-full rounded-2xl text-base font-semibold" onClick={save} disabled={!!error || busy}>
+        <Button className="h-12 w-full rounded-2xl text-base font-semibold" onClick={save} disabled={cantSave}>
           {t("save")}
         </Button>
         {draft.open && (
@@ -208,7 +280,7 @@ function WeekDayEditor({ dow, rows, onDone }: { dow: number; rows: WeeklyDayRow[
             variant="outline"
             className="h-11 w-full rounded-2xl"
             onClick={onApply}
-            disabled={!!error || busy}
+            disabled={cantSave}
           >
             {t("hrsApplyOpen")}
           </Button>
@@ -244,7 +316,133 @@ function WeekDayEditor({ dow, rows, onDone }: { dow: number; rows: WeeklyDayRow[
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={stranded !== null} onOpenChange={(o) => !o && setStranded(null)}>
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("hrsRepeatWarnTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("hrsRepeatWarnBody").replace("{day}", t(DAY_KEYS[dow]))}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {/* Grouped by date; time + name only (never a phone number). Names wrap
+              rather than truncate: in RTL an ellipsis cuts off the START of a name. */}
+          <div className="max-h-[calc(var(--vvh,100dvh)*0.4)] space-y-3 overflow-y-auto rounded-2xl bg-foreground/[0.03] p-3">
+            {groupByDate(stranded?.bookings ?? []).map(([date, list]) => (
+              <section key={date}>
+                <h3 className="text-xs font-semibold text-foreground/70">
+                  {format(parseISO(date), "EEEE d MMMM", { locale: dateFnsLocale })}
+                </h3>
+                <ul className="mt-1 space-y-1">
+                  {list.map((b) => (
+                    <li key={b.id} className="flex items-baseline gap-3 text-sm">
+                      <span dir="ltr" className="shrink-0 tabular-nums">{b.booking_time.slice(0, 5)}</span>
+                      <span className="min-w-0 break-words">{customerLabel(b.name, null, t("customerFallback"))}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+          <AlertDialogFooter className="gap-2 sm:space-x-0">
+            <AlertDialogCancel type="button" className="mt-0 h-11 rounded-2xl">
+              {t("cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              className="h-11 rounded-2xl"
+              onClick={() => {
+                const proceed = stranded?.proceed;
+                setStranded(null);
+                proceed?.();
+              }}
+            >
+              {t("hrsRepeatWarnConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
+  );
+}
+
+/**
+ * Every week / every 2 weeks for one weekday. With every 2 weeks the owner
+ * picks the NEXT working date from the next two occurrences; that date becomes
+ * the anchor. Switching back to every week clears it.
+ */
+function RepeatEditor({
+  dow, today, value, onChange,
+}: { dow: number; today: Date; value: RepeatDraft; onChange: (next: RepeatDraft) => void }) {
+  const { t, lang } = useLang();
+  const dateFnsLocale = lang === "he" ? he : lang === "ar" ? ar : enUS;
+  const labelId = useId();
+  const nextId = useId();
+  const choices = anchorChoices(dow, today);
+
+  const segment = (on: boolean) =>
+    cn(
+      "flex h-11 items-center justify-center rounded-xl text-sm font-medium transition-colors",
+      on ? "bg-white text-foreground shadow-sm" : "text-foreground/70",
+    );
+
+  return (
+    <div className="mt-5 space-y-4">
+      <div className="space-y-1.5">
+        <p id={labelId} className="px-1 text-xs font-medium text-foreground/70">{t("hrsRepeatLabel")}</p>
+        <div role="radiogroup" aria-labelledby={labelId} className="grid grid-cols-2 gap-1 rounded-2xl bg-foreground/[0.05] p-1">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={value.every === 1}
+            onClick={() => onChange({ every: 1, anchor: null })}
+            className={segment(value.every === 1)}
+          >
+            {t("hrsRepeatWeekly")}
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={value.every === 2}
+            onClick={() => value.every !== 2 && onChange({ every: 2, anchor: null })}
+            className={segment(value.every === 2)}
+          >
+            {t("hrsRepeatBiweekly")}
+          </button>
+        </div>
+      </div>
+
+      {value.every === 2 && (
+        <div className="space-y-1.5">
+          <p id={nextId} className="px-1 text-xs font-medium text-foreground/70">
+            {t("hrsRepeatNextLabel").replace("{day}", t(DAY_KEYS[dow]))}
+          </p>
+          <div role="radiogroup" aria-labelledby={nextId} className="grid grid-cols-2 gap-2">
+            {choices.map((date) => {
+              const on = value.anchor === date;
+              return (
+                <button
+                  key={date}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => onChange({ every: 2, anchor: date })}
+                  className={cn(
+                    "h-12 rounded-xl border text-sm tabular-nums transition-colors",
+                    on ? "border-accent bg-accent/10 font-semibold text-foreground" : "border-border text-foreground/80",
+                  )}
+                >
+                  {format(parseISO(date), "d MMMM", { locale: dateFnsLocale })}
+                </button>
+              );
+            })}
+          </div>
+          <p className="px-1 text-xs leading-relaxed text-foreground/70">
+            {t(value.anchor ? "hrsRepeatHint" : "hrsRepeatPick")}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 

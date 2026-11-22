@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useProviderProfile } from "./useProviderProfile";
 import { fetchOwnBlockedDates, fetchOwnDateOverrides } from "@/lib/scheduleFetch";
+import { fetchAllPages, inBatches } from "@/lib/fetchAll";
 
 /** save_date_openings, typed by hand until types.ts includes it. */
 type OpeningsRpc = (
@@ -51,15 +52,21 @@ export function useProviderAvailability(enabled = true) {
       is_available: boolean;
       break_start?: string | null;
       break_end?: string | null;
+      // Every-2-weeks rule. Written ONLY when passed, so every caller that
+      // leaves them out writes exactly what it wrote before (and "apply to all
+      // open days" copies hours without touching other days' repeat setting).
+      repeat_every_weeks?: 1 | 2;
+      repeat_anchor_date?: string | null;
     }) => {
       if (!profile) throw new Error("No provider profile");
 
-      const { start_time, end_time, is_available, break_start, break_end } = slot;
+      const { start_time, end_time, is_available, break_start, break_end, repeat_every_weeks, repeat_anchor_date } = slot;
+      const repeat = repeat_every_weeks === undefined ? {} : { repeat_every_weeks, repeat_anchor_date: repeat_anchor_date ?? null };
 
       // Attempt UPDATE on the existing row
       const { data: updated, error: updateError } = await supabase
         .from("provider_availability")
-        .update({ start_time, end_time, is_available, break_start: break_start ?? null, break_end: break_end ?? null })
+        .update({ start_time, end_time, is_available, break_start: break_start ?? null, break_end: break_end ?? null, ...repeat })
         .eq("provider_id", profile.id)
         .eq("day_of_week", slot.day_of_week)
         .select("id");
@@ -234,6 +241,50 @@ export function useProviderAvailability(enabled = true) {
     deleteDateOverride,
     saveDateOpenings,
   };
+}
+
+/** One active booking, as the every-2-weeks warning lists it. */
+export interface UpcomingBookingName {
+  id: string;
+  booking_date: string;
+  booking_time: string;
+  /** Walk-in: the name on the booking. App booking: the customer's profile name. Never a phone. */
+  name: string | null;
+}
+
+/**
+ * Every active (confirmed / pending) booking of a branch from `fromDate`
+ * ("YYYY-MM-DD") on, with the customer's name — for the warning shown before a
+ * weekday switches to every 2 weeks. Paged past the row cap. Names: a walk-in's
+ * own customer_name, else the account's profiles.display_name (the same
+ * precedence as enrichBookings). Phones are deliberately not read.
+ */
+export async function fetchUpcomingBookingNames(providerId: string, fromDate: string): Promise<UpcomingBookingName[]> {
+  const rows = await fetchAllPages<{
+    id: string; booking_date: string; booking_time: string; user_id: string | null; customer_name: string | null;
+  }>((from, to) =>
+    supabase
+      .from("bookings")
+      .select("id, booking_date, booking_time, user_id, customer_name")
+      .eq("provider_id", providerId)
+      .gte("booking_date", fromDate)
+      .in("status", ["confirmed", "pending"])
+      .order("booking_date")
+      .order("booking_time")
+      .order("id")
+      .range(from, to),
+  );
+  const userIds = [...new Set(rows.filter((r) => !r.customer_name && r.user_id).map((r) => r.user_id!))];
+  const profiles = await inBatches<{ user_id: string; display_name: string | null }>(userIds, (batch) =>
+    supabase.from("profiles").select("user_id, display_name").in("user_id", batch),
+  );
+  const nameByUser = new Map(profiles.map((p) => [p.user_id, p.display_name]));
+  return rows.map((r) => ({
+    id: r.id,
+    booking_date: r.booking_date,
+    booking_time: r.booking_time,
+    name: r.customer_name || (r.user_id ? nameByUser.get(r.user_id) ?? null : null),
+  }));
 }
 
 /**
