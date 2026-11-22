@@ -18,10 +18,10 @@ import {
  * so scrolling never re-renders this component or the page.
  */
 
-// Big avatar geometry in ProviderDetail: the info card sits -mt-12 (48px)
-// over the cover, the avatar -top-14 (56px) above the card, 112px tall.
-const AVATAR_SIZE = 112;
-const AVATAR_TOP_FROM_COVER_BOTTOM = 48 + 56;
+// Big avatar geometry in ProviderDetail: 72px tall (h-[72px]), pulled -mt-9
+// (36px) up over the cover so the cover's bottom edge runs through its middle.
+const AVATAR_SIZE = 72;
+const AVATAR_TOP_FROM_COVER_BOTTOM = 36;
 
 interface CollapsingHeaderProps {
   /** The cover block — its bottom edge locates the big avatar. */

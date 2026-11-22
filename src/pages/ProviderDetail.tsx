@@ -1,28 +1,27 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { categoryNames } from "@/lib/mock-data";
-import { useProviderById, usePublicProviderSchedule } from "@/hooks/useAllProviders";
+import { DEFAULT_AVATAR_URL, useProviderById, usePublicProviderSchedule } from "@/hooks/useAllProviders";
 import { getProviderStatus, type ProviderStatus } from "@/lib/providerStatus";
+import { getNextOpening, openingStatusParts, summarizeOpening } from "@/lib/openingSummary";
+import type { MonthlySettings } from "@/lib/availabilityResolver";
 import WeeklyHoursTable from "@/components/provider-detail/WeeklyHoursTable";
 import MonthlyHoursTable from "@/components/provider-detail/MonthlyHoursTable";
 import WriteReviewSection from "@/components/reviews/WriteReviewSection";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
 import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
-import { Heart, Star, MapPin, Clock, Share2, Globe, X, ChevronLeft, ChevronRight, Images, Sparkles, CalendarPlus, Ticket } from "lucide-react";
+import { Heart, Star, MapPin, Clock, Share2, X, ChevronLeft, ChevronRight, Images, Sparkles, CalendarPlus, Ticket } from "lucide-react";
 import { BackOrHomeIcon } from "@/components/ui/directional-icon";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { ProviderCourses } from "@/components/academy/customer/ProviderCourses";
 import { isAcademyCategory } from "@/lib/academyCategory";
-import { FaWhatsapp, FaInstagram, FaTiktok, FaFacebook, FaWaze } from "react-icons/fa6";
 import { motion } from "framer-motion";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useLang } from "@/contexts/LangContext";
 import { useAuth } from "@/contexts/AuthContext";
 import ReviewCard from "@/components/reviews/ReviewCard";
-import type { SocialLinks } from "@/lib/socialLinks";
-import { buildWhatsAppLink } from "@/lib/socialLinks";
 import { saveRedirectAfterLogin } from "@/lib/redirectAfterLogin";
 import { sized, withOriginalFallback } from "@/lib/imageUrl";
 import { SessionHandledError } from "@/lib/liveSession";
@@ -33,100 +32,8 @@ import { UpcomingAppointmentCard } from "@/components/provider-detail/UpcomingAp
 import { WaitlistRow } from "@/components/provider-detail/WaitlistRow";
 import { OtherBranches } from "@/components/provider-detail/OtherBranches";
 import { CollapsingHeader, HeaderIconButton } from "@/components/provider-detail/CollapsingHeader";
+import { ProviderActions } from "@/components/provider-detail/ProviderActions";
 import { useKeyboardOpen } from "@/hooks/useKeyboardOpen";
-
-interface SocialLinkEntry {
-  href: string;
-  icon: React.ReactNode;
-  label: string;
-  frameClass: string;
-}
-
-const PLATFORM_PALETTE = {
-  whatsapp:  { frameClass: "bg-[#25D366]/15" },
-  instagram: { frameClass: "bg-[#E4405F]/15" },
-  facebook:  { frameClass: "bg-[#1877F2]/15" },
-  tiktok:    { frameClass: "bg-foreground/10" },
-  waze:      { frameClass: "bg-[#05C3DE]/15" },
-  website:   { frameClass: "bg-foreground/10" },
-};
-
-function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | undefined }) {
-  const { t } = useLang();
-
-  const entries: SocialLinkEntry[] = [];
-
-  if (socialLinks?.whatsapp) {
-    entries.push({
-      href: buildWhatsAppLink(socialLinks.whatsapp),
-      icon: <FaWhatsapp className="h-6 w-6" style={{ color: "#25D366" }} />,
-      label: t("socialLinksWhatsapp"),
-      frameClass: PLATFORM_PALETTE.whatsapp.frameClass,
-    });
-  }
-  if (socialLinks?.instagram) {
-    entries.push({
-      href: socialLinks.instagram,
-      icon: <FaInstagram className="h-6 w-6" style={{ color: "#E4405F" }} />,
-      label: t("socialLinksInstagram"),
-      frameClass: PLATFORM_PALETTE.instagram.frameClass,
-    });
-  }
-  if (socialLinks?.tiktok) {
-    entries.push({
-      href: socialLinks.tiktok,
-      icon: <FaTiktok className="h-6 w-6" />,
-      label: t("socialLinksTiktok"),
-      frameClass: PLATFORM_PALETTE.tiktok.frameClass,
-    });
-  }
-  if (socialLinks?.facebook) {
-    entries.push({
-      href: socialLinks.facebook,
-      icon: <FaFacebook className="h-6 w-6" style={{ color: "#1877F2" }} />,
-      label: t("socialLinksFacebook"),
-      frameClass: PLATFORM_PALETTE.facebook.frameClass,
-    });
-  }
-  if (socialLinks?.waze) {
-    entries.push({
-      href: socialLinks.waze,
-      icon: <FaWaze className="h-6 w-6" style={{ color: "#05C3DE" }} />,
-      label: t("socialLinksWaze"),
-      frameClass: PLATFORM_PALETTE.waze.frameClass,
-    });
-  }
-  if (socialLinks?.website) {
-    entries.push({
-      href: socialLinks.website,
-      icon: <Globe className="h-6 w-6" />,
-      label: t("socialLinksWebsite"),
-      frameClass: PLATFORM_PALETTE.website.frameClass,
-    });
-  }
-
-  if (entries.length === 0) return null;
-
-  return (
-    <>
-      <div className="mx-auto my-4 h-px w-12 bg-border" />
-      <div className="flex flex-wrap justify-center gap-3">
-        {entries.map(entry => (
-          <a
-            key={entry.label}
-            href={entry.href}
-            aria-label={entry.label}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`flex h-12 w-12 items-center justify-center rounded-2xl ring-1 ring-inset ring-white/40 ${entry.frameClass} transition-all hover:brightness-110 active:scale-95`}
-          >
-            {entry.icon}
-          </a>
-        ))}
-      </div>
-    </>
-  );
-}
 
 
 // Sized copies (see lib/imageUrl). The cover/avatar full-screen viewer is the
@@ -135,7 +42,14 @@ function SocialLinksRow({ socialLinks }: { socialLinks: SocialLinks | null | und
 // (server crop = final crop). Anything else requests width only (aspect
 // preserved) and lets object-fit crop once — a server crop to a different
 // aspect followed by a CSS crop looks zoomed.
-const AVATAR_SIZE = { width: 336, height: 336 } as const; // h-28 w-28 (112px) × 3; mini h-8 w-8 shares it
+const AVATAR_SIZE = { width: 216, height: 216 } as const; // h-[72px] w-[72px] × 3; mini h-8 w-8 shares it
+// The status line is weekly-mode only, so the resolver is asked the weekly way.
+const WEEKLY_SETTINGS: MonthlySettings = {
+  availability_mode: "weekly",
+  monthly_default_available: true,
+  monthly_default_start: "09:00",
+  monthly_default_end: "17:00",
+};
 const LIGHTBOX_SIZE = { width: 1600, resize: "contain" } as const;
 const THUMB_SIZE = { width: 112, height: 128 } as const; // h-16 w-14 = 56×64 box, ×2
 
@@ -146,7 +60,7 @@ const ProviderDetail = () => {
   // useKeyboardOpen) and cover the review box; hide it while typing.
   const keyboardOpen = useKeyboardOpen();
   const { isEntry, goBack } = useSmartBack();
-  const [coverImgSrc, setCoverImgSrc] = useState("");
+  const [coverFailed, setCoverFailed] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const coverRef = useRef<HTMLDivElement>(null);
   const bigAvatarRef = useRef<HTMLDivElement>(null);
@@ -198,29 +112,38 @@ const ProviderDetail = () => {
   const isMonthly = monthlySettings.availability_mode === "monthly";
   const liked = id ? isFavorite(id) : false;
 
-  const [status, setStatus] = useState<ProviderStatus>(() =>
-    getProviderStatus(availability, blockedDates, new Date(), overrides),
-  );
-
+  // Open/closed comes from the shared helper (same as Home); the next opening
+  // from the resolver. Both are derived on render, and a minute tick re-renders
+  // the page so the line turns over on time.
+  const [, setMinuteTick] = useState(0);
   useEffect(() => {
-    setStatus(getProviderStatus(availability, blockedDates, new Date(), overrides));
-    const intervalId = setInterval(() => {
-      setStatus(getProviderStatus(availability, blockedDates, new Date(), overrides));
-    }, 60_000);
+    const intervalId = setInterval(() => setMinuteTick((n) => n + 1), 60_000);
     return () => clearInterval(intervalId);
-  }, [availability, blockedDates, overrides]);
+  }, []);
+  const now = new Date();
+  const status: ProviderStatus = getProviderStatus(availability, blockedDates, now, overrides);
+  // Shown for weekly-mode providers only (monthly mode has no status yet — the
+  // shared helper reads weekday rows), so the weekly resolver path is the one asked.
+  const showStatus = status.hasSchedule && !isAcademy && !isMonthly;
+  const opening = summarizeOpening(
+    status,
+    showStatus && !status.isOpen
+      ? getNextOpening(now, WEEKLY_SETTINGS, availability, blockedDates, overrides)
+      : null,
+    now,
+  );
+  const statusParts = openingStatusParts(opening, lang, t);
+
+  // A provider without an avatar carries a stock photo (see DEFAULT_AVATAR_URL);
+  // here that counts as no avatar, and the initial letter is shown instead.
+  const rawAvatar = provider?.image?.trim() || "";
+  const avatarSrc = rawAvatar && rawAvatar !== DEFAULT_AVATAR_URL && !avatarFailed ? rawAvatar : "";
+  const coverSrc = coverFailed ? "" : provider?.coverImage?.trim() || "";
 
   const reviewCount = dbReviews?.length || 0;
   const avgRating = dbReviews && dbReviews.length > 0
     ? dbReviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
     : 0;
-
-  useEffect(() => {
-    const primary = provider?.coverImage?.trim() || "";
-    const fallback = provider?.image?.trim() || "";
-    setCoverImgSrc(primary || fallback);
-    setAvatarFailed(false);
-  }, [provider?.id, provider?.coverImage, provider?.image]);
 
   // Gallery viewer: warm the browser cache with the neighbouring photos (same
   // 1600px URL the slide will request) so a swipe shows the next photo at
@@ -250,18 +173,6 @@ const ProviderDetail = () => {
       ?.querySelector<HTMLElement>(`[data-strip-index="${lightboxIndex}"]`)
       ?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [lightboxIndex]);
-
-  const handleCoverImageError = () => {
-    const primary = provider?.coverImage?.trim() || "";
-    const fallback = provider?.image?.trim() || "";
-
-    if (coverImgSrc === primary && fallback && fallback !== primary) {
-      setCoverImgSrc(fallback);
-      return;
-    }
-
-    setCoverImgSrc("");
-  };
 
   const handleShare = useCallback(async () => {
     const url = window.location.href;
@@ -342,16 +253,16 @@ const ProviderDetail = () => {
         coverRef={coverRef}
         bigAvatarRef={bigAvatarRef}
         avatar={
-          provider.image?.trim() && !avatarFailed ? (
-            // Same 336px URL as the big avatar below, so it's one download.
+          avatarSrc ? (
+            // Same 216px URL as the big avatar below, so it's one download.
             <img
-              src={sized(provider.image.trim(), AVATAR_SIZE)}
+              src={sized(avatarSrc, AVATAR_SIZE)}
               alt=""
               decoding="async"
               width={32}
               height={32}
               className="h-full w-full object-cover"
-              onError={withOriginalFallback(provider.image.trim())}
+              onError={withOriginalFallback(avatarSrc)}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
@@ -383,157 +294,136 @@ const ProviderDetail = () => {
       />
 
       <div className="relative">
-      {/* Cover */}
-      <div ref={coverRef} className="relative overflow-hidden bg-gradient-to-br from-accent/15 via-secondary to-secondary/40">
-        {coverImgSrc ? (
-          coverImgSrc === (provider.image?.trim() || "") ? (
-            // Avatar standing in for a missing cover: fixed height, blurred,
-            // so the same photo isn't shown twice (avatar renders sharply
-            // below) and it reads as an intentional backdrop.
+      {/* Cover — no scrim: a white or logo cover stays as the provider made
+          it. The pinned buttons carry their own backing. */}
+      <div ref={coverRef} className="relative overflow-hidden bg-secondary">
+        {coverSrc ? (
+          // Keep the image's natural aspect ratio (height only clamped to a
+          // sane range) so designed banners with text/logos are shown in full
+          // instead of being cropped by a fixed height. Width-only request
+          // keeps that aspect; the page jumps once when it loads (accepted —
+          // a fixed box cropped real covers).
+          <button
+            type="button"
+            className="block w-full"
+            onClick={() => setFullImageSrc(coverSrc)}
+          >
+            <img
+              // 1200: a 16:9 cover is clamped to 224px tall at 375px wide,
+              // and 1200×675 still covers 672px (224 × 3) after contain.
+              src={sized(coverSrc, { width: 1200 })}
+              alt={provider.name[lang]}
+              decoding="async"
+              className="max-h-96 min-h-56 w-full object-cover"
+              onError={withOriginalFallback(coverSrc, () => setCoverFailed(true))}
+            />
+          </button>
+        ) : (
+          // No cover: a short, quiet band in the brand tint. Nothing to show,
+          // so it stays low and the name and services sit higher.
+          <div aria-hidden className="h-36 w-full bg-accent/10" />
+        )}
+      </div>
+
+      {/* Identity — start-aligned. The avatar straddles the cover's bottom
+          edge on the start side, so a centred logo cover and the avatar (often
+          the same logo) no longer sit on top of each other. */}
+      <div className="relative px-5">
+        <div
+          ref={bigAvatarRef}
+          className="-mt-9 h-[72px] w-[72px] overflow-hidden rounded-full bg-secondary ring-4 ring-background"
+        >
+          {avatarSrc ? (
             <button
               type="button"
-              className="block w-full"
-              onClick={() => setFullImageSrc(coverImgSrc)}
+              className="block h-full w-full"
+              onClick={() => setFullImageSrc(avatarSrc)}
             >
-              {/* Blurred anyway, so a small copy is plenty. */}
               <img
-                src={sized(coverImgSrc, { width: 200 })}
+                src={sized(avatarSrc, AVATAR_SIZE)}
                 alt={provider.name[lang]}
                 decoding="async"
-                className="h-64 w-full scale-110 object-cover blur-xl"
-                onError={withOriginalFallback(coverImgSrc, handleCoverImageError)}
+                width={72}
+                height={72}
+                className="h-full w-full object-cover"
+                onError={withOriginalFallback(avatarSrc, () => setAvatarFailed(true))}
               />
             </button>
           ) : (
-            // Real cover: keep the image's natural aspect ratio (height only
-            // clamped to a sane range) so designed banners with text/logos
-            // are shown in full instead of being cropped by a fixed height.
-            // Width-only request keeps that aspect; the page jumps once when
-            // it loads (accepted — a fixed box cropped real covers).
-            <button
-              type="button"
-              className="block w-full"
-              onClick={() => setFullImageSrc(coverImgSrc)}
-            >
-              <img
-                // 1200: a 16:9 cover is clamped to 224px tall at 375px wide,
-                // and 1200×675 still covers 672px (224 × 3) after contain.
-                src={sized(coverImgSrc, { width: 1200 })}
-                alt={provider.name[lang]}
-                decoding="async"
-                className="max-h-96 min-h-56 w-full object-cover"
-                onError={withOriginalFallback(coverImgSrc, handleCoverImageError)}
-              />
-            </button>
-          )
-        ) : (
-          <div className="flex h-64 w-full items-center justify-center">
-            <span className="select-none text-[7rem] font-extralight leading-none tracking-tighter text-foreground/25 md:text-[9rem]">
-              {provider.name[lang]?.charAt(0)?.toUpperCase()}
-            </span>
-          </div>
-        )}
-        {/* Bottom of cover fades to transparent so the page atmosphere
-            shows through cleanly where the info card lands. */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/45 via-black/0 to-transparent" />
-      </div>
-
-      {/* Info */}
-      <motion.div
-        className="relative -mt-12 px-5"
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div className="glass-card relative rounded-3xl px-6 pb-6 pt-[4.25rem] text-center">
-          {/* Profile picture — straddles the cover/card seam. Outer div owns
-              the centering transform; the motion.div only animates scale so
-              framer's inline transform can't override the translate. */}
-          <div ref={bigAvatarRef} className="absolute -top-14 left-1/2 -translate-x-1/2">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.7 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-              className="h-28 w-28 overflow-hidden rounded-full bg-gradient-to-br from-accent/25 to-secondary shadow-[0_12px_32px_-8px_rgba(40,20,10,0.35)] ring-4 ring-white/90"
-            >
-              {provider.image?.trim() && !avatarFailed ? (
-                <button
-                  type="button"
-                  className="block h-full w-full"
-                  onClick={() => setFullImageSrc(provider.image.trim())}
-                >
-                  <img
-                    src={sized(provider.image.trim(), AVATAR_SIZE)}
-                    alt={provider.name[lang]}
-                    decoding="async"
-                    width={112}
-                    height={112}
-                    className="h-full w-full object-cover"
-                    onError={withOriginalFallback(provider.image.trim(), () => setAvatarFailed(true))}
-                  />
-                </button>
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <span className="select-none text-4xl font-light text-foreground/50">
-                    {provider.name[lang]?.charAt(0)?.toUpperCase()}
-                  </span>
-                </div>
-              )}
-            </motion.div>
-          </div>
-
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{provider.name[lang]}</h1>
-
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
-            {categoryNames[provider.category]?.[lang] && (
-              <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-                {categoryNames[provider.category][lang]}
-              </span>
-            )}
-            {reviewCount > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-secondary/70 px-3 py-1 text-xs text-muted-foreground">
-                <Star className="h-3.5 w-3.5 fill-accent text-accent" />
-                <span className="font-medium text-foreground">{avgRating.toFixed(1)}</span>
-                <span>({reviewCount})</span>
-              </span>
-            )}
-          </div>
-
-          {status.hasSchedule && !isAcademy && (
-            <div className="mt-3 flex justify-center">
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
-                  status.isOpen
-                    ? "border-green-500/30 bg-green-500/10 text-green-700"
-                    : "border-red-500/30 bg-red-500/10 text-red-700"
-                }`}
-              >
-                <span
-                  aria-hidden
-                  className={`block h-1.5 w-1.5 rounded-full ${status.isOpen ? "bg-green-500" : "bg-red-500"}`}
-                />
-                <span>{t(status.isOpen ? "providerStatusOpen" : "providerStatusClosed")}</span>
-                {status.todayHours && (
-                  <>
-                    <span aria-hidden className="opacity-40">·</span>
-                    <span dir="ltr">{status.todayHours.open} - {status.todayHours.close}</span>
-                  </>
-                )}
+            <div className="flex h-full w-full items-center justify-center bg-accent/10">
+              <span className="select-none text-2xl font-semibold text-foreground/70">
+                {provider.name[lang]?.charAt(0)?.toUpperCase()}
               </span>
             </div>
           )}
-
-          <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5 shrink-0 text-accent" />
-            {provider.address[lang]}
-          </p>
-          {/* Branch switcher — renders nothing for a single-branch owner.
-              Under the location line so a visitor on the wrong city sees it
-              before booking. */}
-          <OtherBranches provider={provider} />
-          <SocialLinksRow socialLinks={provider.socialLinks} />
         </div>
-      </motion.div>
+
+        <h1 className="mt-3 text-start text-2xl font-bold leading-tight tracking-normal">
+          {provider.name[lang]}
+        </h1>
+
+        {(categoryNames[provider.category]?.[lang] || reviewCount > 0) && (
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[13px] text-foreground/70">
+            {categoryNames[provider.category]?.[lang] && (
+              <span>{categoryNames[provider.category][lang]}</span>
+            )}
+            {reviewCount > 0 && (
+              // Compact rating; the -my-3 keeps a 44px tap area without adding
+              // height to the line. Jumps to the reviews section.
+              <button
+                type="button"
+                aria-label={`${avgRating.toFixed(1)} (${reviewCount}) · ${t("ratingJumpToReviews")}`}
+                onClick={() =>
+                  document.getElementById("provider-reviews")?.scrollIntoView({
+                    block: "start",
+                    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+                  })
+                }
+                className="-my-3 inline-flex min-h-11 items-center gap-1"
+              >
+                <Star aria-hidden className="h-3.5 w-3.5 fill-accent text-accent" />
+                <span dir="ltr" className="tabular-nums">
+                  <span className="font-semibold text-foreground">{avgRating.toFixed(1)}</span> ({reviewCount})
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {provider.address[lang] && (
+          <p className="mt-1 flex items-start gap-1.5 text-start text-[13px] text-foreground/70">
+            <MapPin aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{provider.address[lang]}</span>
+          </p>
+        )}
+
+        {/* Status: one line, neutral when closed (closed is a normal state),
+            green only when open, and always the next opening when known. */}
+        {showStatus && (
+          <p className="mt-2.5 flex items-start gap-2 text-start text-sm">
+            <span
+              aria-hidden
+              className={`mt-1.5 block h-2 w-2 shrink-0 rounded-full ${
+                opening.kind === "open" ? "bg-green-600" : "bg-foreground/30"
+              }`}
+            />
+            <span>
+              <span className={`font-semibold ${opening.kind === "open" ? "text-green-700" : "text-foreground"}`}>
+                {statusParts.head}
+              </span>
+              {statusParts.detail && (
+                <span className="text-foreground/70"> · {statusParts.detail}</span>
+              )}
+            </span>
+          </p>
+        )}
+
+        {/* Branch switcher — renders nothing for a single-branch owner.
+            Under the location and status so a visitor on the wrong city sees
+            it before booking. */}
+        <OtherBranches provider={provider} />
+        <ProviderActions socialLinks={provider.socialLinks} phone={provider.phone} className="mt-4" />
+      </div>
 
       {/* The signed-in customer's next appointment here — renders nothing
           otherwise. Above "about" so a returning customer sees it first; the
@@ -985,7 +875,7 @@ const ProviderDetail = () => {
 
       {/* Reviews */}
       {dbReviews && dbReviews.length > 0 && (
-        <section className="mt-8 px-5">
+        <section id="provider-reviews" className="mt-8 scroll-mt-20 px-5">
           <SectionLabel className="mb-3">{t("reviews")}</SectionLabel>
           <div className="flex flex-col gap-3">
             {dbReviews.map((review, i) => (

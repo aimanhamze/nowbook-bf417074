@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import type { Provider } from "@/lib/mock-data";
 
 /**
- * Branch switcher inside the provider info card, under the location line: a
+ * Branch switcher in the provider identity block, under the status line: a
  * recessed pill track listing ALL the owner's visible branches, the open one
  * selected (accent fill, not a link), the rest tappable. Labels are cities.
  * Automatic for owners with 2+ visible branches; renders nothing otherwise.
@@ -60,7 +60,7 @@ export function OtherBranches({ provider }: { provider: Provider }) {
   const pill = "flex h-9 max-w-[9.5rem] shrink-0 items-center rounded-full px-3.5 text-xs";
 
   return (
-    <nav aria-label={t("branchesLabel")} className="mt-4 flex justify-center">
+    <nav aria-label={t("branchesLabel")} className="mt-3 flex justify-start">
       <div
         ref={trackRef}
         onScroll={updateFade}

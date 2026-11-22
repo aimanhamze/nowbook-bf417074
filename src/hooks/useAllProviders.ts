@@ -89,6 +89,13 @@ export interface SlotCapacity {
   isFull: boolean;
 }
 
+/**
+ * Stock photo a provider without an avatar gets (cards, lists). The provider
+ * page treats it as "no avatar" and shows the initial letter instead.
+ */
+export const DEFAULT_AVATAR_URL =
+  "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=400&h=400&fit=crop";
+
 export function dbProviderToProvider(dbp: DbProvider, services: DbService[], reviewCount = 0): Provider {
   const name = { he: dbp.business_name, ar: dbp.business_name, en: dbp.business_name };
   const address = { he: dbp.address, ar: dbp.address, en: dbp.address };
@@ -106,7 +113,7 @@ export function dbProviderToProvider(dbp: DbProvider, services: DbService[], rev
     category: dbp.category || "barber",
     rating: dbp.average_rating ?? 0,
     reviewCount,
-    image: dbp.avatar_image ?? "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=400&h=400&fit=crop",
+    image: dbp.avatar_image ?? DEFAULT_AVATAR_URL,
     coverImage: dbp.cover_image ?? "",
     address,
     about,
