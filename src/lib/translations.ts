@@ -920,6 +920,7 @@ export const translations = {
     actionWebsite: "אתר",
     contactActionsLabel: "יצירת קשר",
     ratingJumpToReviews: "לביקורות",
+    showAllServices: "הצג את כל {n} השירותים",
 
     pickStaff: "בחירת איש צוות",
     staffMemberLabel: "איש צוות",
@@ -2444,6 +2445,7 @@ export const translations = {
     actionWebsite: "الموقع الإلكتروني",
     contactActionsLabel: "التواصل",
     ratingJumpToReviews: "إلى التقييمات",
+    showAllServices: "عرض جميع الخدمات ({n})",
 
     pickStaff: "اختيار عضو الطاقم",
     staffMemberLabel: "عضو الطاقم",
@@ -4007,6 +4009,7 @@ export const translations = {
     actionWebsite: "Website",
     contactActionsLabel: "Contact",
     ratingJumpToReviews: "Go to reviews",
+    showAllServices: "Show all {n} services",
 
     pickStaff: "Choose staff member",
     staffMemberLabel: "Staff member",

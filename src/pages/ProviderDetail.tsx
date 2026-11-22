@@ -10,7 +10,7 @@ import WriteReviewSection from "@/components/reviews/WriteReviewSection";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
 import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
-import { Heart, Star, MapPin, Clock, Share2, X, ChevronLeft, ChevronRight, Images, Sparkles, CalendarPlus, Ticket } from "lucide-react";
+import { Heart, Star, MapPin, Share2, X, ChevronLeft, ChevronRight, Images, CalendarPlus, Ticket } from "lucide-react";
 import { BackOrHomeIcon } from "@/components/ui/directional-icon";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { SectionLabel } from "@/components/ui/SectionLabel";
@@ -33,6 +33,7 @@ import { WaitlistRow } from "@/components/provider-detail/WaitlistRow";
 import { OtherBranches } from "@/components/provider-detail/OtherBranches";
 import { CollapsingHeader, HeaderIconButton } from "@/components/provider-detail/CollapsingHeader";
 import { ProviderActions } from "@/components/provider-detail/ProviderActions";
+import { ServiceList } from "@/components/provider-detail/ServiceList";
 import { useKeyboardOpen } from "@/hooks/useKeyboardOpen";
 
 
@@ -736,52 +737,11 @@ const ProviderDetail = () => {
         )
       )}
 
-      {/* Services */}
+      {/* Services — one price list (see ServiceList). */}
       {provider.services.length > 0 && !isAcademy && (
         <section className="mt-8 px-5">
           <SectionLabel className="mb-3">{t("services")}</SectionLabel>
-          <div className="flex flex-col gap-2">
-            {provider.services.map((service, i) => (
-              <motion.div
-                key={service.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.25 + i * 0.06, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                className="surface-soft flex items-center gap-3.5 rounded-2xl p-4 transition-colors hover:border-accent/30"
-              >
-                {/* Same fixed tile either way; an image only replaces the icon inside it. */}
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-accent/10 text-accent">
-                  {service.image_url ? (
-                    <img
-                      src={sized(service.image_url, { width: 240 })}
-                      alt={service.name[lang]}
-                      loading="lazy"
-                      decoding="async"
-                      width={40}
-                      height={40}
-                      className="h-full w-full object-cover"
-                      onError={withOriginalFallback(service.image_url)}
-                    />
-                  ) : (
-                    <Sparkles className="h-4 w-4" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 text-start">
-                  <p className="line-clamp-2 text-sm font-medium leading-snug">{service.name[lang]}</p>
-                  <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    {service.duration} {t("min")}
-                  </span>
-                </div>
-                {provider.showPrices && service.price > 0 && (
-                  <div className="flex shrink-0 items-baseline gap-0.5 text-end">
-                    <span className="text-sm text-muted-foreground">₪</span>
-                    <span className="text-lg font-semibold tracking-tight tabular-nums">{service.price}</span>
-                  </div>
-                )}
-              </motion.div>
-            ))}
-          </div>
+          <ServiceList services={provider.services} showPrices={provider.showPrices} lang={lang} t={t} />
         </section>
       )}
 
