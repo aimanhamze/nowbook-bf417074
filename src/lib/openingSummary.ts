@@ -117,6 +117,25 @@ export function openingStatusParts(
   };
 }
 
+/**
+ * Today's summary for the collapsed hours row. Same wording as the status
+ * line, except that once today's hours are over the head says when it closed
+ * ("Closed at 20:00"), so a time never stands next to "closed" unexplained.
+ */
+export function hoursRowParts(
+  summary: OpeningSummary,
+  lang: Lang,
+  t: Translate,
+): { head: string; detail: string | null } {
+  if (summary.kind === "closed" && summary.closedAt) {
+    return {
+      head: t("statusClosedAt").replace("{time}", summary.closedAt),
+      detail: summary.next ? nextOpeningText(summary.next, lang, t) : null,
+    };
+  }
+  return openingStatusParts(summary, lang, t);
+}
+
 /** The whole status line as one string. */
 export function openingStatusText(summary: OpeningSummary, lang: Lang, t: Translate): string {
   const { head, detail } = openingStatusParts(summary, lang, t);

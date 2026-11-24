@@ -3,6 +3,8 @@ import { he, ar, enUS } from "date-fns/locale";
 import type { ProviderStatus, AvailabilityRow } from "@/lib/providerStatus";
 import type { Lang } from "@/lib/translations";
 import { nextWorkingDate } from "@/lib/repeatWeeks";
+import { hoursRowParts, type OpeningSummary } from "@/lib/openingSummary";
+import { HoursDisclosure, HoursRow } from "./HoursDisclosure";
 
 const DOW_KEYS = [
   "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
@@ -24,6 +26,8 @@ interface Props {
   availability: AvailabilityRow[];
   blockedDates: string[];
   status: ProviderStatus;
+  /** Today's open/closed summary and next opening: the collapsed row's text. */
+  opening: OpeningSummary;
   /**
    * The provider runs per-staff booking, so these SHOP hours may be wider than
    * any individual member's. Required rather than optional: this table has one
@@ -34,7 +38,11 @@ interface Props {
   t: (key: string) => string;
 }
 
-export default function WeeklyHoursTable({ availability, status, staffEnabled, lang, t }: Props) {
+/**
+ * Weekly-mode hours: collapsed to today's summary, expanding in place to the
+ * seven days starting today.
+ */
+export default function WeeklyHoursTable({ availability, status, opening, staffEnabled, lang, t }: Props) {
   if (!status.hasSchedule) return null;
 
   const now = new Date();
@@ -53,109 +61,37 @@ export default function WeeklyHoursTable({ availability, status, staffEnabled, l
       : t("hoursNextDate").replace("{date}", format(next, "d MMMM", { locale: dateLocale }));
     return `${t("hoursEveryTwoWeeks")} · ${when}`;
   };
-  const todayRepeat = repeatLine(todayDow);
 
   // today first, then the remaining 6 days in order starting from tomorrow
   const orderedDows = Array.from({ length: 7 }, (_, i) => (todayDow + i) % 7);
-
-  const closedPill = (
-    <span className="rounded-full bg-muted/60 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-      {t("providerStatusClosed")}
-    </span>
-  );
+  const { head, detail } = hoursRowParts(opening, lang, t);
 
   return (
-    <div className="glass-card rounded-2xl p-2">
-      {/* Today row — elevated card with a live status dot and the day's
-          hours as a badge, so "can I go now?" is answered at a glance. */}
-      <div
-        className={`flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 ring-1 ring-inset ${
-          status.isOpen
-            ? "bg-green-500/10 ring-green-500/20"
-            : "bg-muted/40 ring-black/5"
-        }`}
-      >
-        <div className="flex items-center gap-2.5">
-          <span aria-hidden className="relative flex h-2 w-2 shrink-0">
-            {status.isOpen && (
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-60 motion-reduce:hidden" />
-            )}
-            <span
-              className={`relative inline-flex h-2 w-2 rounded-full ${
-                status.isOpen ? "bg-green-500" : "bg-muted-foreground/40"
-              }`}
-            />
-          </span>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-foreground">
-              {t("today")} · {t(DOW_KEYS[todayDow])}
-            </span>
-            <span
-              className={`text-[11px] font-medium ${
-                status.isOpen ? "text-green-700" : "text-muted-foreground"
-              }`}
-            >
-              {t(status.isOpen ? "providerStatusOpen" : "providerStatusClosed")}
-            </span>
-            {todayRepeat && (
-              <span className="text-[11px] text-muted-foreground">{todayRepeat}</span>
-            )}
-          </div>
-        </div>
-        {status.todayHours ? (
-          <span
-            dir="ltr"
-            className={`rounded-full bg-white/70 px-3 py-1 text-sm font-semibold tabular-nums ${
-              status.isOpen ? "text-green-700" : "text-muted-foreground"
-            }`}
-          >
-            {status.todayHours.open} - {status.todayHours.close}
-          </span>
-        ) : (
-          closedPill
-        )}
-      </div>
-
-      {/* Remaining 6 days — hairline-separated rows, tabular digits so the
-          times align into a clean column, closed days as muted pills. */}
-      <div className="flex flex-col divide-y divide-border/40 px-2 pt-1">
-        {orderedDows.slice(1).map(dow => {
-          const hours = getRowHours(availability, dow);
-          const repeat = repeatLine(dow);
-          return (
-            <div key={dow} className="flex items-center justify-between gap-3 px-1.5 py-2.5">
-              <span className="flex min-w-0 flex-col">
-                <span
-                  className={`text-sm ${hours ? "font-medium text-foreground/80" : "text-muted-foreground"}`}
-                >
-                  {t(DOW_KEYS[dow])}
-                </span>
-                {repeat && (
-                  <span className="text-[11px] text-muted-foreground">{repeat}</span>
-                )}
-              </span>
-              {hours ? (
-                <span dir="ltr" className="shrink-0 text-sm tabular-nums text-foreground">
-                  {hours.open} - {hours.close}
-                </span>
-              ) : (
-                closedPill
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Per-staff availability: these are the SHOP's hours, and a member's own
-          hours sit inside them. Without this the customer reads 09:00–20:00
-          here, picks a member, and finds 10:00–14:00 — the support ticket this
-          one line exists to prevent. Rendered ONLY for staff-enabled providers,
-          so everyone else sees this table exactly as before. */}
-      {staffEnabled && (
-        <p className="border-t border-border/40 px-3.5 pb-2 pt-2.5 text-[11px] leading-relaxed text-muted-foreground">
-          {t("hoursShopWideNote")}
-        </p>
-      )}
-    </div>
+    <HoursDisclosure
+      title={`${t("today")} · ${t(DOW_KEYS[todayDow])}`}
+      head={head}
+      detail={detail}
+      isOpen={opening.kind === "open"}
+      // Per-staff availability: these are the SHOP's hours, and a member's own
+      // hours sit inside them. Without this the customer reads 09:00–20:00
+      // here, picks a member, and finds 10:00–14:00 — the support ticket this
+      // one line exists to prevent. ONLY for staff-enabled providers.
+      note={staffEnabled ? t("hoursShopWideNote") : null}
+    >
+      <ul className="divide-y divide-border">
+        {orderedDows.map((dow, i) => (
+          <HoursRow
+            key={dow}
+            label={t(DOW_KEYS[dow])}
+            sub={repeatLine(dow)}
+            // Today's hours come from the shared status (it knows blocked dates,
+            // date-openings and off weeks); the other days from the weekly rule.
+            hours={i === 0 ? status.todayHours : getRowHours(availability, dow)}
+            isToday={i === 0}
+            closedLabel={t("providerStatusClosed")}
+          />
+        ))}
+      </ul>
+    </HoursDisclosure>
   );
 }

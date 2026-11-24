@@ -707,7 +707,7 @@ const ProviderDetail = () => {
 
       {/* Working Hours — MONTHLY providers get a date-based list (resolved per
           date via the shared resolver); WEEKLY providers keep the weekday list
-          UNCHANGED. Monthly gates on mode (a monthly provider may have no weekly
+          Both collapse to a today row (HoursDisclosure). Monthly gates on mode (a monthly provider may have no weekly
           rows, so status.hasSchedule can't gate it). */}
       {isAcademy ? null : isMonthly ? (
         <section className="mt-8 px-5">
@@ -730,6 +730,7 @@ const ProviderDetail = () => {
               availability={availability}
               blockedDates={blockedDates}
               status={status}
+              opening={opening}
               staffEnabled={provider.staffEnabled}
               lang={lang}
               t={t}
