@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { BookOpen } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { sectionTransition } from "@/components/dashboard/sectionTransition";
-import { SectionLabel } from "@/components/ui/SectionLabel";
+import { SectionHeading } from "@/components/provider-detail/PageParts";
 import { CourseCard } from "./CourseCard";
 import { useCourseCatalogue } from "./useCourseCatalogue";
 import { coursePageUrl } from "./useCourseRegisterAction";
@@ -32,9 +32,9 @@ export function ProviderCourses({ providerId }: { providerId: string }) {
   return (
     <section className="mt-8 px-5">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <SectionLabel>{t("academyOurCourses")}</SectionLabel>
+        <SectionHeading>{t("academyOurCourses")}</SectionHeading>
         {courses.length > 0 && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[13px] text-foreground/70">
             {courses.length === 1
               ? t("academyCoursesCount_one")
               : t("academyCoursesCount_other").replace("{n}", String(courses.length))}

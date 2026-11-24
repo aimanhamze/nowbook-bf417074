@@ -25,15 +25,15 @@ export function WaitlistRow({ provider }: { provider: Provider }) {
 
   return (
     <section className="mt-3 px-5" aria-label={t("waitlistRowLabel")}>
-      <div className="glass-card-md flex items-center gap-3 rounded-2xl p-2.5 pe-1.5">
+      <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-2.5 pe-1.5">
         <WaitlistDateChip entryDate={next.entry_date} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-snug">{t("waitlistRowLabel")}</p>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="truncate text-[13px] text-foreground/70">
             {waitlistDateLabel(next.entry_date, lang)} · {waitlistWindowsLabel(entryWindows(next), t)}
           </p>
           {moreCount > 0 && (
-            <Link to="/bookings" className="-my-3 inline-flex min-h-11 items-center text-xs font-semibold text-accent">
+            <Link to="/bookings" className="-my-3 inline-flex min-h-11 items-center text-[13px] font-medium text-foreground underline underline-offset-4">
               {/* Isolate "+N" so an RTL line does not render it "N+". */}
               {t(moreCount === 1 ? "waitlistMoreOne" : "waitlistMore").replace("+{count}", `⁦+${moreCount}⁩`)}
             </Link>

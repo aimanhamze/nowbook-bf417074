@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle, PenLine } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,6 +12,13 @@ interface Props {
   providerId: string;
 }
 
+/**
+ * The "write a review" part of the provider page's reviews section (the page
+ * supplies the section, its heading and its side padding).
+ *  - signed out: one line with a sign-in link
+ *  - signed in, no completed booking to review: nothing
+ *  - eligible: a button that opens the form in place
+ */
 export default function WriteReviewSection({ providerId }: Props) {
   const { user } = useAuth();
   const { t } = useLang();
@@ -26,11 +32,12 @@ export default function WriteReviewSection({ providerId }: Props) {
   // ── State 1: not logged in ─────────────────────────────────────────────────
   if (!user) {
     return (
-      <p className="mt-6 px-5 text-xs text-muted-foreground">
+      <p className="text-start text-sm text-foreground/70">
         {t("reviewsLogInToReview")}{" "}
         <button
+          type="button"
           onClick={() => { saveRedirectAfterLogin(); navigate("/auth"); }}
-          className="font-medium text-accent underline-offset-2 hover:underline"
+          className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4"
         >
           {t("signIn")}
         </button>
@@ -52,56 +59,31 @@ export default function WriteReviewSection({ providerId }: Props) {
     queryClient.invalidateQueries({ queryKey: ["reviews", providerId] });
   };
 
+  if (submitted) {
+    return (
+      <p className="mt-3 flex min-h-11 items-center gap-2.5 text-start text-sm font-medium text-foreground">
+        <CheckCircle aria-hidden className="h-4 w-4 shrink-0 text-green-600" />
+        {t("reviewsThankYou")}
+      </p>
+    );
+  }
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <PenLine aria-hidden className="h-4 w-4 shrink-0" />
+        {t("reviewsWriteAReview")}
+      </button>
+    );
+  }
+
   return (
-    <section className="mt-8 px-5">
-      <div className="rounded-2xl border border-border/50 bg-card p-4 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)]">
-        <AnimatePresence mode="wait">
-          {submitted ? (
-            // Thank-you state
-            <motion.div
-              key="thankyou"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="flex items-center gap-2.5 py-1"
-            >
-              <CheckCircle className="h-4 w-4 shrink-0 text-green-600" />
-              <span className="text-sm font-medium text-foreground">
-                {t("reviewsThankYou")}
-              </span>
-            </motion.div>
-          ) : !expanded ? (
-            // Collapsed trigger
-            <motion.button
-              key="trigger"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setExpanded(true)}
-              className="flex w-full items-center gap-2 py-1 text-start text-sm font-medium text-accent active:opacity-70 transition-opacity"
-            >
-              <PenLine className="h-4 w-4 shrink-0" />
-              {t("reviewsWriteAReview")}
-            </motion.button>
-          ) : (
-            // Expanded form
-            <motion.div
-              key="form"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <ReviewForm
-                bookingId={eligibleBookingId!}
-                providerId={providerId}
-                onSubmitted={handleSubmitted}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </section>
+    <div className="mt-3">
+      <ReviewForm bookingId={eligibleBookingId!} providerId={providerId} onSubmitted={handleSubmitted} />
+    </div>
   );
 }

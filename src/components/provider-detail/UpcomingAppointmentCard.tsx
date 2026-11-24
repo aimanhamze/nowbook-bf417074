@@ -59,7 +59,7 @@ export function UpcomingAppointmentCard({ provider }: { provider: Provider }) {
           // adding height to the header line.
           <Link
             to="/bookings"
-            className="-my-3 inline-flex min-h-11 items-center px-1 text-xs font-semibold text-accent"
+            className="-my-3 inline-flex min-h-11 items-center px-1 text-[13px] font-medium text-foreground underline underline-offset-4"
           >
             {/* Isolate "+N" left-to-right: in an RTL line the leading "+"
                 otherwise flips to the far side and reads "2+". */}
@@ -156,13 +156,13 @@ function AppointmentRow({ booking, provider }: { booking: UpcomingBooking; provi
         <button
           type="button"
           aria-label={`${t("appointmentDetails")}: ${serviceNames}, ${longDate}, ${booking.booking_time}`}
-          className="glass-card-md flex min-h-[68px] w-full items-center gap-3 rounded-2xl p-2.5 pe-3 text-start transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-border bg-card p-2.5 pe-3 text-start transition-colors active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <DateChip booking={booking} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold leading-snug">{serviceNames}</span>
-            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              <span dir="ltr" className="shrink-0 font-medium tabular-nums text-foreground/80">{booking.booking_time}</span>
+            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-foreground/70">
+              <span dir="ltr" className="shrink-0 font-medium tabular-nums text-foreground">{booking.booking_time}</span>
               {staffName && (
                 <>
                   <span aria-hidden className="shrink-0">·</span>
@@ -172,7 +172,7 @@ function AppointmentRow({ booking, provider }: { booking: UpcomingBooking; provi
             </span>
           </span>
           <StatusPill status={booking.status} />
-          <ForwardArrow className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+          <ForwardArrow className="h-4 w-4 shrink-0 text-foreground/50" />
         </button>
       </SheetTrigger>
 
