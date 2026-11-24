@@ -420,15 +420,9 @@ const ProviderDetail = () => {
           active entry here. */}
       <WaitlistRow provider={provider} />
 
-      {/* About — plain text on the page, three lines and "read more". */}
-      {provider.about[lang] && (
-        <section className="mt-8 px-5">
-          <SectionHeading className="mb-2">{t("about")}</SectionHeading>
-          <AboutText text={provider.about[lang]} moreLabel={t("readMore")} lessLabel={t("showLess")} />
-        </section>
-      )}
-
-      {isAcademy && <ProviderCourses providerId={provider.id} />}
+      {/* Section order: gallery → services (fitness: + packages; academy:
+          courses) → hours → about → reviews. What they do and what it costs
+          comes before when and who. */}
 
       {/* Photo Gallery — static collage (Google-Business style): a featured
           tile plus a grid of smaller ones, layout adapting to photo count.
@@ -517,6 +511,183 @@ const ProviderDetail = () => {
           </section>
         );
       })()}
+
+      {/* Services — one price list (see ServiceList). */}
+      {provider.services.length > 0 && !isAcademy && (
+        <section className="mt-8 px-5">
+          <SectionHeading className="mb-3">{t("services")}</SectionHeading>
+          <ServiceList
+            services={provider.services}
+            showPrices={provider.showPrices}
+            lang={lang}
+            t={t}
+            // A row starts booking with its service chosen — wherever the Book
+            // button is offered, except a fitness studio (it books classes).
+            onSelect={
+              canBook && !showsPackages
+                ? (service) => navigate(bookPath(provider.id, service.id))
+                : undefined
+            }
+          />
+        </section>
+      )}
+
+      {/* Packages — fitness studios only. Purchase is a REQUEST: payment happens
+          outside the app, and the provider activates once they have it. */}
+      {showsPackages && !usablePackage && packageOffers.length > 0 && (
+        <section className="mt-8 px-5">
+          {/* What this customer already has here, before what is on sale —
+              "how many classes do I have left" is the more common question. */}
+          {livePackages.length > 0 && (
+            <div className="mb-4 flex flex-col gap-2">
+              <h3 className="text-start text-[15px] font-semibold tracking-normal text-foreground">{t("myPackages")}</h3>
+              {livePackages.map((pkg, i) => (
+                <MyPackageCard
+                  key={pkg.id}
+                  pkg={pkg}
+                  templateName={packageOffers.find((o) => o.id === pkg.template_id)?.name ?? null}
+                  showProvider={false}
+                  index={i}
+                />
+              ))}
+            </div>
+          )}
+
+          {hasSpentPackage && (
+            <p className="mb-3 rounded-2xl bg-rose-50 px-4 py-2.5 text-center text-[13px] font-medium text-rose-700">
+              {t("packageExhaustedMessage")}
+            </p>
+          )}
+          <SectionHeading className="mb-3">{t("availablePackages")}</SectionHeading>
+          {/* One bordered list with hairlines, like the services list. */}
+          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+            {packageOffers.map((pkg) => (
+              <li key={pkg.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="min-w-0 flex-1 text-start">
+                  <span className="line-clamp-2 text-[15px] font-medium leading-snug text-foreground">
+                    <bdi>{pkg.name}</bdi>
+                  </span>
+                  {pkg.description && (
+                    <span className="mt-0.5 line-clamp-1 block text-[13px] text-foreground/70">{pkg.description}</span>
+                  )}
+                  <span className="mt-0.5 block text-[13px] text-foreground/70">
+                    {pkg.total_entries} {t("entriesShort")} · {pkg.validity_days} {t("daysUnit")}
+                  </span>
+                </span>
+                <span className="flex shrink-0 flex-col items-end gap-1.5">
+                  {/* Left-to-right island: the ₪ sign leads the number in every language. */}
+                  <span dir="ltr" className="text-base font-semibold tabular-nums text-foreground">
+                    ₪{pkg.price}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!user) {
+                        saveRedirectAfterLogin(`/provider/${id}`);
+                        navigate("/auth");
+                        return;
+                      }
+                      requestPackage.mutate(pkg.id, {
+                        onSuccess: () => toast.success(t("purchasePendingNote")),
+                        onError: (err) => {
+                          if (err instanceof SessionHandledError) return;
+                          const key = packageErrorKey(err instanceof Error ? err.message : String(err));
+                          toast.error(t(key ? (key as never) : "packageRequestFailed"));
+                        },
+                      });
+                    }}
+                    disabled={requestPackage.isPending || hasLivePackage}
+                    className="inline-flex min-h-11 items-center rounded-xl bg-accent px-3.5 text-[13px] font-semibold text-accent-foreground transition-opacity active:scale-95 disabled:opacity-50"
+                  >
+                    {t("purchasePackage")}
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {hasLivePackage && (
+            <p className="mt-2 text-center text-[13px] text-foreground/70">
+              {t("packageAlreadyPending")}
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* Academy: courses take the services slot. */}
+      {isAcademy && <ProviderCourses providerId={provider.id} />}
+
+      {/* Working Hours — MONTHLY providers get a date-based list (resolved per
+          date via the shared resolver), WEEKLY providers the weekday list.
+          Both collapse to a today row (HoursDisclosure). Monthly gates on mode
+          (a monthly provider may have no weekly rows, so status.hasSchedule
+          can't gate it). */}
+      {isAcademy ? null : isMonthly ? (
+        <section className="mt-8 px-5">
+          <SectionHeading className="mb-3">{t("workingHoursLabel")}</SectionHeading>
+          <MonthlyHoursTable
+            monthlySettings={monthlySettings}
+            blockedDates={blockedDates}
+            overrides={overrides}
+            bookingWindowDays={provider.bookingWindowDays}
+            staffEnabled={provider.staffEnabled}
+            lang={lang}
+            t={t}
+          />
+        </section>
+      ) : (
+        status.hasSchedule && (
+          <section className="mt-8 px-5">
+            <SectionHeading className="mb-3">{t("workingHoursLabel")}</SectionHeading>
+            <WeeklyHoursTable
+              availability={availability}
+              blockedDates={blockedDates}
+              status={status}
+              opening={opening}
+              staffEnabled={provider.staffEnabled}
+              lang={lang}
+              t={t}
+            />
+          </section>
+        )
+      )}
+
+      {/* About — plain text on the page, three lines and "read more". */}
+      {provider.about[lang] && (
+        <section className="mt-8 px-5">
+          <SectionHeading className="mb-2">{t("about")}</SectionHeading>
+          <AboutText text={provider.about[lang]} moreLabel={t("readMore")} lessLabel={t("showLess")} />
+        </section>
+      )}
+
+      {/* Reviews — always present: a one-line rating summary and hairline
+          rows when there are reviews, otherwise one quiet line. Writing one
+          (or the sign-in line for a visitor) sits at the end of the section. */}
+      <section id="provider-reviews" className="mt-8 scroll-mt-20 px-5">
+        <SectionHeading className="mb-2">{t("reviews")}</SectionHeading>
+        {dbReviews && reviewCount > 0 && (
+          <>
+            <p className="flex items-center gap-1.5 text-start text-sm text-foreground/70">
+              <Star aria-hidden className="h-4 w-4 shrink-0 fill-accent text-accent" />
+              <span dir="ltr" className="font-semibold tabular-nums text-foreground">{avgRating.toFixed(1)}</span>
+              <span aria-hidden>·</span>
+              <span>
+                {reviewCount === 1
+                  ? t("reviewsCountOne")
+                  : t("reviewsCount").replace("{count}", String(reviewCount))}
+              </span>
+            </p>
+            <ul className="mt-3 divide-y divide-border border-y border-border">
+              {dbReviews.map((review) => (
+                <ReviewRow key={review.id} review={review} anonymousLabel={t("guest")} />
+              ))}
+            </ul>
+          </>
+        )}
+        {dbReviews && reviewCount === 0 && (
+          <p className="text-start text-sm text-foreground/70">{t("noReviewsYet")}</p>
+        )}
+        <WriteReviewSection providerId={provider.id} />
+      </section>
 
       {/* Hero image viewer — full-screen look at the cover / profile picture.
           Tap anywhere (or X) to close. Unmounts synchronously on close (no
@@ -668,171 +839,6 @@ const ProviderDetail = () => {
             </div>
           </motion.div>
       )}
-
-      {/* Working Hours — MONTHLY providers get a date-based list (resolved per
-          date via the shared resolver); WEEKLY providers keep the weekday list
-          Both collapse to a today row (HoursDisclosure). Monthly gates on mode (a monthly provider may have no weekly
-          rows, so status.hasSchedule can't gate it). */}
-      {isAcademy ? null : isMonthly ? (
-        <section className="mt-8 px-5">
-          <SectionHeading className="mb-3">{t("workingHoursLabel")}</SectionHeading>
-          <MonthlyHoursTable
-            monthlySettings={monthlySettings}
-            blockedDates={blockedDates}
-            overrides={overrides}
-            bookingWindowDays={provider.bookingWindowDays}
-            staffEnabled={provider.staffEnabled}
-            lang={lang}
-            t={t}
-          />
-        </section>
-      ) : (
-        status.hasSchedule && (
-          <section className="mt-8 px-5">
-            <SectionHeading className="mb-3">{t("workingHoursLabel")}</SectionHeading>
-            <WeeklyHoursTable
-              availability={availability}
-              blockedDates={blockedDates}
-              status={status}
-              opening={opening}
-              staffEnabled={provider.staffEnabled}
-              lang={lang}
-              t={t}
-            />
-          </section>
-        )
-      )}
-
-      {/* Services — one price list (see ServiceList). */}
-      {provider.services.length > 0 && !isAcademy && (
-        <section className="mt-8 px-5">
-          <SectionHeading className="mb-3">{t("services")}</SectionHeading>
-          <ServiceList
-            services={provider.services}
-            showPrices={provider.showPrices}
-            lang={lang}
-            t={t}
-            // A row starts booking with its service chosen — wherever the Book
-            // button is offered, except a fitness studio (it books classes).
-            onSelect={
-              canBook && !showsPackages
-                ? (service) => navigate(bookPath(provider.id, service.id))
-                : undefined
-            }
-          />
-        </section>
-      )}
-
-      {/* Packages — fitness studios only. Purchase is a REQUEST: payment happens
-          outside the app, and the provider activates once they have it. */}
-      {showsPackages && !usablePackage && packageOffers.length > 0 && (
-        <section className="mt-8 px-5">
-          {/* What this customer already has here, before what is on sale —
-              "how many classes do I have left" is the more common question. */}
-          {livePackages.length > 0 && (
-            <div className="mb-4 flex flex-col gap-2">
-              <h3 className="text-start text-[15px] font-semibold tracking-normal text-foreground">{t("myPackages")}</h3>
-              {livePackages.map((pkg, i) => (
-                <MyPackageCard
-                  key={pkg.id}
-                  pkg={pkg}
-                  templateName={packageOffers.find((o) => o.id === pkg.template_id)?.name ?? null}
-                  showProvider={false}
-                  index={i}
-                />
-              ))}
-            </div>
-          )}
-
-          {hasSpentPackage && (
-            <p className="mb-3 rounded-2xl bg-rose-50 px-4 py-2.5 text-center text-[13px] font-medium text-rose-700">
-              {t("packageExhaustedMessage")}
-            </p>
-          )}
-          <SectionHeading className="mb-3">{t("availablePackages")}</SectionHeading>
-          {/* One bordered list with hairlines, like the services list. */}
-          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-            {packageOffers.map((pkg) => (
-              <li key={pkg.id} className="flex items-center gap-3 px-4 py-3">
-                <span className="min-w-0 flex-1 text-start">
-                  <span className="line-clamp-2 text-[15px] font-medium leading-snug text-foreground">
-                    <bdi>{pkg.name}</bdi>
-                  </span>
-                  {pkg.description && (
-                    <span className="mt-0.5 line-clamp-1 block text-[13px] text-foreground/70">{pkg.description}</span>
-                  )}
-                  <span className="mt-0.5 block text-[13px] text-foreground/70">
-                    {pkg.total_entries} {t("entriesShort")} · {pkg.validity_days} {t("daysUnit")}
-                  </span>
-                </span>
-                <span className="flex shrink-0 flex-col items-end gap-1.5">
-                  {/* Left-to-right island: the ₪ sign leads the number in every language. */}
-                  <span dir="ltr" className="text-base font-semibold tabular-nums text-foreground">
-                    ₪{pkg.price}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!user) {
-                        saveRedirectAfterLogin(`/provider/${id}`);
-                        navigate("/auth");
-                        return;
-                      }
-                      requestPackage.mutate(pkg.id, {
-                        onSuccess: () => toast.success(t("purchasePendingNote")),
-                        onError: (err) => {
-                          if (err instanceof SessionHandledError) return;
-                          const key = packageErrorKey(err instanceof Error ? err.message : String(err));
-                          toast.error(t(key ? (key as never) : "packageRequestFailed"));
-                        },
-                      });
-                    }}
-                    disabled={requestPackage.isPending || hasLivePackage}
-                    className="inline-flex min-h-11 items-center rounded-xl bg-accent px-3.5 text-[13px] font-semibold text-accent-foreground transition-opacity active:scale-95 disabled:opacity-50"
-                  >
-                    {t("purchasePackage")}
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-          {hasLivePackage && (
-            <p className="mt-2 text-center text-[13px] text-foreground/70">
-              {t("packageAlreadyPending")}
-            </p>
-          )}
-        </section>
-      )}
-
-      {/* Reviews — always present: a one-line rating summary and hairline
-          rows when there are reviews, otherwise one quiet line. Writing one
-          (or the sign-in line for a visitor) sits at the end of the section. */}
-      <section id="provider-reviews" className="mt-8 scroll-mt-20 px-5">
-        <SectionHeading className="mb-2">{t("reviews")}</SectionHeading>
-        {dbReviews && reviewCount > 0 && (
-          <>
-            <p className="flex items-center gap-1.5 text-start text-sm text-foreground/70">
-              <Star aria-hidden className="h-4 w-4 shrink-0 fill-accent text-accent" />
-              <span dir="ltr" className="font-semibold tabular-nums text-foreground">{avgRating.toFixed(1)}</span>
-              <span aria-hidden>·</span>
-              <span>
-                {reviewCount === 1
-                  ? t("reviewsCountOne")
-                  : t("reviewsCount").replace("{count}", String(reviewCount))}
-              </span>
-            </p>
-            <ul className="mt-3 divide-y divide-border border-y border-border">
-              {dbReviews.map((review) => (
-                <ReviewRow key={review.id} review={review} anonymousLabel={t("guest")} />
-              ))}
-            </ul>
-          </>
-        )}
-        {dbReviews && reviewCount === 0 && (
-          <p className="text-start text-sm text-foreground/70">{t("noReviewsYet")}</p>
-        )}
-        <WriteReviewSection providerId={provider.id} />
-      </section>
 
       {/* Sticky Book Button — hidden for a studio customer with no spendable
           package. The booking flow would only show them locked cards, and the
