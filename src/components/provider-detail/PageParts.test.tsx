@@ -16,11 +16,16 @@ const review = (patch: Partial<Review> = {}): Review => ({
 });
 
 describe("provider page parts", () => {
-  it("SectionHeading is a plain h2: no uppercase, no letter-spacing, no muted grey", () => {
+  // The heading went back to the shared SectionLabel look (orange bar); what
+  // this page still guarantees is the size, the contrast and no RTL tracking.
+  it("SectionHeading: the shared label with the bar, at 13px, readable grey, no RTL letter-spacing", () => {
     render(<SectionHeading>שירותים</SectionHeading>);
     const h = screen.getByRole("heading", { level: 2, name: "שירותים" });
-    expect(h.className).toContain("tracking-normal");
-    expect(h.className).not.toMatch(/uppercase|muted-foreground|tracking-\[/);
+    expect(h.querySelector("span.bg-accent")).toBeTruthy();
+    expect(h.className).toContain("text-[13px]");
+    expect(h.className).toContain("text-foreground/70");
+    expect(h.className).toContain("rtl:tracking-normal");
+    expect(h.className).not.toMatch(/text-xs|muted-foreground/);
   });
 
   it("ReviewRow: name, date, a labelled rating and the comment in its own direction", () => {

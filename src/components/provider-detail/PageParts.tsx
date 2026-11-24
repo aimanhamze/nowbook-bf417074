@@ -2,22 +2,27 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { format } from "date-fns";
 import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { Review } from "@/hooks/useReviews";
 
 // Small pieces that belong to the customer provider page only. The shared
 // SectionLabel and ReviewCard stay as they are for the rest of the app.
 
-/** The page's section heading: 18px/600, plain, no accent bar. */
+/**
+ * The page's section heading: the shared SectionLabel (orange bar), read at
+ * this page's sizes — 13px, text-foreground/70, and no letter-spacing in
+ * Hebrew and Arabic (it breaks Arabic joins and loosens Hebrew).
+ */
 export function SectionHeading({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <h2 className={cn("text-start text-lg font-semibold leading-snug tracking-normal text-foreground", className)}>
+    <SectionLabel className={cn("text-[13px] text-foreground/70 rtl:tracking-normal", className)}>
       {children}
-    </h2>
+    </SectionLabel>
   );
 }
 
 /**
- * The provider's description: plain text on the page, three lines, and a
+ * The provider's description (the page wraps it in a soft card): three lines, and a
  * "read more" link only when the text is actually cut. dir="auto" lets an
  * English description on a Hebrew page read (and align) its own way.
  */
@@ -41,7 +46,7 @@ export function AboutText({ text, moreLabel, lessLabel }: { text: string; moreLa
       <p
         ref={ref}
         dir="auto"
-        className={`whitespace-pre-line text-start text-[15px] leading-normal text-foreground ${
+        className={`whitespace-pre-line text-start text-[15px] leading-relaxed text-foreground/85 ${
           expanded ? "" : "line-clamp-3"
         }`}
       >
@@ -52,7 +57,7 @@ export function AboutText({ text, moreLabel, lessLabel }: { text: string; moreLa
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
-          className="-mb-2 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-4"
+          className="-mb-3 inline-flex min-h-11 items-center text-[13px] font-semibold text-accent"
         >
           {expanded ? lessLabel : moreLabel}
         </button>
@@ -61,10 +66,10 @@ export function AboutText({ text, moreLabel, lessLabel }: { text: string; moreLa
   );
 }
 
-/** One review as a plain row; the list supplies the hairlines. */
+/** One review as a row of the reviews card; the list supplies the hairlines. */
 export function ReviewRow({ review, anonymousLabel }: { review: Review; anonymousLabel: string }) {
   return (
-    <li className="py-3.5">
+    <li className="px-4 py-3.5">
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 truncate text-[15px] font-semibold text-foreground">
           <bdi>{review.display_name || anonymousLabel}</bdi>

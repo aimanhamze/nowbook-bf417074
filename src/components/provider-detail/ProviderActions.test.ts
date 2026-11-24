@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { actionColumns, providerActions } from "./ProviderActions";
+import { providerActions } from "./ProviderActions";
 
 describe("providerActions", () => {
   it("nothing filled in: no actions", () => {
@@ -19,7 +19,9 @@ describe("providerActions", () => {
     ]);
   });
 
-  it("order: message, call, navigate, then the social profiles", () => {
+  // Order changed back to the original icon row (Waze after the social
+  // profiles), with Call next to WhatsApp.
+  it("order: the original icon row, with call next to WhatsApp", () => {
     const all = providerActions(
       {
         website: "https://x.example",
@@ -32,13 +34,7 @@ describe("providerActions", () => {
       "0501234567",
     );
     expect(all.map((a) => a.key)).toEqual([
-      "whatsapp", "call", "navigate", "instagram", "tiktok", "facebook", "website",
+      "whatsapp", "call", "instagram", "tiktok", "facebook", "navigate", "website",
     ]);
-  });
-});
-
-describe("actionColumns", () => {
-  it("one row up to three, 2×2 for four, rows of three after", () => {
-    expect([1, 2, 3, 4, 5, 6, 7].map(actionColumns)).toEqual([1, 2, 3, 2, 3, 3, 3]);
   });
 });

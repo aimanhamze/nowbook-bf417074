@@ -24,13 +24,13 @@ export function HoursDisclosure({ title, head, detail, isOpen, children, note }:
   const listId = useId();
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+    <div className="glass-card overflow-hidden rounded-2xl">
       <button
         type="button"
         aria-expanded={expanded}
         aria-controls={listId}
         onClick={() => setExpanded((v) => !v)}
-        className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start transition-colors active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+        className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start transition-colors active:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
         <span
           aria-hidden
@@ -46,12 +46,12 @@ export function HoursDisclosure({ title, head, detail, isOpen, children, note }:
         <ChevronDown aria-hidden className={`h-4 w-4 shrink-0 text-foreground/50 ${expanded ? "rotate-180" : ""}`} />
       </button>
 
-      <div id={listId} hidden={!expanded} className="border-t border-border">
+      <div id={listId} hidden={!expanded} className="border-t border-border/40">
         {children}
       </div>
 
       {note && (
-        <p className="border-t border-border px-4 py-3 text-[13px] leading-relaxed text-foreground/70">{note}</p>
+        <p className="border-t border-border/40 px-4 py-3 text-[13px] leading-relaxed text-foreground/70">{note}</p>
       )}
     </div>
   );

@@ -32,12 +32,12 @@ export default function WriteReviewSection({ providerId }: Props) {
   // ── State 1: not logged in ─────────────────────────────────────────────────
   if (!user) {
     return (
-      <p className="text-start text-sm text-foreground/70">
+      <p className="mt-1 px-1 text-start text-[13px] text-foreground/70">
         {t("reviewsLogInToReview")}{" "}
         <button
           type="button"
           onClick={() => { saveRedirectAfterLogin(); navigate("/auth"); }}
-          className="inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-4"
+          className="inline-flex min-h-11 items-center font-semibold text-accent"
         >
           {t("signIn")}
         </button>
@@ -61,7 +61,7 @@ export default function WriteReviewSection({ providerId }: Props) {
 
   if (submitted) {
     return (
-      <p className="mt-3 flex min-h-11 items-center gap-2.5 text-start text-sm font-medium text-foreground">
+      <p className="surface-soft mt-3 flex min-h-12 items-center gap-2.5 rounded-2xl px-4 text-start text-sm font-medium text-foreground">
         <CheckCircle aria-hidden className="h-4 w-4 shrink-0 text-green-600" />
         {t("reviewsThankYou")}
       </p>
@@ -73,7 +73,7 @@ export default function WriteReviewSection({ providerId }: Props) {
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="surface-soft mt-3 flex min-h-12 w-full items-center gap-2 rounded-2xl px-4 text-start text-sm font-semibold text-accent transition-opacity active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <PenLine aria-hidden className="h-4 w-4 shrink-0" />
         {t("reviewsWriteAReview")}

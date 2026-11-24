@@ -78,7 +78,7 @@ export default function WeeklyHoursTable({ availability, status, opening, staffE
       // one line exists to prevent. ONLY for staff-enabled providers.
       note={staffEnabled ? t("hoursShopWideNote") : null}
     >
-      <ul className="divide-y divide-border">
+      <ul className="divide-y divide-border/40">
         {orderedDows.map((dow, i) => (
           <HoursRow
             key={dow}

@@ -23,7 +23,7 @@ interface Props {
 }
 
 /**
- * The provider's services as one price list: a single surface, hairlines
+ * The provider's services as one price list: a single soft card, light hairlines
  * between rows, name at the start and price at the end in tabular figures.
  * Long lists show the first few and expand in place.
  */
@@ -40,7 +40,7 @@ export function ServiceList({ services, showPrices, lang, t, onSelect }: Props) 
   const rowContent = (service: Service) => (
     <>
       {hasThumbs && (
-        <span className="block h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-secondary">
+        <span className="block h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-accent/10">
           {service.image_url && (
             <img
               src={sized(service.image_url, THUMB_REQUEST)}
@@ -68,25 +68,25 @@ export function ServiceList({ services, showPrices, lang, t, onSelect }: Props) 
       </span>
       {showPrices && service.price > 0 && (
         // Left-to-right island: the ₪ sign leads the number in every language.
-        <span dir="ltr" className="shrink-0 text-base font-semibold tabular-nums text-foreground">
+        <span dir="ltr" className="shrink-0 text-lg font-semibold tabular-nums text-foreground">
           ₪{service.price.toLocaleString("en-US")}
         </span>
       )}
       {onSelect && <Forward aria-hidden className="h-4 w-4 shrink-0 text-foreground/50" />}
     </>
   );
-  const rowClass = "flex min-h-16 w-full items-center gap-3 px-4 py-3";
+  const rowClass = "flex min-h-16 w-full items-center gap-3.5 px-4 py-3.5";
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <ul className="divide-y divide-border">
+    <div className="surface-soft overflow-hidden rounded-2xl">
+      <ul className="divide-y divide-border/40">
         {shown.map((service) => (
           <li key={service.id}>
             {onSelect ? (
               <button
                 type="button"
                 onClick={() => onSelect(service)}
-                className={`${rowClass} text-start transition-colors active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent`}
+                className={`${rowClass} text-start transition-colors active:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent`}
               >
                 {rowContent(service)}
               </button>
@@ -101,7 +101,7 @@ export function ServiceList({ services, showPrices, lang, t, onSelect }: Props) 
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
-          className="flex min-h-12 w-full items-center justify-center gap-1.5 border-t border-border px-4 text-sm font-medium text-foreground transition-colors active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+          className="flex min-h-12 w-full items-center justify-center gap-1.5 border-t border-border/40 px-4 text-sm font-semibold text-accent transition-colors active:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
         >
           {expanded ? t("showLess") : t("showAllServices").replace("{n}", String(services.length))}
           <ChevronDown aria-hidden className={`h-4 w-4 ${expanded ? "rotate-180" : ""}`} />

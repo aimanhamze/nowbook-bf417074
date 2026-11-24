@@ -10,7 +10,7 @@ import WriteReviewSection from "@/components/reviews/WriteReviewSection";
 import { useProviderReviews } from "@/hooks/useReviews";
 import { useFavorites } from "@/hooks/useFavorites";
 import { usePublicProviderPhotos } from "@/hooks/useProviderPhotos";
-import { Heart, Star, MapPin, Share2, X, ChevronLeft, ChevronRight, Images, CalendarPlus } from "lucide-react";
+import { Heart, Star, MapPin, Share2, X, ChevronLeft, ChevronRight, Images, CalendarPlus, Ticket } from "lucide-react";
 import { BackOrHomeIcon } from "@/components/ui/directional-icon";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { ProviderCourses } from "@/components/academy/customer/ProviderCourses";
@@ -43,7 +43,7 @@ import { useKeyboardOpen } from "@/hooks/useKeyboardOpen";
 // (server crop = final crop). Anything else requests width only (aspect
 // preserved) and lets object-fit crop once — a server crop to a different
 // aspect followed by a CSS crop looks zoomed.
-const AVATAR_SIZE = { width: 216, height: 216 } as const; // h-[72px] w-[72px] × 3; mini h-8 w-8 shares it
+const AVATAR_SIZE = { width: 288, height: 288 } as const; // h-24 w-24 (96px) × 3; mini h-8 w-8 shares it
 // The status line is weekly-mode only, so the resolver is asked the weekly way.
 const WEEKLY_SETTINGS: MonthlySettings = {
   availability_mode: "weekly",
@@ -230,8 +230,23 @@ const ProviderDetail = () => {
   }
 
   return (
-    // Plain page background: no gradient, no glows, no glass on content.
-    <div className="relative min-h-screen overflow-x-clip bg-background pb-36">
+    <div
+      className="relative min-h-screen overflow-x-clip pb-36"
+      style={{ background: "var(--bg-atmosphere)" }}
+    >
+      {/* Radial accent glows — anchored below the cover so they bleed around
+          the info card and into the services area, not behind the cover image. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[16rem] [inset-inline-end:-5rem] h-[24rem] w-[24rem] rounded-full blur-3xl opacity-55"
+        style={{ background: "radial-gradient(circle, hsl(24 95% 78% / 0.55) 0%, transparent 65%)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[44rem] [inset-inline-start:-6rem] h-[30rem] w-[30rem] rounded-full blur-3xl opacity-50"
+        style={{ background: "radial-gradient(circle, hsl(265 60% 80% / 0.45) 0%, transparent 65%)" }}
+      />
+
       {/* Back / share / favourite — pinned; a frosted bar with a small
           avatar fades in behind them once the big avatar scrolls away. */}
       <CollapsingHeader
@@ -239,7 +254,7 @@ const ProviderDetail = () => {
         bigAvatarRef={bigAvatarRef}
         avatar={
           avatarSrc ? (
-            // Same 216px URL as the big avatar below, so it's one download.
+            // Same 288px URL as the big avatar below, so it's one download.
             <img
               src={sized(avatarSrc, AVATAR_SIZE)}
               alt=""
@@ -280,10 +295,8 @@ const ProviderDetail = () => {
 
       <div className="relative">
       {/* Cover — no scrim: a white or logo cover stays as the provider made
-          it. The pinned buttons carry their own backing. The hairline along
-          the bottom edge keeps a white cover from melting into the white page
-          (always on: the page cannot know the image's colour). */}
-      <div ref={coverRef} className="relative overflow-hidden border-b border-border bg-secondary">
+          it. The pinned buttons carry their own backing. */}
+      <div ref={coverRef} className="relative overflow-hidden bg-secondary">
         {coverSrc ? (
           // Keep the image's natural aspect ratio (height only clamped to a
           // sane range) so designed banners with text/logos are shown in full
@@ -312,104 +325,119 @@ const ProviderDetail = () => {
         )}
       </div>
 
-      {/* Identity — start-aligned. The avatar straddles the cover's bottom
-          edge on the start side, so a centred logo cover and the avatar (often
-          the same logo) no longer sit on top of each other. */}
-      <div className="relative px-5">
-        <div
-          ref={bigAvatarRef}
-          className="-mt-9 h-[72px] w-[72px] overflow-hidden rounded-full bg-secondary ring-4 ring-background"
-        >
-          {avatarSrc ? (
-            <button
-              type="button"
-              className="block h-full w-full"
-              onClick={() => setFullImageSrc(avatarSrc)}
-            >
-              <img
-                src={sized(avatarSrc, AVATAR_SIZE)}
-                alt={provider.name[lang]}
-                decoding="async"
-                width={72}
-                height={72}
-                className="h-full w-full object-cover"
-                onError={withOriginalFallback(avatarSrc, () => setAvatarFailed(true))}
-              />
-            </button>
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-accent/10">
-              <span className="select-none text-2xl font-semibold text-foreground/70">
-                {provider.name[lang]?.charAt(0)?.toUpperCase()}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <h1 className="mt-3 text-start text-2xl font-bold leading-tight tracking-normal">
-          {provider.name[lang]}
-        </h1>
-
-        {(categoryNames[provider.category]?.[lang] || reviewCount > 0) && (
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 text-[13px] text-foreground/70">
-            {categoryNames[provider.category]?.[lang] && (
-              <span>{categoryNames[provider.category][lang]}</span>
-            )}
-            {reviewCount > 0 && (
-              // Compact rating; the -my-3 keeps a 44px tap area without adding
-              // height to the line. Jumps to the reviews section.
+      {/* Identity — a soft info card that overlaps the cover by 24px. The
+          96px avatar sits on the card's start side, centred on the cover's
+          bottom edge (48px above it, 48px below), so a centred logo cover and
+          the avatar never sit on top of each other. Geometry is mirrored in
+          CollapsingHeader. */}
+      <div className="relative -mt-6 px-5">
+        <div className="glass-card relative rounded-3xl px-5 pb-5 pt-[5.25rem]">
+          <div
+            ref={bigAvatarRef}
+            className="absolute -top-6 start-5 h-24 w-24 overflow-hidden rounded-full bg-gradient-to-br from-accent/25 to-secondary shadow-[0_12px_32px_-8px_rgba(40,20,10,0.35)] ring-4 ring-white/90"
+          >
+            {avatarSrc ? (
               <button
                 type="button"
-                aria-label={`${avgRating.toFixed(1)} (${reviewCount}) · ${t("ratingJumpToReviews")}`}
-                onClick={() =>
-                  document.getElementById("provider-reviews")?.scrollIntoView({
-                    block: "start",
-                    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
-                  })
-                }
-                className="-my-3 inline-flex min-h-11 items-center gap-1"
+                className="block h-full w-full"
+                onClick={() => setFullImageSrc(avatarSrc)}
               >
+                <img
+                  src={sized(avatarSrc, AVATAR_SIZE)}
+                  alt={provider.name[lang]}
+                  decoding="async"
+                  width={96}
+                  height={96}
+                  className="h-full w-full object-cover"
+                  onError={withOriginalFallback(avatarSrc, () => setAvatarFailed(true))}
+                />
+              </button>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <span className="select-none text-4xl font-light text-foreground/50">
+                  {provider.name[lang]?.charAt(0)?.toUpperCase()}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Rating — in the free corner beside the avatar. 44px tap area
+              (the pill itself is 32px); jumps to the reviews section. */}
+          {reviewCount > 0 && (
+            <button
+              type="button"
+              aria-label={`${avgRating.toFixed(1)} (${reviewCount}) · ${t("ratingJumpToReviews")}`}
+              onClick={() =>
+                document.getElementById("provider-reviews")?.scrollIntoView({
+                  block: "start",
+                  behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+                })
+              }
+              className="absolute end-4 top-2.5 flex min-h-11 items-center"
+            >
+              <span className="flex h-8 items-center gap-1 rounded-full bg-secondary/70 px-3 text-[13px] text-foreground/70">
                 <Star aria-hidden className="h-3.5 w-3.5 fill-accent text-accent" />
                 <span dir="ltr" className="tabular-nums">
                   <span className="font-semibold text-foreground">{avgRating.toFixed(1)}</span> ({reviewCount})
                 </span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {provider.address[lang] && (
-          <p className="mt-1 flex items-start gap-1.5 text-start text-[13px] text-foreground/70">
-            <MapPin aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{provider.address[lang]}</span>
-          </p>
-        )}
-
-        {/* Status: one line, neutral when closed (closed is a normal state),
-            green only when open, and always the next opening when known. */}
-        {showStatus && (
-          <p className="mt-2.5 flex items-start gap-2 text-start text-sm">
-            <span
-              aria-hidden
-              className={`mt-1.5 block h-2 w-2 shrink-0 rounded-full ${
-                opening.kind === "open" ? "bg-green-600" : "bg-foreground/30"
-              }`}
-            />
-            <span>
-              <span className={`font-semibold ${opening.kind === "open" ? "text-green-700" : "text-foreground"}`}>
-                {statusParts.head}
               </span>
-              {statusParts.detail && (
-                <span className="text-foreground/70"> · {statusParts.detail}</span>
-              )}
-            </span>
-          </p>
-        )}
+            </button>
+          )}
 
-        {/* Branch switcher — renders nothing for a single-branch owner.
-            Under the location and status so a visitor on the wrong city sees
-            it before booking. */}
-        <OtherBranches provider={provider} />
-        <ProviderActions socialLinks={provider.socialLinks} phone={provider.phone} className="mt-4" />
+          <h1 className="text-start text-2xl font-semibold leading-tight tracking-normal">
+            {provider.name[lang]}
+          </h1>
+
+          {categoryNames[provider.category]?.[lang] && (
+            <p className="mt-1 text-start text-[13px] text-foreground/70">
+              {categoryNames[provider.category][lang]}
+            </p>
+          )}
+
+          {provider.address[lang] && (
+            <p className="mt-1 flex items-start gap-1.5 text-start text-[13px] text-foreground/70">
+              <MapPin aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+              <span>{provider.address[lang]}</span>
+            </p>
+          )}
+
+          {/* Status: a soft tinted pill — green when open, neutral when closed
+              (closed is a normal state, never red) — with the next opening. */}
+          {showStatus && (
+            <p
+              className={`mt-3 inline-flex max-w-full items-start gap-2 rounded-2xl border px-3 py-1.5 text-start text-[13px] ${
+                opening.kind === "open"
+                  ? "border-green-500/30 bg-green-500/10"
+                  : "border-foreground/10 bg-foreground/[0.05]"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`mt-[0.4rem] block h-2 w-2 shrink-0 rounded-full ${
+                  opening.kind === "open" ? "bg-green-500" : "bg-foreground/35"
+                }`}
+              />
+              <span>
+                <span className={`font-semibold ${opening.kind === "open" ? "text-green-700" : "text-foreground"}`}>
+                  {statusParts.head}
+                </span>
+                {statusParts.detail && (
+                  <span className="text-foreground/70"> · {statusParts.detail}</span>
+                )}
+              </span>
+            </p>
+          )}
+
+          {/* Branch switcher — renders nothing for a single-branch owner.
+              Under the location and status so a visitor on the wrong city sees
+              it before booking. */}
+          <OtherBranches provider={provider} />
+          <ProviderActions
+            socialLinks={provider.socialLinks}
+            phone={provider.phone}
+            className="mt-4 border-t border-border/40 pt-4"
+          />
+        </div>
       </div>
 
       {/* The signed-in customer's next appointment here — renders nothing
@@ -559,10 +587,13 @@ const ProviderDetail = () => {
             </p>
           )}
           <SectionHeading className="mb-3">{t("availablePackages")}</SectionHeading>
-          {/* One bordered list with hairlines, like the services list. */}
-          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+          {/* One soft card with light hairlines, like the services list. */}
+          <ul className="surface-soft divide-y divide-border/40 overflow-hidden rounded-2xl">
             {packageOffers.map((pkg) => (
-              <li key={pkg.id} className="flex items-center gap-3 px-4 py-3">
+              <li key={pkg.id} className="flex items-center gap-3.5 px-4 py-3.5">
+                <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                  <Ticket className="h-4 w-4" />
+                </span>
                 <span className="min-w-0 flex-1 text-start">
                   <span className="line-clamp-2 text-[15px] font-medium leading-snug text-foreground">
                     <bdi>{pkg.name}</bdi>
@@ -576,7 +607,7 @@ const ProviderDetail = () => {
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1.5">
                   {/* Left-to-right island: the ₪ sign leads the number in every language. */}
-                  <span dir="ltr" className="text-base font-semibold tabular-nums text-foreground">
+                  <span dir="ltr" className="text-lg font-semibold tabular-nums text-foreground">
                     ₪{pkg.price}
                   </span>
                   <button
@@ -651,22 +682,24 @@ const ProviderDetail = () => {
         )
       )}
 
-      {/* About — plain text on the page, three lines and "read more". */}
+      {/* About — soft card; three lines and "read more". */}
       {provider.about[lang] && (
         <section className="mt-8 px-5">
-          <SectionHeading className="mb-2">{t("about")}</SectionHeading>
-          <AboutText text={provider.about[lang]} moreLabel={t("readMore")} lessLabel={t("showLess")} />
+          <SectionHeading className="mb-3">{t("about")}</SectionHeading>
+          <div className="surface-soft rounded-2xl p-4">
+            <AboutText text={provider.about[lang]} moreLabel={t("readMore")} lessLabel={t("showLess")} />
+          </div>
         </section>
       )}
 
-      {/* Reviews — always present: a one-line rating summary and hairline
-          rows when there are reviews, otherwise one quiet line. Writing one
+      {/* Reviews — always present: one soft card with a rating summary and
+          hairline rows when there are reviews, otherwise one quiet line. Writing one
           (or the sign-in line for a visitor) sits at the end of the section. */}
       <section id="provider-reviews" className="mt-8 scroll-mt-20 px-5">
-        <SectionHeading className="mb-2">{t("reviews")}</SectionHeading>
+        <SectionHeading className="mb-3">{t("reviews")}</SectionHeading>
         {dbReviews && reviewCount > 0 && (
-          <>
-            <p className="flex items-center gap-1.5 text-start text-sm text-foreground/70">
+          <div className="surface-soft overflow-hidden rounded-2xl">
+            <p className="flex items-center gap-1.5 px-4 py-3 text-start text-sm text-foreground/70">
               <Star aria-hidden className="h-4 w-4 shrink-0 fill-accent text-accent" />
               <span dir="ltr" className="font-semibold tabular-nums text-foreground">{avgRating.toFixed(1)}</span>
               <span aria-hidden>·</span>
@@ -676,15 +709,15 @@ const ProviderDetail = () => {
                   : t("reviewsCount").replace("{count}", String(reviewCount))}
               </span>
             </p>
-            <ul className="mt-3 divide-y divide-border border-y border-border">
+            <ul className="divide-y divide-border/40 border-t border-border/40">
               {dbReviews.map((review) => (
                 <ReviewRow key={review.id} review={review} anonymousLabel={t("guest")} />
               ))}
             </ul>
-          </>
+          </div>
         )}
         {dbReviews && reviewCount === 0 && (
-          <p className="text-start text-sm text-foreground/70">{t("noReviewsYet")}</p>
+          <p className="surface-soft rounded-2xl p-4 text-start text-sm text-foreground/70">{t("noReviewsYet")}</p>
         )}
         <WriteReviewSection providerId={provider.id} />
       </section>
@@ -849,10 +882,11 @@ const ProviderDetail = () => {
           while the keyboard is up (it would ride over it — this branch). */}
       {canBook && !isAcademy && !keyboardOpen && (
       <div className="fixed inset-x-0 bottom-0 z-50">
-        <div className="border-t border-border bg-background p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
+        <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[hsl(40_30%_96%)] to-transparent" />
+        <div className="border-t border-white/40 bg-white/70 p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] backdrop-blur-xl">
           <button
             onClick={() => navigate(bookPath(provider.id))}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-base font-semibold text-accent-foreground transition-transform active:scale-[0.98]"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-base font-semibold text-accent-foreground shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.55)] transition-transform active:scale-[0.98]"
           >
             <CalendarPlus className="h-5 w-5" />
             {t("bookAppointment")}

@@ -103,7 +103,7 @@ export default function MonthlyHoursTable({
       // top of each date's window. ONLY for staff-enabled providers.
       note={staffEnabled ? t("hoursShopWideNote") : null}
     >
-      <ul className="divide-y divide-border">
+      <ul className="divide-y divide-border/40">
         {days.map(({ i, date, hours }) => (
           <HoursRow
             key={i}
@@ -120,7 +120,7 @@ export default function MonthlyHoursTable({
           type="button"
           aria-expanded={showAll}
           onClick={() => setShowAll(v => !v)}
-          className="flex min-h-12 w-full items-center justify-center gap-1.5 border-t border-border px-4 text-sm font-medium text-foreground transition-colors active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+          className="flex min-h-12 w-full items-center justify-center gap-1.5 border-t border-border/40 px-4 text-sm font-semibold text-accent transition-colors active:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
         >
           {t(showAll ? "showLess" : "showMoreDays")}
           <ChevronDown aria-hidden className={`h-4 w-4 ${showAll ? "rotate-180" : ""}`} />

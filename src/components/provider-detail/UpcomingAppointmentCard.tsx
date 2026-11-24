@@ -59,7 +59,7 @@ export function UpcomingAppointmentCard({ provider }: { provider: Provider }) {
           // adding height to the header line.
           <Link
             to="/bookings"
-            className="-my-3 inline-flex min-h-11 items-center px-1 text-[13px] font-medium text-foreground underline underline-offset-4"
+            className="-my-3 inline-flex min-h-11 items-center px-1 text-[13px] font-semibold text-accent"
           >
             {/* Isolate "+N" left-to-right: in an RTL line the leading "+"
                 otherwise flips to the far side and reads "2+". */}
@@ -156,7 +156,7 @@ function AppointmentRow({ booking, provider }: { booking: UpcomingBooking; provi
         <button
           type="button"
           aria-label={`${t("appointmentDetails")}: ${serviceNames}, ${longDate}, ${booking.booking_time}`}
-          className="flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-border bg-card p-2.5 pe-3 text-start transition-colors active:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="glass-card-md flex min-h-[68px] w-full items-center gap-3 rounded-2xl p-2.5 pe-3 text-start transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <DateChip booking={booking} />
           <span className="min-w-0 flex-1">
